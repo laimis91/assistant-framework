@@ -342,7 +342,7 @@ inline_eval_only_roots = {
     { "name" => "status", "type" => "enum", "required" => false, "enum_values" => %w[DONE NEEDS_CONTEXT BLOCKED DEVIATED] },
     { "name" => "failure_class", "type" => "string", "required" => false },
     { "name" => "next_action", "type" => "enum", "required" => false, "enum_values" => %w[review orchestrator] },
-    { "name" => "current_assistant_review_contract", "type" => "object", "required" => false, "object_fields" => [{ "name" => "schema_version", "type" => "enum", "required" => true, "enum_values" => ["9.0"] }] },
+    { "name" => "current_assistant_review_contract", "type" => "object", "required" => false, "object_fields" => [{ "name" => "schema_version", "type" => "enum", "required" => true, "enum_values" => ["10.0"] }] },
     { "name" => "current_final_batch", "type" => "object", "required" => false, "object_fields" => [{ "name" => "review_snapshot_id", "type" => "string", "required" => true }, final_snapshot_identity_schema] },
     { "name" => "harness_entry_state", "type" => "object", "required" => false },
     {
@@ -680,7 +680,9 @@ closure_authority_valid = lambda do |authority|
     end
   end && authority.map { |entry| entry["aggregate_finding_id"] }.uniq.length == authority.length
 end
-perspectives = %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse risk_selected_specialist closure_verification]
+# light_contract_and_runtime (trivial/small light) and plan_coverage_and_feasibility
+# (plan review) are single fresh passes outside the canonical discovery matrix (take(n) below).
+perspectives = %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse risk_selected_specialist closure_verification light_contract_and_runtime plan_coverage_and_feasibility]
 canonical_perspectives = {
   "trivial_small" => perspectives.take(2),
   "medium" => perspectives.take(3),
@@ -774,18 +776,35 @@ templates.each do |template_ref, template|
   fail_with.call("templates.#{template_ref}.scope_size must be trivial, small, medium, or large") unless %w[trivial small medium large].include?(template["scope_size"])
   topology = template["topology"]
   topology_fields = %w[canonical_discovery_perspectives closure_verification_required discovery_pass_count max_required_responses security_specialist_triggered]
-  fail_with.call("templates.#{template_ref}.topology must contain exactly #{topology_fields.join(', ')}") unless topology.is_a?(Hash) && topology.keys.sort == topology_fields
-  fail_with.call("templates.#{template_ref}.topology.discovery_pass_count must be an integer from 2 through 4") unless topology["discovery_pass_count"].is_a?(Integer) && (2..4).cover?(topology["discovery_pass_count"])
-  fail_with.call("templates.#{template_ref}.topology.max_required_responses must be an integer from 2 through 6") unless topology["max_required_responses"].is_a?(Integer) && (2..6).cover?(topology["max_required_responses"])
+  fail_with.call("templates.#{template_ref}.topology must contain exactly #{topology_fields.join(', ')} plus optional light_review and plan_review") unless topology.is_a?(Hash) && (topology.keys - %w[light_review plan_review]).sort == topology_fields
+  # Light trivial/small review: one fresh light_contract_and_runtime pass, no separate
+  # closure pass, selected only by explicit topology.light_review true. Absent/false
+  # keeps the canonical >=2-pass topology (historical two-pass trivial/small stays valid).
+  fail_with.call("templates.#{template_ref}.topology.light_review must be boolean when present") if topology.key?("light_review") && ![true, false].include?(topology["light_review"])
+  light = topology["light_review"] == true
+  fail_with.call("templates.#{template_ref}.topology.light_review true requires trivial/small scope_size and discovery_pass_count 1") if light && !(%w[trivial small].include?(template["scope_size"]) && topology["discovery_pass_count"] == 1)
+  # Plan review (U4): one fresh plan_coverage_and_feasibility pass at any scope size, no
+  # closure pass, selected only by topology.plan_review true. Templates carry no
+  # review_subject, so plan_review true is accepted only on that one-pass plan shape and
+  # absent/false keeps multi-pass plan review acceptable.
+  fail_with.call("templates.#{template_ref}.topology.plan_review must be boolean when present") if topology.key?("plan_review") && ![true, false].include?(topology["plan_review"])
+  plan_review = topology["plan_review"] == true
+  fail_with.call("templates.#{template_ref}.topology.plan_review true requires discovery_pass_count 1 and no light_review") if plan_review && (light || topology["discovery_pass_count"] != 1)
+  fail_with.call("templates.#{template_ref}.topology.closure_verification_required must be false for plan review") if plan_review && topology["closure_verification_required"] != false
+  single_pass = light || plan_review
+  min_passes = single_pass ? 1 : 2
+  fail_with.call("templates.#{template_ref}.topology.discovery_pass_count must be 1 for light_review trivial/small or plan_review, or an integer from 2 through 4") unless topology["discovery_pass_count"].is_a?(Integer) && (single_pass || (2..4).cover?(topology["discovery_pass_count"]))
+  fail_with.call("templates.#{template_ref}.topology.max_required_responses must be an integer from #{min_passes} through 6") unless topology["max_required_responses"].is_a?(Integer) && (min_passes..6).cover?(topology["max_required_responses"])
+  fail_with.call("templates.#{template_ref}.topology.closure_verification_required must be false for light trivial/small review") if light && topology["closure_verification_required"] != false
   %w[security_specialist_triggered closure_verification_required].each { |field| fail_with.call("templates.#{template_ref}.topology.#{field} must be boolean") unless [true, false].include?(topology[field]) }
   fail_with.call("templates.#{template_ref}.topology.canonical_discovery_perspectives must exactly match the canonical perspective matrix") unless topology["canonical_discovery_perspectives"] == canonical_perspectives
   passes, tuples = template.values_at("expected_passes", "required_coverage_tuples")
   fail_with.call("templates.#{template_ref}.expected_passes must be a non-empty array") unless passes.is_a?(Array) && !passes.empty?
-  fail_with.call("templates.#{template_ref}.expected_passes must contain 2 through 6 records") unless (2..6).cover?(passes.length)
+  fail_with.call("templates.#{template_ref}.expected_passes must contain #{min_passes} through 6 records") unless (min_passes..6).cover?(passes.length)
   fail_with.call("templates.#{template_ref}.topology.max_required_responses must equal expected_passes length") unless topology["max_required_responses"] == passes.length
   fail_with.call("templates.#{template_ref}.required_coverage_tuples must be a non-empty array") unless tuples.is_a?(Array) && !tuples.empty?
   discovery_key = %w[trivial small].include?(template["scope_size"]) ? "trivial_small" : template["scope_size"]
-  required_discovery_perspectives = canonical_perspectives.fetch(discovery_key)
+  required_discovery_perspectives = plan_review ? %w[plan_coverage_and_feasibility] : light ? %w[light_contract_and_runtime] : canonical_perspectives.fetch(discovery_key)
   fail_with.call("templates.#{template_ref}.topology.discovery_pass_count must match scope_size canonical discovery count") unless topology["discovery_pass_count"] == required_discovery_perspectives.length
   pass_perspectives = passes.map { |review_pass| review_pass.is_a?(Hash) ? review_pass["perspective"] : nil }
   expected_perspectives = required_discovery_perspectives.dup
@@ -799,8 +818,12 @@ templates.each do |template_ref, template|
     required_fields = %w[assigned_scope coverage_obligations perspective prior_finding_visibility review_pass_id]
     fail_with.call("templates.#{template_ref}.expected_passes[#{index}] must contain exactly #{required_fields.join(', ')}") unless review_pass.is_a?(Hash) && review_pass.keys.sort == required_fields
     fail_with.call("templates.#{template_ref}.expected_passes[#{index}] is malformed") unless nonblank.call(review_pass["review_pass_id"]) && perspectives.include?(review_pass["perspective"]) && nonblank_strings.call(review_pass["assigned_scope"]) && nonblank_strings.call(review_pass["coverage_obligations"]) && %w[none closure_ledger].include?(review_pass["prior_finding_visibility"])
-    expected_prior_visibility = review_pass["perspective"] == "closure_verification" ? "closure_ledger" : "none"
-    fail_with.call("templates.#{template_ref}.expected_passes[#{index}].prior_finding_visibility must match its perspective") unless review_pass["prior_finding_visibility"] == expected_prior_visibility
+    allowed_visibility = case review_pass["perspective"]
+                         when "closure_verification" then %w[closure_ledger]
+                         when "light_contract_and_runtime", "plan_coverage_and_feasibility" then %w[none closure_ledger]
+                         else %w[none]
+                         end
+    fail_with.call("templates.#{template_ref}.expected_passes[#{index}].prior_finding_visibility must match its perspective") unless allowed_visibility.include?(review_pass["prior_finding_visibility"])
     fail_with.call("templates.#{template_ref}.expected_passes[#{index}] references scope outside its manifest") unless review_pass["assigned_scope"].all? { |scope_item_id| manifest_by_id.key?(scope_item_id) }
     pass_ids << review_pass["review_pass_id"]
     assigned_scope_ids.concat(review_pass["assigned_scope"])
@@ -1407,6 +1430,8 @@ validate_fixture() {
 
     validation_error="$(jq -r --arg skill_name "$skill_name" '
         def five_lens_case_ids:
+          ["five-lens-decision-briefing-uses-storm-style-workflow", "five-lens-quick-normalizes-to-standard", "five-lens-retains-all-material-follow-ups"];
+        def historical_v4_five_lens_case_ids:
           ["five-lens-decision-briefing-uses-storm-style-workflow", "five-lens-delegated-lenses-sequential-peer-fallback", "five-lens-quick-normalizes-to-standard", "five-lens-retains-all-material-follow-ups", "five-lens-sequential-fallback-preserves-process-evidence"];
         def packet_case_ids:
           ["packet-admission-coherent-medium-v14", "native-slice-execution-uses-dependencies-not-runner-topology", "isolated-independent-slices-integrate-before-review"];
@@ -1418,8 +1443,9 @@ validate_fixture() {
           elif $skill_name == "assistant-skill-creator" and (creator_case_ids - $case_ids | length) == 0 and ($declared | length) == 0 then "creator behavior cases must declare their semantic validator"
           elif $skill_name == "assistant-workflow" and (packet_case_ids - $case_ids | length) == 0 and ($declared | length) == 0 then "packet admission cases must declare their semantic validator"
           elif ($declared | length) == 0 then empty
-          elif $skill_name == "assistant-research" and ($declared | map(.id) | sort) != five_lens_case_ids then "semantic_validator must be declared by exactly the five five-lens assistant-research cases"
-          elif $skill_name == "assistant-research" and ($declared | all(.semantic_validator == "assistant-research.five_lens_v4")) then empty
+          elif $skill_name == "assistant-research" and ($declared | map(.id) | sort) == historical_v4_five_lens_case_ids and ($declared | all(.semantic_validator == "assistant-research.five_lens_v4")) then empty
+          elif $skill_name == "assistant-research" and ($declared | map(.id) | sort) != five_lens_case_ids then "semantic_validator must be declared by exactly the three current v5 five-lens assistant-research cases, or by exactly the five frozen historical v4 cases"
+          elif $skill_name == "assistant-research" and ($declared | all(.semantic_validator == "assistant-research.five_lens_v5")) then empty
           elif $skill_name == "assistant-skill-creator" and ($declared | map(.id) | sort) != (creator_case_ids | sort) then "semantic_validator must be declared by exactly the six fixed assistant-skill-creator cases"
           elif $skill_name == "assistant-skill-creator" and ($declared | all(.semantic_validator == "assistant-skill-creator.behavior_v1")) then empty
           elif $skill_name == "assistant-workflow" and ($declared | map(.id) | sort) != (packet_case_ids | sort) then "semantic_validator must be declared by exactly the three fixed packet-admission cases"

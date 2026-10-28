@@ -7,7 +7,7 @@
 # Defines required artifacts for consumed canonical workflow results.
 # Canonical completion verifies required artifacts before the completion marker.
 
-schema_version: "15.0"
+schema_version: "16.0"
 contract: output
 skill: assistant-workflow
 
@@ -21,34 +21,34 @@ completion_tiers:
   preparation_only:
     execution_intent: prepare_only
     required_artifacts: [completion_policy, validation_results, feature_preparation_result]
-    conditional_artifacts: [triage_result, phase_checkpoints, task_journal, feature_preparation_evidence, plan_document, plan_schema_version, approved_plan_identity, verification_decision_ref, implementation_steps, completion_allocation, requirement_acceptance_map, architecture_decision_pack, context_map, context_budget_note, context_handoff_packet, change_impact_applicability, change_impact_evidence]
+    conditional_artifacts: [triage_result, phase_checkpoints, task_journal, feature_preparation_evidence, plan_document, plan_schema_version, approved_plan_identity, verification_decision_ref, implementation_steps, completion_allocation, requirement_acceptance_map, architecture_decision_pack, context_map, context_budget_note, context_handoff_packet, change_impact_applicability, change_impact_evidence, plan_review_result]
     review_gate: "Preparation-evidence admissibility audit only; no Build, changed-files, implementation test, code-review, or final-handoff claim is permitted."
     checkpoint_policy: "Returns validation_results plus the typed readiness artifact with Execution not started, exact scope, applicable evidence ref, gaps, open decisions, implications, and next step."
   small:
     controller_intensity: light
     required_artifacts: [completion_policy, changed_files, verification_decision, evidence_assessment, validation_results, fresh_review_result]
-    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, tdd_cycle_log_ref, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, review_result, qa_evaluation_result, final_handoff, plan_document, plan_schema_version, approved_plan_identity, verification_decision_ref, implementation_steps, completion_allocation, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment, change_impact_applicability, change_impact_evidence]
-    review_gate: "fresh review after validation; Pack/expanded impact uses canonical assistant-review; full independent review only when risk promotes work"
+    conditional_artifacts: [triage_result, subagent_evidence, build_repair_state, test_results, tdd_cycle_log_ref, debugging_result, artifact_contract, task_state_reconciliation, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, review_result, qa_evaluation_result, final_handoff, plan_document, plan_schema_version, approved_plan_identity, verification_decision_ref, implementation_steps, completion_allocation, manual_test_steps, manual_verification_result, workflow_experiment_ledger, loop_readiness_assessment, change_impact_applicability, change_impact_evidence, plan_review_result]
+    review_gate: "fresh independent review after validation at every size; local self-check is preparation; Pack/expanded impact retains canonical assistant-review"
     checkpoint_policy: "Keep state inline. Summarize selected checks before Build and actual evidence, gaps, and exclusions at completion. Retain unchanged verification_decision and evidence_assessment at actual consumer boundaries; no full JSON dump is required for a human update. Exact phase markers require strict intensity, explicit project policy, or user request"
   small_elevated:
     condition: "execution_intent != prepare_only and size == small and (controller_intensity == strict or qa_evaluation_mode == required)"
     controller_intensity: strict
     required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, verification_decision, evidence_assessment, validation_results, spec_review_result, review_result, final_handoff]
-    conditional_artifacts: [test_results, tdd_cycle_log_ref, subagent_evidence, build_repair_state, debugging_result, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, qa_evaluation_result, plan_document, plan_schema_version, approved_plan_identity, verification_decision_ref, implementation_steps, completion_allocation, manual_test_steps, manual_verification_result, change_impact_applicability, change_impact_evidence]
+    conditional_artifacts: [test_results, tdd_cycle_log_ref, subagent_evidence, build_repair_state, debugging_result, requirement_acceptance_map, feature_preparation_evidence, architecture_decision_pack, qa_evaluation_result, plan_document, plan_schema_version, approved_plan_identity, verification_decision_ref, implementation_steps, completion_allocation, manual_test_steps, manual_verification_result, change_impact_applicability, change_impact_evidence, plan_review_result]
     prohibited_artifacts: [fresh_review_result]
     review_gate: "typed canonical review and required QA terminal state; no medium+ slice evidence"
     checkpoint_policy: "strict phase checkpoints without decomposition artifacts"
   medium:
     controller_intensity: standard
     intensity_policy: "ordinary medium+ non-harness work keeps harness_capable=false and qa_evaluation_mode=not_required by default; standard does not require Done Contract, Harness Recipe, Trace Ledger, Replay Packet, Artifact Reference Ledger, or QA evaluation."
-    required_artifacts: [completion_policy, triage_result, changed_files, verification_decision, evidence_assessment, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff]
-    conditional_artifacts: [test_results, tdd_cycle_log_ref, build_repair_state, plan_document, plan_schema_version, approved_plan_identity, verification_decision_ref, implementation_steps, completion_allocation, task_state_reconciliation, task_journal, context_map, feature_preparation_evidence, architecture_decision_pack, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, change_impact_applicability, change_impact_evidence]
-    review_gate: "spec review plus code quality review, with independent QA evaluation when required and evidence matched to the approved plan"
+    required_artifacts: [completion_policy, triage_result, changed_files, verification_decision, evidence_assessment, validation_results, spec_review_result, review_result, requirement_acceptance_map, final_handoff]
+    conditional_artifacts: [subagent_evidence, test_results, tdd_cycle_log_ref, build_repair_state, plan_document, plan_schema_version, approved_plan_identity, verification_decision_ref, implementation_steps, completion_allocation, task_state_reconciliation, task_journal, context_map, feature_preparation_evidence, architecture_decision_pack, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, change_impact_applicability, change_impact_evidence, plan_review_result]
+    review_gate: "one-pass plan review plus one final acceptance batch at the canonical per-size pass count (medium 3) owning spec obligations and code quality, with independent QA evaluation when required and evidence matched to the approved plan"
     checkpoint_policy: "task journal or carried-forward state records phase transitions; visible updates use concise natural language unless exact markers were explicitly triggered"
   large_critical:
     controller_intensity: strict
-    required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, verification_decision, evidence_assessment, validation_results, subagent_evidence, spec_review_result, review_result, requirement_acceptance_map, final_handoff, task_journal, context_map, context_budget_note]
-    conditional_artifacts: [test_results, tdd_cycle_log_ref, debugging_result, build_repair_state, plan_document, plan_schema_version, approved_plan_identity, verification_decision_ref, implementation_steps, completion_allocation, artifact_contract, task_state_reconciliation, pattern_retrieval_note, feature_preparation_evidence, architecture_decision_pack, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation, change_impact_applicability, change_impact_evidence]
+    required_artifacts: [completion_policy, triage_result, phase_checkpoints, changed_files, verification_decision, evidence_assessment, validation_results, spec_review_result, review_result, requirement_acceptance_map, final_handoff, task_journal, context_map, context_budget_note]
+    conditional_artifacts: [subagent_evidence, test_results, tdd_cycle_log_ref, debugging_result, build_repair_state, plan_document, plan_schema_version, approved_plan_identity, verification_decision_ref, implementation_steps, completion_allocation, artifact_contract, task_state_reconciliation, pattern_retrieval_note, feature_preparation_evidence, architecture_decision_pack, metrics_entry, manual_test_steps, manual_verification_result, candidate_search_result, workflow_experiment_ledger, loop_readiness_assessment, done_contract, harness_recipe, harness_run_state, trace_ledger, replay_packet, pivot_restart_decision, artifact_reference_ledger, qa_evaluation_result, verified_skill_distillation, change_impact_applicability, change_impact_evidence, plan_review_result]
     review_gate: "full strict evidence, security/operability review when applicable, QA evaluation when required, and all canonical packet criteria verified"
     checkpoint_policy: "explicit phase checkpoints are required"
 
@@ -177,8 +177,8 @@ artifacts:
       - name: build_execution_lane
         type: enum
         required: true
-        enum_values: [none, inline_direct, bounded_executor, separated_workers]
-        validation: "For execution_intent=prepare_only, none records that no Build lane runs. Otherwise ordinary medium standard-risk work defaults to bounded_executor; separated_workers requires high/critical risk, broad/noisy/environment-heavy verification, independent TDD evidence, or explicit separation"
+        enum_values: [none, direct_main, bounded_executor, separated_workers]
+        validation: "For execution_intent=prepare_only, none records that no Build lane runs. Otherwise direct_main is the default at every size/risk; bounded_executor is optional for concrete execution benefit; separated_workers requires high/critical risk, broad/noisy/environment-heavy verification, independent TDD evidence, or explicit separation"
       - name: workflow_state_mode
         type: enum
         required: true
@@ -196,7 +196,7 @@ artifacts:
       - name: required_agents
         type: string[]
         required: true
-        validation: "For execution_intent=prepare_only, include only concrete Discover/preparation roles and exclude Build, Review, QA Evaluator, Code Writer, Builder/Tester, and Code Reviewer roles. Otherwise select required workflow roles and skills from size, task type, and risk tier."
+        validation: "For execution_intent=prepare_only, include only concrete Discover/preparation roles, including requested/required fresh plan review and selected research lenses/peer; exclude post-Build code/QA acceptance and implementation roles. Otherwise record actual optional execution owners and required independent review/lens responsibilities."
       - name: subagent_policy_state
         type: enum
         required: true
@@ -206,7 +206,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [delegated, direct_fallback, not_applicable]
-        validation: "delegated requires delegation_triggered; direct_fallback preserves equivalent role evidence and requires delegation_opted_out, subagents_unavailable, or policy_disallowed evidence; not_applicable means no subagent role is needed."
+        validation: "delegated requires delegation_triggered; direct_fallback covers Build/execution roles only, preserves equivalent Build/execution role evidence, and requires delegation_opted_out, subagents_unavailable, or policy_disallowed evidence; not_applicable means no subagent role is needed. Formal plan, code, finding-closure, and QA/acceptance review roles always use newly created fresh-context agents; when that isolation is unavailable the review is incomplete and never direct_fallback."
       - name: subagent_trigger_scope
         type: string[]
         required: true
@@ -263,7 +263,7 @@ artifacts:
       - name: build_execution_lane
         type: enum
         required: true
-        enum_values: [none, inline_direct, bounded_executor, separated_workers]
+        enum_values: [none, direct_main, bounded_executor, separated_workers]
         validation: "For execution_intent=prepare_only, none records that no Build lane runs. Otherwise select the execution lane from risk and verification shape."
       - name: plan_mode
         type: enum
@@ -375,7 +375,7 @@ artifacts:
     required: conditional
     condition: "execution_intent != prepare_only and an active workflow packet with tdd_applies == true has started its RED phase"
     description: "Canonical TDD cycle_log reference."
-    validation: "Resolves to the actual current task-journal or workflow-output cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log, not merely a planned RED tuple or passing verification row. Before production, its in-progress entry contains the observed authorizing invocation with freshness=current and result=failed, the sole selected/applicable check_id, exact CheckSpec argv/cwd, matching test_file/test_name, verified_failing=true, and failure_reason matching meaningful_failure; GREEN/REFACTOR are not required at this gate. Before Review and workflow completion, this same ref resolves to the full canonical completed cycle_log with valid current GREEN/REFACTOR and selected-check evidence. Preserve prior cycles and all actual invocation records; never reconstruct or invent them. Omit for inactive or unstarted TDD and prepare_only work."
+    validation: "Resolves to the actual current task-journal or workflow-output cycle_log conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log, not merely a planned RED tuple or passing verification row. Before production, its in-progress entry contains the observed authorizing invocation with freshness=current and result=failed, the sole selected/applicable check_id, exact CheckSpec argv/cwd, matching test_file/test_name, verified_failing=true, and failure_reason matching meaningful_failure; GREEN/REFACTOR are not required at this gate. Before Review and workflow completion, this same ref resolves to the full canonical completed cycle_log with valid current GREEN/REFACTOR and selected-check evidence; a no-change REFACTOR may instead carry reuse_green with green.reuse_digest (default digest mode) or, only when reuse_identity_mode is detailed, green.relevant_input_identity. Preserve prior cycles and all actual invocation records; never reconstruct or invent them. Omit for inactive or unstarted TDD and prepare_only work."
     on_fail: "Stop before production when the actual authorizing RED entry is missing, stale, unbound, or wrong-reason. Keep Review/completion blocked until the full canonical cycle resolves and validates."
 
   - name: test_results
@@ -473,8 +473,8 @@ artifacts:
     type: object
     required: conditional
     condition: "execution_intent != prepare_only and controller_intensity == light"
-    description: "Compact review after selected verification, with fresh attention to carried scope, decision, actual evidence, exclusions, changed files, and acceptance criteria."
-    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty or resolved, and evidence identifies inspected selected-check results plus current evidence_assessment and unchanged verification_decision. Gaps remain visible and cannot be described as sufficient. When a Pack or expanded impact applies, canonical refs resolve to one validated assistant-review final_summary and exact current final batch; Pack refs remain Pack-only."
+    description: "Compact review after selected verification from one newly created fresh-context reviewer covering spec obligations and quality, with fresh attention to carried scope, decision, actual evidence, exclusions, changed files, and acceptance criteria. Ordinary light review records no batch plan, ledgers, structured fresh_dispatch, or review-tools validation."
+    validation: "Result is PASS, reviewed_scope names the changed surface, findings are empty for a first-review PASS or, on a re-review, each listed finding has a verified_closed closure_results row, and evidence identifies inspected selected-check results plus current evidence_assessment and unchanged verification_decision. Gaps remain visible and cannot be described as sufficient. When a Pack or expanded impact applies, canonical refs resolve to one validated assistant-review final_summary and exact current final batch; Pack refs remain Pack-only."
     on_fail: "Run fresh post-validation review, fix findings, rerun validation, and record PASS evidence. For a Pack or expanded impact, bind final_snapshot_identity_ref and delegation_path_ref to the canonical final_summary before validation_status=validated."
     object_fields:
       - name: result
@@ -485,12 +485,47 @@ artifacts:
         type: string
         required: true
       - name: findings
-        type: string[]
+        type: object[]
         required: true
-        validation: "Empty or contains only explicitly resolved findings."
+        description: "Compact review findings; each row carries a stable id such as light-1 that the lead keeps. Rows apply when fresh_review_result is recorded by a Workflow 16.0 producer; a historical Workflow 15 string[] findings list stays readable as-is and is never certified current."
+        validation: "Empty for a first-review PASS; on a re-review each listed finding has a closure_results row with status verified_closed. aggregate_finding_id values are unique and non-empty. A fresh re-review receives the fixed findings as {aggregate_finding_id, description} rows using these ids, and its record carries those resolved first-review rows."
+        object_fields:
+          - {name: aggregate_finding_id, type: string, required: true, description: "Stable compact finding id such as light-1."}
+          - {name: file_line, type: string, required: true}
+          - {name: description, type: string, required: true}
       - name: evidence
         type: string
         required: true
+      - name: reviewer_identity
+        type: object
+        required: conditional
+        condition: "fresh_review_result is recorded by a Workflow 16.0 producer"
+        description: "Fresh reviewer identity of the compact light review."
+        validation: "A fresh re-review after a fix has an actor_id absent from prior_reviewer_actor_ids."
+        on_missing: fail
+        object_fields:
+          - {name: actor_id, type: string, required: true}
+          - {name: native_invocation_id, type: string, required: true}
+          - {name: runtime, type: string, required: true, description: "Actual lowercase host runtime that created the reviewer, such as claude or codex; compared case-sensitively.", on_missing: fail}
+          - {name: fork_turns, type: enum, required: conditional, condition: "runtime == codex", enum_values: [none]}
+      - name: prior_reviewer_actor_ids
+        type: string[]
+        required: conditional
+        condition: "The compact result is a fresh re-review after a fix"
+        description: "Actor ids of every earlier reviewer of this compact review."
+        validation: "Non-empty; reviewer_identity.actor_id is absent from this list."
+        on_missing: fail
+      - name: closure_results
+        type: object[]
+        required: conditional
+        condition: "The compact result is a fresh re-review after a fix"
+        description: "Closure per resolved first-review finding carried in this record's findings; same row shape as assistant-review/contracts/handoffs.yaml closure_results."
+        validation: "Exactly one row per findings[].aggregate_finding_id of this record, so the closure ids equal the record's own finding ids; result PASS requires every row status verified_closed, so a regressed or incomplete row keeps the result from PASS."
+        on_missing: fail
+        object_fields:
+          - {name: aggregate_finding_id, type: string, required: true}
+          - {name: status, type: enum, required: true, enum_values: [verified_closed, regressed, incomplete]}
+          - {name: evidence, type: string, required: true}
       - name: canonical_result_ref
         type: string
         required: conditional
@@ -566,11 +601,65 @@ artifacts:
         condition: "architecture_design_mode in [lightweight, required, review_intensive] or impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         enum_values: [validated]
 
+  - name: plan_review_result
+    type: object
+    required: conditional
+    condition: "A requested or required plan has its fresh plan review (review_subject=plan) and no persisted/executable admission consumes that review"
+    description: "Compact plan review, shaped like fresh_review_result plus request/plan coverage, from one newly created fresh-context reviewer with perspective plan_coverage_and_feasibility. Persisted/executable admission instead uses the structured plan batch and review-tools validation consumed through review_authorities, unchanged."
+    validation: "Result is PASS for the current plan identity, findings follow fresh_review_result.findings, and request_plan_reconciliation reuses the review_authorities field names: required and observed requirement ids both equal the plan's requirement ids, and unresolved_requirement_ids and unresolved_finding_ids are explicitly empty; a missing unresolved list is unknown, never empty."
+    on_fail: "Dispatch a newly created fresh-context plan reviewer with the original request and current plan; after a material plan fix, dispatch one newly created fresh re-reviewer with the fixed findings rows and record PASS before approval."
+    object_fields:
+      - {name: review_subject, type: enum, required: true, enum_values: [plan]}
+      - {name: perspective, type: enum, required: true, enum_values: [plan_coverage_and_feasibility]}
+      - {name: result, type: enum, required: true, enum_values: [PASS]}
+      - {name: reviewed_scope, type: string, required: true, description: "Reviewed plan sections and request scope."}
+      - name: findings
+        type: object[]
+        required: true
+        validation: "Same rows and rules as fresh_review_result.findings."
+        object_fields:
+          - {name: aggregate_finding_id, type: string, required: true}
+          - {name: file_line, type: string, required: true}
+          - {name: description, type: string, required: true}
+      - name: request_plan_reconciliation
+        type: object
+        required: true
+        on_missing: fail
+        object_fields:
+          - {name: original_request_ref, type: string, required: true}
+          - {name: approved_plan_ref, type: string, required: true, description: "Reviewed plan-definition ref bound to the current plan identity; never the approval_ref recorded afterwards."}
+          - {name: required_requirement_ids, type: "string[]", required: true, min_items: 1}
+          - {name: observed_requirement_ids, type: "string[]", required: true}
+          - {name: unresolved_requirement_ids, type: "string[]", required: true}
+          - {name: unresolved_finding_ids, type: "string[]", required: true}
+      - {name: evidence, type: string, required: true}
+      - name: reviewer_identity
+        type: object
+        required: true
+        on_missing: fail
+        validation: "Same fields and rules as fresh_review_result.reviewer_identity."
+        object_fields:
+          - {name: actor_id, type: string, required: true}
+          - {name: native_invocation_id, type: string, required: true}
+          - {name: runtime, type: string, required: true}
+          - {name: fork_turns, type: enum, required: conditional, condition: "runtime == codex", enum_values: [none]}
+      - {name: prior_reviewer_actor_ids, type: "string[]", required: conditional, condition: "The compact result is a fresh re-review after a material plan fix", validation: "Same rule as fresh_review_result.prior_reviewer_actor_ids.", on_missing: fail}
+      - name: closure_results
+        type: object[]
+        required: conditional
+        condition: "The compact result is a fresh re-review after a material plan fix"
+        validation: "Same rule as fresh_review_result.closure_results: one row per findings[].aggregate_finding_id of this record."
+        on_missing: fail
+        object_fields:
+          - {name: aggregate_finding_id, type: string, required: true}
+          - {name: status, type: enum, required: true, enum_values: [verified_closed, regressed, incomplete]}
+          - {name: evidence, type: string, required: true}
+
   - name: review_result
     type: object
     required: conditional
     condition: "execution_intent != prepare_only and (controller_intensity in [standard, strict] or risk_tier in [high, critical] or qa_evaluation_mode == required)"
-    description: "Stage 2 assistant-review quality result only. Spec compliance is recorded in spec_review_result. Workflow consumes validated references to canonical assistant-review artifacts and does not restate their schemas."
+    description: "Final fresh acceptance review result (assistant-review, review_subject=acceptance, with the triage controller_intensity). Its spec obligations are recorded in spec_review_result. Workflow consumes validated references to canonical assistant-review artifacts and does not restate their schemas."
     validation: "Before dispatch, Review receives the unchanged verification_decision, current evidence_assessment, actual selected-check results, and omitted-check rationales. canonical_result_ref resolves to a validated assistant-review final_summary produced under producer_schema_version equal to skills/assistant-review/contracts/index.yaml#schema_version; final_review_snapshot_id, final_snapshot_identity_ref, and final_snapshot_identity resolve within that same final_summary and equal its exact current final batch; delegation_path_ref resolves to its review_delegation_path. When a Pack applies, architecture_decision_pack_review_ref resolves to its canonical Pack review. QA evaluation does not replace review_result, and final_handoff remains Document-owned."
     on_fail: "Pass the unchanged verification_decision, current evidence_assessment, actual selected-check results, and omitted-check rationales to assistant-review; validate its final_summary, exact current final-batch final_snapshot_identity, review_delegation_path, and applicable Architecture Decision Pack review, and record stable refs plus exact canonical contracts before Review completes."
     object_fields:
@@ -747,15 +836,34 @@ artifacts:
     required: conditional
     condition: "execution_intent != prepare_only and (size in [medium, large, mega] or risk_tier in [high, critical] or controller_intensity == strict or qa_evaluation_mode == required)"
     validation: >
-      Dedicated Stage 1 spec compliance result from references/prompts/spec-review.md.
-      Must be distinct from assistant-review quality findings. At completion, status must
-      be PASS and required_fixes must be empty or fully resolved.
-    on_fail: "Run dedicated spec compliance review until status is PASS and required fixes are empty or resolved"
+      Spec-obligation result of the final fresh acceptance review (assistant-review,
+      review_subject=acceptance) using references/prompts/spec-review.md, bound to the
+      same final batch as review_result; no separate Stage 1 reviewer is dispatched.
+      Historical Stage 1 records remain readable under their original labels. Stage 1
+      or older records without final_review_snapshot_id or
+      request_plan_reconciliation_ref are readable but never current. Must be
+      distinct from assistant-review quality findings. Unfinished or omitted
+      request/plan items are owned by that review's request_plan_reconciliation and
+      are referenced, not restated. At completion, status must be PASS and
+      required_fixes must be empty or fully resolved.
+    on_fail: "Cover the spec obligations in a fresh complete acceptance batch until status is PASS and required fixes are empty or resolved"
     object_fields:
       - name: status
         type: enum
         required: true
         enum_values: [PASS]
+      - name: final_review_snapshot_id
+        type: string
+        required: true
+        description: "Binding to the acceptance review that produced these spec obligations."
+        validation: "Equals review_result.final_review_snapshot_id of the current final batch; a different or stale batch blocks completion."
+        on_missing: fail
+      - name: request_plan_reconciliation_ref
+        type: string
+        required: true
+        description: "Reference to the same acceptance review's request_plan_reconciliation, the single owner of unfinished or omitted request/plan items."
+        validation: "Resolves to the request_plan_reconciliation of the review bound by final_review_snapshot_id; its unresolved_requirement_ids and unfinished_task_wide_work are explicitly empty or approved exclusions. Not copied or restated here."
+        on_missing: fail
       - name: scope_reviewed
         type: string
         required: true
@@ -811,23 +919,24 @@ artifacts:
   - name: subagent_evidence
     type: object
     required: conditional
-    condition: "execution_intent != prepare_only and controller_intensity in [standard, strict] and development/code-work task changes project source, tests, docs, config, contracts, runtime integrations, or generated project artifacts"
+    condition: "execution_intent != prepare_only and build_execution_lane in [direct_main, bounded_executor, separated_workers] and controller_intensity in [standard, strict] and development/code-work task changes project source, tests, docs, config, contracts, runtime integrations, or generated project artifacts"
     description: "Standard/strict completion evidence whose Build and Review responsibilities are recorded separately."
-    validation: "Evidence matches build_execution_lane. Build records only selected-lane implementation/verification evidence: one bounded executor or Code Writer plus Builder/Tester. Independent Code Reviewer evidence remains required at completion for both lanes, but Review owns and emits it after Build. direct_fallback preserves the same phase ownership with an explicit policy reason."
+    validation: "Evidence matches build_execution_lane. Build records actual selected-lane evidence: direct_main actual main implementation/checks, one delegated bounded executor, or delegated Code Writer plus Builder/Tester. Newly created fresh-context Code Reviewer evidence is required at completion in every lane and execution_mode, including direct_main; Review owns and emits it after Build. direct_main omits worker-only records and needs no fallback exemption. Direct fallback covers Build/execution roles only. Historical fallback remains read-only evidence under original labels."
     on_fail: "Record selected-lane Build evidence, then record Review-owned independent Code Reviewer evidence after Build. Do not require reviewer evidence to leave Build or invent Builder/Tester dispatch in bounded_executor mode."
     object_fields:
       - name: execution_mode
         type: enum
         required: true
-        enum_values: [delegated, direct_fallback]
+        enum_values: [delegated, direct_fallback, not_applicable]
+        validation: "not_applicable is used only with build_execution_lane == direct_main; delegated and direct_fallback describe Build/execution roles of the optional delegated lanes."
       - name: required_roles
         type: string[]
         required: true
-        validation: "bounded_executor includes one executor and Code Reviewer; separated_workers includes Code Writer, Builder/Tester, and Code Reviewer. Reviewer compatibility is legacy-only when explicit."
+        validation: "direct_main includes Code Reviewer; bounded_executor includes one executor and Code Reviewer; separated_workers includes Code Writer, Builder/Tester, and Code Reviewer. Reviewer compatibility is legacy-only when explicit."
       - name: build_execution_lane
         type: enum
         required: true
-        enum_values: [bounded_executor, separated_workers]
+        enum_values: [direct_main, bounded_executor, separated_workers]
       - name: bounded_executor_evidence
         type: object
         required: conditional
@@ -884,7 +993,7 @@ artifacts:
         type: object[]
         required: conditional
         condition: "execution_mode == direct_fallback"
-        validation: "Contains equivalent selected-lane Build evidence and separately labeled Review-owned Code Reviewer evidence."
+        validation: "Contains equivalent selected-lane Build/execution role evidence only, each with phase_owner BUILD. Review, Code Reviewer, and QA Evaluator roles never use direct fallback; phase_owner REVIEW is readable only when reading a historical v15 record under its original label, and new producers never write it."
         object_fields:
           - name: role
             type: string
@@ -893,6 +1002,7 @@ artifacts:
             type: enum
             required: true
             enum_values: [BUILD, REVIEW]
+            validation: "New producers write BUILD; REVIEW is a historical v15 reader label only."
           - name: result_ref
             type: string
             required: true
@@ -903,8 +1013,9 @@ artifacts:
       - name: code_reviewer_evidence
         type: object
         required: true
-        description: "Independent Code Reviewer dispatch/result or fresh direct-fallback review evidence created during Review after Build completes"
-        validation: "Names Review as owner, identifies the reviewed scope, and references review_result evidence; it cannot be used to satisfy a Build exit gate."
+        description: "Newly created fresh-context independent Code Reviewer dispatch/result evidence created during Review after Build completes, in every lane and execution_mode"
+        validation: "Names Review as owner, identifies a newly created reviewer with self-contained fresh context (Codex fork_turns=none) that is neither the author nor a Build actor, identifies the reviewed scope, and references review_result evidence; it cannot be used to satisfy a Build exit gate. Historical v15 direct-fallback review evidence is readable only as a historical record and never satisfies current completion."
+        on_fail: "Dispatch a newly created independent Code Reviewer with a self-contained handoff. When isolation is unavailable, record Review as incomplete and do not complete the workflow; never substitute author or self-review."
         object_fields:
           - name: phase_owner
             type: enum
@@ -920,12 +1031,14 @@ artifacts:
         type: object
         required: conditional
         condition: "execution_intent != prepare_only and qa_evaluation_mode == required"
-        validation: "Contains QAEvaluator dispatch/result evidence in delegated mode, or QAEvaluator direct evidence with fallback reason in direct_fallback mode"
+        validation: "Contains newly created fresh-context QAEvaluator dispatch/result evidence in every lane and execution_mode. Direct-fallback QA evidence is readable only when reading a historical v15 record and never satisfies current completion."
+        on_fail: "Dispatch a newly created QAEvaluator through assistant-review. When isolation is unavailable, record QA as incomplete and do not complete the workflow."
         object_fields:
           - name: qa_evaluator_dispatch
             type: string
-            required: false
-            description: "QAEvaluator subagent/tool/run id when delegated"
+            required: conditional
+            condition: "record is produced under workflow v16; a historical v15 record may omit it"
+            description: "Newly created QAEvaluator subagent/tool/run id"
           - name: qa_evaluator_result
             type: string
             required: true
@@ -933,7 +1046,7 @@ artifacts:
           - name: qa_evaluator_direct_evidence
             type: string
             required: false
-            description: "Fresh QA evidence when direct_fallback"
+            description: "Historical v15 reader only: original direct-fallback QA evidence; new producers omit it"
 
   - name: task_state_reconciliation
     type: object
@@ -2300,8 +2413,8 @@ artifacts:
     type: enum
     required: conditional
     condition: "approved Plan uses executable packets"
-    enum_values: ["15.0"]
-    description: "New producers write v15 only; explicit verified v12 provenance uses bounded read-old/write-new admission."
+    enum_values: ["16.0"]
+    description: "New producers write v16 only; historical v15 (and verified v14) plans are read and normalized to v16 after original approval validation; explicit verified v12 provenance uses bounded read-old/write-new admission."
 
   - name: approved_plan_identity
     type: object
@@ -2718,7 +2831,7 @@ artifacts:
       - name: execution
         type: object
         required: true
-        description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume."
+        description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume. Lane/actor execution stamps are immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline: the history row carrying stamp_baseline {evidence_refs, tdd_cycle_log_ref when present}, appended once with each first stamp (reason dispatch stamp baseline) or replacement (which also keeps replaced_stamps, reason stamp replaced by a newly admitted dispatch before start or old-actor evidence). A relabelled or stripped stamp blocks. Before then, only a newly admitted dispatch may replace a stamp."
         object_fields:
           - {name: state, type: enum, required: true, enum_values: [PENDING, RUNNING, VERIFIED, BLOCKED, INVALIDATED]}
           - {name: evidence_refs, type: "string[]", required: true}
@@ -2732,6 +2845,8 @@ artifacts:
           - {name: progress_guard_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Stable outcome guard identity; never derived from legacy recovery counters."}
           - {name: action_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Exact admitted semantic action identity."}
           - {name: action_admission_ref, type: string, required: conditional, condition: "A semantic action admission has been committed", description: "Retained admission reused by later stages of the same RUNNING action."}
+          - {name: build_execution_lane, type: enum, required: conditional, enum_values: [direct_main, bounded_executor, separated_workers], condition: "The packet has been dispatched", description: "Admitted dispatch lane stamp written by admission; immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline, otherwise replaceable only by a newly admitted dispatch with the old stamp kept in history."}
+          - {name: execution_actor_id, type: string, required: conditional, condition: "The packet has been dispatched and its lane resolves an actual execution actor", description: "Admitted direct_main execution actor or writer actor stamp; immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline, otherwise replaceable only by a newly admitted dispatch with the old stamp kept in history."}
           - name: recovery
             type: object
             required: false
@@ -3575,7 +3690,7 @@ artifacts:
 
 # Completeness check:
 # Before printing --- WORKFLOW COMPLETE ---, verify:
-# 1. execution_intent=prepare_only selects completion_tiers.preparation_only and returns feature_preparation_result plus every applicable preparation artifact (including feature_preparation_evidence for existing_system); it excludes Build, changed-file, test, review, and final-handoff claims. Otherwise all required artifacts for the selected completion tier are present and controller_intensity matches the selected tier.
+# 1. execution_intent=prepare_only selects completion_tiers.preparation_only and returns feature_preparation_result plus every applicable preparation artifact (including feature_preparation_evidence for existing_system); it excludes Build, changed-file, test, post-Build review, and final-handoff claims. Otherwise all required artifacts for the selected completion tier are present and controller_intensity matches the selected tier.
 # 2. When execution_intent != prepare_only, test_results.failed == 0 when selected tests ran; validation_results records selected checks and binding checks with actual outcomes. Skipped/not_applicable entries do not satisfy completion evidence; docs-only/no-op/discovery exceptions must record the reason. evidence_assessment reflects current evidence and cannot be sufficient while a material selected-check gap remains.
 # 3. When execution_intent != prepare_only and (size is medium/large/mega, risk_tier is high/critical, controller_intensity is strict, or qa_evaluation_mode=required): spec_review_result.status == PASS and required_fixes are empty or resolved
 # 4. When execution_intent != prepare_only and (size is medium/large/mega, risk_tier is high/critical, controller_intensity is strict, or qa_evaluation_mode=required): review_result contains validated canonical result and delegation-path refs, plus final_snapshot_identity_ref and final_snapshot_identity exactly bound to the same assistant-review final_summary and current final batch; an applicable Pack also carries architecture_decision_pack_review_ref and its exact canonical contract

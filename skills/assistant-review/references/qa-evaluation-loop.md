@@ -23,7 +23,7 @@ The orchestrator provides:
 - `done_contract`: done_when, not_done_when, verification, owner_consumer, acceptance_criteria, debate_record, accepted_by.
 - `debate_record`: pre-build debate/subagent-perspective evidence from the Done Contract; required when a Done Contract exists.
 - `acceptance_criteria`: binary criteria from the user request, approved plan, slice manifest, or Done Contract.
-- `verification_evidence`: build/test/manual/check evidence already produced by Builder/Tester or direct fallback.
+- `verification_evidence`: build/test/manual/check evidence from the actual main actor or selected optional verification owner.
 - `code_review_result`: final Code Reviewer or Reviewer compatibility result.
 - `domain_context`: scoped UI/visual, product, UX, docs, DX, or domain notes when applicable.
 - `rubric_refs`: explicit references to scoped domain rubric families from `references/domain-rubrics.md` when applicable.
@@ -56,7 +56,7 @@ score_progression = []
 
 while shared_progress_allows_work:
   1. EVALUATE ACCEPTANCE
-     Dispatch qa-evaluator in delegated mode, or use direct fallback with fresh QA context.
+     Dispatch a newly created independent qa-evaluator with fresh context; unavailable isolation remains incomplete.
      Before dispatch and after any QA pause, rehash source material and require exact equality with the current complete final review batch. Source mutation requires validation, invalidation, and a fresh complete review batch before QA resumes; no stale review result may enter QA. When the carried obligation exists, verify execution_prerequisite before requested_scope; block if prerequisite or evidence is missing rather than dropping the obligation. Return its unchanged requested_scope, execution_prerequisite, feature_preparation_scope, and the exact conditional source ref or not_applicable basis with status/evidence.
      Check every acceptance criterion, Done Contract item, and Done Contract debate_record independently when a Done Contract exists.
      Compare verification evidence to the claimed outcome.

@@ -70,8 +70,8 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && ! grep -Fq "$stale_generated_phrase" "$agents_file" \
             && grep -Fq "Codex uses installed skills through native skill routing." "$agents_file" \
             && grep -Fq "load only the references or contracts relevant to the current phase" "$agents_file" \
-            && grep -Fq "For small, low-risk, localized work, act as a hands-on worker" "$agents_file" \
-            && grep -Fq "For medium+ or elevated-risk development work, remain the orchestrator" "$agents_file" \
+            && grep -Fq "Implement and verify directly when useful, at every size/risk" "$agents_file" \
+            && grep -Fq "Formal plan, code, finding-closure and acceptance reviews use newly created independent agents" "$agents_file" \
             && grep -Fq "Keep orchestration proportional" "$agents_file" \
             && grep -Fq "including when no skill matches" "$agents_file" \
             && cmp -s "$FRAMEWORK_DIR/tools/progress/operating-guidance.md" "$INSTALL_HOME/.codex/tools/progress/operating-guidance.md" \
@@ -949,9 +949,9 @@ write_ownership_workflow_fixture() {
     local workflow="$1" variant="$2" file
     mkdir -p "$workflow/contracts"
     printf '%s\n' '---' 'name: assistant-workflow' 'description: Retained ownership protocol fixture.' '---' >"$workflow/SKILL.md"
-    printf '%s\n' 'schema_version: "15.0"' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml"
+    printf '%s\n' 'schema_version: "16.0"' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml"
     cat >"$workflow/contracts/handoffs.yaml" <<'PROTOCOL'
-schema_version: "15.0"
+schema_version: "16.0"
 contract: handoffs
 skill: assistant-workflow
 worker_stage_protocol:
@@ -970,23 +970,24 @@ worker_stage_protocol:
       completes_build: false
 PROTOCOL
     case "$variant" in
-        old13|old14|unknown-version)
+        old13|old14|old15|unknown-version)
             local target_version=14.0
             [[ "$variant" != old13 ]] || target_version=13.0
-            [[ "$variant" != unknown-version ]] || target_version=16.0
+            [[ "$variant" != old15 ]] || target_version=15.0
+            [[ "$variant" != unknown-version ]] || target_version=17.0
             for file in "$workflow/contracts/index.yaml" "$workflow/contracts/handoffs.yaml"; do
-                sed "s/15.0/$target_version/" "$file" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$file"
+                sed "s/16.0/$target_version/" "$file" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$file"
             done ;;
-        mixed-version) sed 's/15.0/14.0/' "$workflow/contracts/index.yaml" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$workflow/contracts/index.yaml" ;;
+        mixed-version) sed 's/16.0/14.0/' "$workflow/contracts/index.yaml" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$workflow/contracts/index.yaml" ;;
         old|recovery|full) printf '%s\n' 'schema_version: "12.0"' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
         no-stages) sed '/^worker_stage_protocol:/,$d' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
         stage-mismatch) sed 's/current_matching_red/none/' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
         early-completion) sed 's/completes_build: false/completes_build: true/' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
         missing-index) rm "$workflow/contracts/index.yaml" ;;
         duplicate-index) printf '%s\n' 'skill: assistant-workflow' >>"$workflow/contracts/index.yaml" ;;
-        duplicate-handoffs) printf '%s\n' 'schema_version: "15.0"' >>"$workflow/contracts/handoffs.yaml" ;;
-        malformed) printf '%s\n' 'schema_version: "15.0' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
-        wrong-identity) printf '%s\n' 'schema_version: "15.0"' 'contract: output' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
+        duplicate-handoffs) printf '%s\n' 'schema_version: "16.0"' >>"$workflow/contracts/handoffs.yaml" ;;
+        malformed) printf '%s\n' 'schema_version: "16.0' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
+        wrong-identity) printf '%s\n' 'schema_version: "16.0"' 'contract: output' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
         unsafe-workflow) rm -r "$workflow"; printf 'wrong path type\n' >"$workflow" ;;
         unsafe-skill) rm "$workflow/SKILL.md"; mkdir "$workflow/SKILL.md" ;;
         unsafe-index) rm "$workflow/contracts/index.yaml"; ln -s "$workflow/SKILL.md" "$workflow/contracts/index.yaml" ;;
@@ -1125,7 +1126,7 @@ ownership_install_compatibility_matrix() {
     local matrix_root="$1" agent variant mode case_home agent_home skills workflow before after workflow_before status log
     local -a args
     for agent in codex claude gemini; do
-        for variant in old13 old14 old no-stages stage-mismatch early-completion missing-index duplicate-index duplicate-handoffs malformed wrong-identity unsafe-workflow unsafe-skill unsafe-index absent current current15 unknown-version mixed-version bom-crlf recovery full; do
+        for variant in old13 old14 old no-stages stage-mismatch early-completion missing-index duplicate-index duplicate-handoffs malformed wrong-identity unsafe-workflow unsafe-skill unsafe-index absent current old15 unknown-version mixed-version bom-crlf recovery full; do
             for mode in normal dry-run; do
                 [[ "$mode" == dry-run && ( "$variant" == recovery || "$variant" == full ) ]] && continue
                 case_home="$matrix_root/$agent-$variant-$mode"
@@ -1156,11 +1157,11 @@ ownership_install_compatibility_matrix() {
                 HOME="$case_home" CODEX_HOME="$([[ "$agent" == codex ]] && printf '%s' "$agent_home" || printf /)" bash "$FRAMEWORK_DIR/install.sh" "${args[@]}" >"$log" 2>&1 || status=$?
                 after="$(ownership_install_fingerprint "$case_home")"
                 case "$variant" in
-                    absent|current|current15|bom-crlf|recovery|full)
+                    absent|current|bom-crlf|recovery|full)
                         if [[ "$status" != 0 ]]; then ownership_matrix_failure="$agent/$variant/$mode unexpectedly rejected; $log"; return 1; fi
                         if [[ "$mode" == dry-run && "$before" != "$after" ]]; then ownership_matrix_failure="$agent/$variant dry-run mutated managed tree"; return 1; fi
                         if [[ "$variant" == absent && -e "$workflow" ]]; then ownership_matrix_failure="$agent selective absent install added workflow"; return 1; fi
-                        if [[ "$variant" == current || "$variant" == current15 || "$variant" == bom-crlf ]]; then
+                        if [[ "$variant" == current || "$variant" == bom-crlf ]]; then
                             if [[ "$workflow_before" != "$(ownership_install_fingerprint "$workflow")" ]]; then ownership_matrix_failure="$agent selective install refreshed retained compatible controller"; return 1; fi
                         fi
                         if [[ "$variant" == recovery || "$variant" == full ]]; then
@@ -1295,5 +1296,65 @@ if (cd /private/tmp && PATH="$review_runtime_root/bin" HOME="$review_install_hom
     [[ ! -e "$review_install_home/custom codex/tools/evals/review-efficiency-report.rb" ]]; then
     pass
 else fail "selective review custom-home/unrelated-cwd helper or source-only exclusion failed"; fi
+
+test_start "selective installs reject mixed protocol consumers before normal and dry-run writes"
+protocol_root="$(mktemp -d)"
+p0p4_register_cleanup "$protocol_root"
+protocol_failures=()
+for protocol_agent in codex claude gemini; do
+    for protocol_case in review-with-old-workflow workflow-with-old-debugging review-with-old-debugging; do
+        for protocol_mode in normal dry-run; do
+            protocol_home="$protocol_root/$protocol_agent-$protocol_case-$protocol_mode"
+            protocol_target="$protocol_home/.$protocol_agent/skills"
+            mkdir -p "$protocol_target"
+            protocol_args=(--agent "$protocol_agent")
+            if [[ "$protocol_case" == review-with-old-workflow ]]; then
+                write_ownership_workflow_fixture "$protocol_target/assistant-workflow" old15
+                protocol_args+=(--skill assistant-review)
+            else
+                mkdir -p "$protocol_target/assistant-debugging/contracts"
+                printf '%s\n' '---' 'name: assistant-debugging' 'description: Original v2 debugging consumer.' '---' >"$protocol_target/assistant-debugging/SKILL.md"
+                printf '%s\n' 'schema_version: "2.0"' 'contract: index' 'skill: assistant-debugging' >"$protocol_target/assistant-debugging/contracts/index.yaml"
+                # review-with-old-debugging exercises the debugging/review protocol pair alone.
+                if [[ "$protocol_case" == review-with-old-debugging ]]; then protocol_args+=(--skill assistant-review); else protocol_args+=(--skill assistant-workflow); fi
+            fi
+            [[ "$protocol_mode" != dry-run ]] || protocol_args+=(--dry-run)
+            protocol_before="$(ownership_install_fingerprint "$protocol_home")"
+            if HOME="$protocol_home" CODEX_HOME="$protocol_home/.codex" bash "$FRAMEWORK_DIR/install.sh" "${protocol_args[@]}" >"$protocol_root/$protocol_agent-$protocol_case-$protocol_mode.log" 2>&1; then
+                protocol_failures+=("$protocol_agent/$protocol_case/$protocol_mode accepted incompatible retained consumer")
+            elif ! grep -Fq 'INCOMPATIBLE_SKILL_PROTOCOL_UPGRADE' "$protocol_root/$protocol_agent-$protocol_case-$protocol_mode.log"; then
+                protocol_failures+=("$protocol_agent/$protocol_case/$protocol_mode rejected for wrong reason")
+            fi
+            [[ "$protocol_before" == "$(ownership_install_fingerprint "$protocol_home")" ]] || protocol_failures+=("$protocol_agent/$protocol_case/$protocol_mode wrote before rejection")
+        done
+    done
+done
+if [[ "${#protocol_failures[@]}" == 0 ]]; then pass; else fail "protocol compatibility preflight: ${protocol_failures[*]}"; fi
+
+test_start "protocol preflight reports missing metadata and accepts CRLF metadata like Windows"
+protocol_metadata_failures=()
+for protocol_agent in codex claude gemini; do
+    for protocol_case in missing-index crlf-current; do
+        protocol_home="$protocol_root/metadata-$protocol_agent-$protocol_case"
+        protocol_target="$protocol_home/.$protocol_agent/skills"
+        mkdir -p "$protocol_target/assistant-debugging/contracts"
+        printf '%s\n' '---' 'name: assistant-debugging' 'description: Retained debugging consumer.' '---' >"$protocol_target/assistant-debugging/SKILL.md"
+        [[ "$protocol_case" == missing-index ]] \
+            || printf '%s\r\n' 'schema_version: "3.0"' 'contract: index' 'skill: assistant-debugging' >"$protocol_target/assistant-debugging/contracts/index.yaml"
+        protocol_log="$protocol_root/metadata-$protocol_agent-$protocol_case.log"
+        protocol_before="$(ownership_install_fingerprint "$protocol_home")"
+        protocol_status=0
+        HOME="$protocol_home" CODEX_HOME="$protocol_home/.codex" bash "$FRAMEWORK_DIR/install.sh" --agent "$protocol_agent" --skill assistant-workflow --dry-run >"$protocol_log" 2>&1 || protocol_status=$?
+        if [[ "$protocol_case" == missing-index ]]; then
+            if [[ "$protocol_status" == 0 ]] || ! grep -Fq 'INCOMPATIBLE_SKILL_PROTOCOL_UPGRADE: missing or unreadable contracts/index.yaml' "$protocol_log" || grep -Fq 'No such file' "$protocol_log"; then
+                protocol_metadata_failures+=("$protocol_agent/$protocol_case did not report missing metadata")
+            fi
+        elif grep -Fq 'INCOMPATIBLE_SKILL_PROTOCOL_UPGRADE' "$protocol_log"; then
+            protocol_metadata_failures+=("$protocol_agent/$protocol_case rejected CRLF current metadata")
+        fi
+        [[ "$protocol_before" == "$(ownership_install_fingerprint "$protocol_home")" ]] || protocol_metadata_failures+=("$protocol_agent/$protocol_case wrote during dry-run")
+    done
+done
+if [[ "${#protocol_metadata_failures[@]}" == 0 ]]; then pass; else fail "protocol metadata preflight: ${protocol_metadata_failures[*]}"; fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -47,7 +47,68 @@ def seal(request):
             proof = evidence(request, packet)
             proof.pop("implementation_evidence_ref")
             context["packet_evidence"][packet["packet_id"]] = proof
+    if plan.get("plan_schema_version") in {"14.0", "15.0"}:
+        # Fixed synthetic attestation of the historical producer of this approved definition.
+        context["historical_plan_attestation"] = attest(plan)
+    else:
+        context.pop("historical_plan_attestation", None)
+    if plan.get("plan_schema_version") == "16.0":
+        # Fixed synthetic native review authority, separate from packet evidence.
+        ref = "review:synthetic-approved-plan"
+        context["readiness"]["plan_review_ref"] = ref
+        context["review_authorities"] = {ref: review_fact("plan", ref, identity, context)}
+        bind_plan_approval(request)
     return request
+
+
+def attest(plan):
+    return {"schema_version": plan["plan_schema_version"], "verified": True,
+            "producer_ref": "producer:historical-workflow-" + plan["plan_schema_version"],
+            "definition_sha256": plan["approved_plan_identity"]["definition_digest"]}
+
+
+def bind_plan_approval(request, review_ref="review:synthetic-approved-plan"):
+    """Synthetic approval authority recorded after, and referencing, the plan review."""
+    identity = request["plan"]["approved_plan_identity"]
+    request["context"]["plan_approval_authorities"] = {identity["approval_ref"]: {
+        "approval_ref": identity["approval_ref"], "approved_plan_identity": deepcopy(identity),
+        "plan_review_ref": review_ref}}
+    return request
+
+
+def bind_plan_review_exception(request, reason="no_plan_required"):
+    """Synthetic independently resolved plan-review applicability exception."""
+    context = request["context"]
+    ref = "applicability:synthetic-plan-review-exception"
+    context["readiness"].update(plan_review_required=False, plan_review_applicability_ref=ref)
+    context["plan_review_applicability_authority"] = {ref: {
+        "approved_plan_identity": deepcopy(request["plan"]["approved_plan_identity"]), "reason": reason}}
+    return request
+
+
+def reconciliation(context, subject):
+    """Review v10 producer shape (assistant-review/scripts/review-tools.py)."""
+    ids = [row["requirement_id"] for row in context["requirements"]]
+    result = {"original_request_ref": "request:fixed", "approved_plan_ref": "plan:fixed",
+              "required_requirement_ids": list(ids), "observed_requirement_ids": list(ids),
+              "unresolved_requirement_ids": [], "unresolved_finding_ids": []}
+    if subject == "acceptance":
+        result["unfinished_task_wide_work"] = []
+    return result
+
+
+def review_fact(subject, ref, identity, context):
+    fact = {"review_subject": subject, "producer_version": "10.0", "result": "CLEAN", "coverage_complete": True,
+            "approved_plan_identity": deepcopy(identity), "canonical_review_ref": ref,
+            "fresh_dispatch_evidence_ref": "native:fresh-" + subject + "-review",
+            "request_plan_reconciliation": reconciliation(context, subject)}
+    if subject == "plan":
+        # The plan review precedes approval: it binds the reviewed definition only.
+        fact.pop("approved_plan_identity")
+        fact.update(reviewed_plan_identity={key: identity[key] for key in ("task_identity", "plan_version", "definition_digest")},
+                    subagent_execution_mode="delegated", validation_status="validated", terminal_state="completed",
+                    actor_id="fresh-native:plan-reviewer")
+    return fact
 
 
 def valid_request(count=1, boundary="dispatch"):
@@ -113,9 +174,91 @@ def evidence(request, packet):
     return result
 
 
+def stamp_dispatch(request, packet, state="RUNNING"):
+    """Synthetic admitted dispatch: the stamps a real dispatch writes before verification."""
+    context = request["context"]
+    lane = context["build_execution_lane"]
+    actor = (context["execution_actor_bindings"][packet["packet_id"]]["actor_id"] if lane == "direct_main"
+             else context.get("writer_actor_ids", {}).get(packet["packet_id"]))
+    packet["execution"].update(state=state, build_execution_lane=lane)
+    if actor is not None:
+        packet["execution"]["execution_actor_id"] = actor
+    return packet
+
+
+def stamp_baseline_row(execution):
+    """The history row a first dispatch stamp appends: its evidence baseline (X1)."""
+    baseline = {"evidence_refs": deepcopy(execution["evidence_refs"])}
+    if "tdd_cycle_log_ref" in execution:
+        baseline["tdd_cycle_log_ref"] = execution["tdd_cycle_log_ref"]
+    return {"state": execution["state"], "stamp_baseline": baseline, "reason": "dispatch stamp baseline"}
+
+
+def started_row(execution):
+    """The durable row admission appends, once per stamp, when it commits a stamped packet to RUNNING (H3)."""
+    return {"state": "RUNNING", "input_identity": deepcopy(execution["input_identity"]),
+            "evidence_refs": deepcopy(execution["evidence_refs"]), "reason": "started under current stamp"}
+
+
+def completion_authorities(request, current=False, qa_criteria=None):
+    plan, context = request["plan"], request["context"]
+    completion = context["completion_evidence"]
+    identity = deepcopy(plan["approved_plan_identity"])
+    if not current:
+        provenance = plan.get("reconciliation_provenance", {})
+        for key in ("workflow_migration", "workflow_v16_migration"):
+            if key in provenance:
+                identity = deepcopy(provenance[key]["original_approved_plan_identity"])
+                break
+    if current and context.get("build_execution_lane") == "separated_workers":
+        # Fixed synthetic native Builder actors for every packet with Builder evidence.
+        context.setdefault("builder_actor_ids", {}).update(
+            {pid: "native-builder:" + pid for pid, proof in context.get("packet_evidence", {}).items()
+             if "builder_evidence_ref" in proof})
+    for gate in context["required_terminal_gates"]:
+        if gate not in {"independent_review", "qa"}:
+            continue
+        ref = "synthetic:completed-source:" + gate
+        terminal = completion["terminal_gates"][gate]
+        terminal["canonical_review_ref"] = ref
+        fact = {"review_subject": "acceptance", "producer_version": "10.0" if current else "9.0",
+            "role": "QAEvaluator" if gate == "qa" else "Reviewer", "terminal_state": "completed",
+            "canonical_contract": "assistant-review/contracts/output.yaml#" + ("qa_evaluation_result" if gate == "qa" else "final_summary"),
+            "canonical_review_ref": ref, "canonical_result_ref": ref, "result": "CLEAN", "coverage_complete": True,
+            "approved_plan_identity": deepcopy(identity), "snapshot_identity": context["current_snapshot_identity"],
+            "actor_id": ("new-native:" if current else "original-native:") + gate,
+            "native_invocation_id": ("new-invocation:" if current else "original-invocation:") + gate,
+            "native_evidence_ref": ("new-native-evidence:" if current else "original-native-evidence:") + gate,
+            "subagent_execution_mode": "delegated" if current else "direct_fallback",
+            "request_plan_reconciliation": reconciliation(context, "acceptance")}
+        if current:
+            fact.update(validation_status="validated", fresh_dispatch_evidence_ref="fresh-native-dispatch:" + gate)
+        if gate == "qa":
+            fact.pop("request_plan_reconciliation")
+            criteria = qa_criteria or [row["acceptance_criterion"] for row in context["requirements"]]
+            context["qa_acceptance_context"] = {"source_ref": "accepted-qa-context:fixed", "acceptance_criteria": list(criteria)}
+            fact.update(final_verdict="accepted", covered_acceptance_criteria=list(criteria),
+                        acceptance_source_ref="accepted-qa-context:fixed")
+        context.setdefault("review_authorities", {})[ref] = fact
+    return request
+
+
+def retain_stamps(request):
+    """The retained previous_plan keeps the dispatch stamps the fixture wrote into the plan."""
+    current = {p["packet_id"]: p["execution"] for p in request["plan"]["implementation_steps"]}
+    for packet in request["context"]["previous_plan"]["implementation_steps"]:
+        for field in API.STAMP_CODES:
+            if field in current[packet["packet_id"]]:
+                packet["execution"][field] = current[packet["packet_id"]][field]
+    return request
+
+
 def verify_all(request):
     for packet in request["plan"]["implementation_steps"]:
         packet["execution"]["state"] = "VERIFIED"
+        if request["plan"].get("plan_schema_version") == "16.0":
+            # Current VERIFIED work retains its admitted dispatch stamps (L9).
+            stamp_dispatch(request, packet, "VERIFIED")
         request["context"]["packet_evidence"][packet["packet_id"]] = evidence(request, packet)
     return request
 
@@ -223,10 +366,10 @@ def expected_current_definition(source):
     Keep every approved field except the specified version tag; coordinator
     execution, approval identity and migration provenance are outside definition.
     """
-    assert source["plan_schema_version"] in {"14.0", "15.0"}
+    assert source["plan_schema_version"] in {"14.0", "15.0", "16.0"}
     expected = {key: deepcopy(value) for key, value in source.items()
                 if key not in {"approved_plan_identity", "reconciliation_provenance"}}
-    expected["plan_schema_version"] = "15.0"
+    expected["plan_schema_version"] = "16.0"
     expected["implementation_steps"] = [
         {key: deepcopy(value) for key, value in packet.items() if key != "execution"}
         for packet in source["implementation_steps"]]
@@ -242,6 +385,12 @@ def assert_current_approval(source, canonical):
         migration = canonical["reconciliation_provenance"]["workflow_migration"]
         assert migration["source_sha256"] == API.digest(source), "Original migration source identity changed"
         assert migration["original_approved_plan_identity"] == source["approved_plan_identity"]
+        intermediate = deepcopy(expected)
+        intermediate["plan_schema_version"] = "15.0"
+        assert migration["normalized_definition_digest"] == API.digest(intermediate)
+    if source["plan_schema_version"] in {"14.0", "15.0"}:
+        migration = canonical["reconciliation_provenance"]["workflow_v16_migration"]
+        assert migration["consumer_schema_version"] == "16.0"
         assert migration["normalized_definition_digest"] == identity["definition_digest"]
 
 
@@ -306,7 +455,7 @@ def canonical_v14_plan_format_admission():
     observed = API.admission(case)
     if observed["status"] == "blocked" and observed["code"] == "unsupported_version":
         raise AssertionError("Canonical v14 packet format is not admitted")
-    if observed["status"] != "accepted" or observed["canonical_plan"]["plan_schema_version"] != "15.0":
+    if observed["status"] != "accepted" or observed["canonical_plan"]["plan_schema_version"] != "16.0":
         raise AssertionError(("Unexpected canonical14 admission result", observed))
 
 
@@ -326,7 +475,7 @@ def no_tests_request(command=False):
         packet["verification_decision_ref"] = deepcopy(ref)
     request["plan"]["completion_allocation"]["selected_check_ids"] = ["focused", "integrated"]
     seal(request)
-    packet["execution"]["state"] = "RUNNING"
+    stamp_dispatch(request, packet)
     request["context"]["test_applicability"][packet["packet_id"]] = applicability(request, packet, "not_applicable")
     proof = evidence(request, packet)
     proof.pop("tests")
@@ -353,7 +502,7 @@ def active_writer_verification_barrier():
     """New RED oracle: current otherwise-valid evidence cannot verify mutable output."""
     request = valid_request(boundary="verification")
     packet = request["plan"]["implementation_steps"][0]
-    packet["execution"]["state"] = "RUNNING"
+    stamp_dispatch(request, packet)
     request["context"]["packet_evidence"][packet["packet_id"]] = evidence(request, packet)
     request["context"]["workspace"]["active_source_writer_ids"] = [packet["packet_id"]]
     original = deepcopy(request)
@@ -486,6 +635,8 @@ def terminal_stage_and_provenance_controls():
                         "result": "passed", "evidence_ref": "integration:migrated", "procedure": "Inspect the current integrated acceptance evidence"}],
                     "terminal_gates": {"independent_review": {"passed": True, "after_integration": True,
                         "snapshot_identity": "snapshot:migrated", "evidence_ref": "review:migrated"}}}
+            if boundary == "completion":
+                completion_authorities(trial)
             trial["context"]["previous_plan"] = deepcopy(trial["plan"])
             check(trial, "accepted", "retained migrated provenance at " + boundary)
             missing = deepcopy(trial)
@@ -590,8 +741,11 @@ def productive_fourth_attempt_admission():
                   "selected_check_ids", "binding_obligation_refs", "tdd_applies", "verification_decision_ref"):
         assert current[field] == packet[field], ("Migration changed approved allocation", field)
     assert current["verification_decision"] == request["context"]["verification_decision"]
-    for field in ("input_identity", "history", "evidence_refs", "recovery"):
+    for field in ("input_identity", "evidence_refs", "recovery"):
         assert current["execution"][field] == packet["execution"][field], ("Migration lost original execution", field)
+    # The first stamp appends only its evidence baseline row (X1).
+    assert current["execution"]["history"] == packet["execution"]["history"] + [stamp_baseline_row(packet["execution"])], (
+        "Migration lost original execution", "history")
     progress = observed["canonical_progress_state"]
     for field in ("guard_id", "outcome_ref", "policy", "work_ordinal", "consecutive_no_progress",
                   "status", "baseline_ref", "frontier_ref", "history", "evidence_refs"):
@@ -696,7 +850,7 @@ def failed_green_running_next_action_admission():
     actual = observed["current_task_packet"]
     assert actual["execution"]["state"] == "RUNNING"
     assert actual["execution"]["input_identity"] == input_identity
-    assert actual["execution"]["history"] == packet["execution"]["history"]
+    assert actual["execution"]["history"] == packet["execution"]["history"] + [started_row(packet["execution"])]
     assert actual["red_evidence"] == original_cycle["red"]
     assert observed["canonical_context"]["packet_evidence"][pid]["tdd_cycle"] == original_cycle
     assert observed["canonical_context"]["writer_actor_ids"][pid] == "native-writer:" + pid
@@ -1103,7 +1257,7 @@ def shared_progress_controls():
     # Start a genuinely native v15 branch before admission. Mutating an accepted
     # migrated v14 snapshot would instead exercise its provenance gate.
     native_source = released_v14_productive_fourth_attempt()
-    native_source["plan"]["plan_schema_version"] = "15.0"
+    native_source["plan"]["plan_schema_version"] = "16.0"
     seal(native_source)
     native_source["context"]["previous_plan"] = deepcopy(native_source["plan"])
     native_admitted = check(native_source, "accepted")
@@ -1190,6 +1344,9 @@ def shared_progress_controls():
                 expected_execution = deepcopy(old["execution"])
                 if old["packet_id"] == original["target_packet_id"]:
                     expected_execution["action_admission_ref"] = expected_state["action_admission"]["admission_ref"]
+                    expected_execution["build_execution_lane"] = original["context"]["build_execution_lane"]
+                    expected_execution["execution_actor_id"] = original["context"]["writer_actor_ids"][old["packet_id"]]
+                    expected_execution["history"].append(stamp_baseline_row(old["execution"]))
                 assert new["execution"] == expected_execution
             assert result["canonical_context"]["current_input_identities"] == original["context"]["current_input_identities"]
         for mutation in ("scope-identity", "decision-identity", "both-identities", "member", "input", "unapproved"):
@@ -1220,7 +1377,8 @@ def shared_progress_controls():
         result = definition_check(generic, "accepted", version + " guarded dispatch preserves generic history literally")
         if result["status"] == "accepted":
             for plan in (result["canonical_plan"], result["canonical_context"]["previous_plan"]):
-                assert plan["implementation_steps"][0]["execution"]["history"] == generic["plan"]["implementation_steps"][0]["execution"]["history"]
+                source = generic["plan"]["implementation_steps"][0]["execution"]
+                assert plan["implementation_steps"][0]["execution"]["history"] == source["history"] + [stamp_baseline_row(source)]
         for field in ("event_id", "evidence_ref"):
             for malformed in (None, "", " "):
                 marked = deepcopy(released_v14_productive_fourth_attempt() if version == "14.0" else native_source)
@@ -1270,6 +1428,7 @@ def shared_progress_controls():
             for owner in (changed["plan"], changed["context"]):
                 owner["approved_plan_identity"]["approval_ref"] = "approval:independent-metadata-change"
             changed["context"]["test_applicability"] = {packet["packet_id"]: applicability(changed, packet)}
+            bind_plan_approval(changed)
         changed["context"]["packet_evidence"][packet["packet_id"]] = evidence(changed, packet)
         material = mutation in {"scope", "specification", "verification"}
         assert (API.digest(API.packet_definition(packet)) != approved_digest) == material
@@ -1538,6 +1697,8 @@ def completion_progress_closure_controls():
                 "procedure": "Inspect the current integrated acceptance evidence"}],
             "terminal_gates": {"independent_review": {"passed": True, "after_integration": True,
                 "snapshot_identity": "snapshot:completion", "evidence_ref": "review:completion"}}}
+        current = trial["plan"].get("plan_schema_version") == "16.0" and not trial["plan"].get("reconciliation_provenance")
+        completion_authorities(trial, current=current)
         return trial
 
     def compact(request, inventory=None):
@@ -1957,14 +2118,14 @@ def completion_progress_closure_controls():
     # Missing canonical retention is recorded without hiding the stale-work
     # reproductions below; no historical authority is backfilled from a mutant.
     native_source = released_v14_productive_fourth_attempt()
-    native_source["plan"]["plan_schema_version"] = "15.0"
+    native_source["plan"]["plan_schema_version"] = "16.0"
     seal(native_source)
     native_source["context"]["previous_plan"] = deepcopy(native_source["plan"])
-    native_initial = check(native_source, "accepted", "native v15 singleton actually admits before definition mutations")
+    native_initial = check(native_source, "accepted", "native v16 singleton actually admits before definition mutations")
     assert native_initial["status"] == "accepted", "Native singleton prerequisite failure is not authorizing RED"
     native_close = cycle(retained_progress_request(native_initial))
     native_close.update(boundary="plan", plan=deepcopy(native_initial["canonical_plan"]))
-    native_closed = check(native_close, "accepted", "native v15 singleton actually closes before definition mutations")
+    native_closed = check(native_close, "accepted", "native v16 singleton actually closes before definition mutations")
     assert native_closed["status"] == "accepted", "Native singleton closure prerequisite failure is not authorizing RED"
     native_known_closed = retained_progress_request(native_closed)
     native_admission = deepcopy(native_initial["canonical_progress_state"]["action_admission"])
@@ -1984,7 +2145,7 @@ def completion_progress_closure_controls():
     original_closed["context"]["progress"] = deepcopy(known_closed["context"]["progress"])
     original_closed["plan"]["implementation_steps"][0]["execution"] = deepcopy(known_closed["plan"]["implementation_steps"][0]["execution"])
     original_closed["context"]["previous_plan"] = deepcopy(original_closed["plan"])
-    for version, original in (("14.0", original_closed), ("15.0", native_known_closed)):
+    for version, original in (("14.0", original_closed), ("16.0", native_known_closed)):
         for form in ("full", "compacted"):
             retained = deepcopy(original) if form == "full" else compact(original)
             if form == "compacted":
@@ -2182,7 +2343,7 @@ def completion_progress_closure_controls():
         execution["state"] = "VERIFIED"
         for field in ("action_ref", "action_admission_ref"):
             execution.pop(field, None)
-    check(empty_guard, "blocked", "valid empty initial progress cannot certify guard-only VERIFIED work", "progress_history_missing")
+    check(retain_stamps(empty_guard), "blocked", "valid empty initial progress cannot certify guard-only VERIFIED work", "progress_history_missing")
     for form, retained in (("full", known_closed), ("compacted", compact(known_closed))):
         expected_location = "checkpoint" if form == "full" else "summary"
         check_lineage(retained, original_identity, original_admission["admission_ref"], expected_location,
@@ -2263,7 +2424,7 @@ def completion_progress_closure_controls():
                                        action_ref=old_action)
         if form == "compacted":
             foreign = compact(foreign)
-        check(completion(foreign), "blocked", form + " no-pair B cannot complete under actually closed singleton A", "progress_mismatch")
+        check(retain_stamps(completion(foreign)), "blocked", form + " no-pair B cannot complete under actually closed singleton A", "progress_mismatch")
     sibling = retained_progress_request(closed_first)
     sibling["target_packet_id"] = "dependent-outcome"
     assert not any(field in sibling["plan"]["implementation_steps"][1]["execution"]
@@ -2685,6 +2846,1355 @@ def completion_progress_closure_controls():
     return total
 
 
+def current_completion_request(qa=True):
+    """Current v16 completion with fresh v10 final review (and optional QA)."""
+    case = verify_all(valid_request(2, "completion"))
+    case["plan"]["plan_schema_version"] = "16.0"
+    seal(case)
+    verify_all(case)
+    context = case["context"]
+    gates = ["independent_review", "qa"] if qa else ["independent_review"]
+    context.update(current_snapshot_identity="snapshot:current-authority", required_terminal_gates=gates)
+    context["completion_evidence"] = {"approved_plan_identity": deepcopy(case["plan"]["approved_plan_identity"]),
+        "snapshot_identity": context["current_snapshot_identity"], "acceptance_results": [],
+        "validation_results": [{"selected_check_ids": ["integrated"], "binding_obligation_refs": [], "result": "passed",
+            "evidence_ref": "integration:current", "procedure": "Inspect the current integrated acceptance evidence"}],
+        "terminal_gates": {gate: {"passed": True, "after_integration": True, "snapshot_identity": context["current_snapshot_identity"],
+            "evidence_ref": gate + ":source"} for gate in gates}}
+    completion_authorities(case, current=True)
+    return case
+
+
+def review_tools_module():
+    path = ROOT / "skills/assistant-review/scripts/review-tools.py"
+    spec = importlib.util.spec_from_file_location("review_tools_for_admission", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def review_tools_v10_aggregate(subject, reconciliation_value, result):
+    """Python port of the canonical two-pass v10 aggregate fixture in review-tools-contracts.sh."""
+    import json
+    snapshot = {"basis": "content_digest", "value": "sha256:source", "captured_at": "2026-10-23T12:00:00Z", "scope_manifest_digest": "sha256:manifest"}
+    binding = {"task_id": "task", "native_invocation_id": "native-p1", "batch_id": "batch", "review_snapshot_id": "snapshot",
+               "review_pass_id": "p1", "review_attempt_id": "p1:retry-7", "producer_id": "reviewer", "producer_version": "10.0",
+               "source_digest": "sha256:source"}
+    passes = [{"review_pass_id": "p1", "perspective": "contract_and_test_oracle", "assigned_scope": ["scope"], "coverage_obligations": ["contract"], "prior_finding_visibility": "none"},
+              {"review_pass_id": "p2", "perspective": "runtime_lifecycle_and_failure_paths", "assigned_scope": ["scope"], "coverage_obligations": ["runtime"], "prior_finding_visibility": "none"}]
+    tuples = [{"review_pass_id": p["review_pass_id"], "scope_item_id": "scope", "applicable_concern": "contract",
+               "review_perspective": p["perspective"], "coverage_obligation": p["coverage_obligations"][0]} for p in passes]
+    actors = {"p1": "reviewer-1", "p2": "reviewer-2"}
+    contexts, authorities, responses, replies = {}, {}, {}, {}
+    for p in passes:
+        pid = p["review_pass_id"]
+        actor = actors[pid]
+        fact = {"actor_id": actor, "root_actor_id": "root", "author_actor_ids": ["author"], "prior_reviewer_actor_ids": [],
+                "native_invocation_id": "native:" + actor, "creation_evidence_ref": "native:create-" + actor,
+                "runtime_evidence_ref": "native:observed-" + actor, "runtime": "codex", "fork_turns": "none",
+                "context_isolation": "fresh_self_contained", "handoff_digest": "sha256:handoff-" + pid,
+                "source_digest": snapshot["value"], "review_subject": subject}
+        context = {"round": 1, "batch_id": "batch", "review_snapshot_id": "snapshot", "snapshot_identity": snapshot,
+                   "review_pass_id": pid, "review_attempt_id": pid + ":retry-7", "review_perspective": p["perspective"],
+                   "assigned_scope": p["assigned_scope"], "scope_size": "small", "rubric_required": False,
+                   "quality_principles_required": False}
+        contexts[pid] = context
+        authorities[pid] = {"producer_version": "10.0", "context": dict(context, reviewer_actor_id=actor,
+                            native_invocation_id=fact["native_invocation_id"], handoff_digest=fact["handoff_digest"], review_subject=subject),
+                            "required_coverage_tuples": [t for t in tuples if t["review_pass_id"] == pid], "fresh_dispatch": fact}
+        entry = {key: value for key, value in next(t for t in tuples if t["review_pass_id"] == pid).items() if key != "review_pass_id"}
+        replies[pid] = dict({key: context[key] for key in ("round", "batch_id", "review_snapshot_id", "snapshot_identity",
+                                                           "review_pass_id", "review_attempt_id", "review_perspective")},
+            status="DONE", pass_completion_state="completed", reviewed_scope=["scope"], findings=[],
+            coverage_entries=[dict(entry, status="inspected_no_risk", evidence="inspected source invariant")],
+            summary="No material findings within the reviewed scope and available evidence",
+            evidence=[{"source": "source", "detail": "traced producer and consumer"}],
+            reuse_search={"applicability": "not_applicable", "applicability_reason": "fixture has no new capability"}, verdict="clean")
+        native = dict(binding, native_invocation_id=fact["native_invocation_id"], review_pass_id=pid, review_attempt_id=context["review_attempt_id"])
+        responses["event:" + pid] = {"identity_authority": {"dispatch_binding": native, "history_known": True, "records": [], "archives": {}},
+            "delivery": {"binding": deepcopy(native), "complete": True, "payload": json.dumps(replies[pid], separators=(",", ":")),
+                         "payload_ref": "raw:" + pid, "event_id": "event:" + pid}}
+    plan = {"batch_id": "batch", "review_snapshot_id": "snapshot", "scope_size": "small",
+            "topology": {"discovery_pass_count": 2, "canonical_discovery_perspectives": {
+                "trivial_small": [p["perspective"] for p in passes],
+                "medium": [p["perspective"] for p in passes] + ["integration_compatibility_and_consumers"],
+                "large": [p["perspective"] for p in passes] + ["integration_compatibility_and_consumers", "architecture_maintainability_and_reuse"]},
+                "security_specialist_triggered": False, "closure_verification_required": False, "max_required_responses": 2},
+            "expected_passes": passes, "required_coverage_tuples": tuples}
+    barrier = {"pass_attempt_ledger": [{"review_pass_id": pid, "active_terminal_attempt_id": contexts[pid]["review_attempt_id"],
+        "attempts": [{"review_attempt_id": contexts[pid]["review_attempt_id"], "attempt_count": 1, "record_state": "terminal",
+                      "terminal_state": "completed", "repair_disposition": "not_needed",
+                      "response_events": [{"response_event_id": "event:" + pid, "dispatch_attempt_id": contexts[pid]["review_attempt_id"],
+                                           "disposition": "active_terminal"}]}]} for pid in ("p1", "p2")]}
+    authority = {"producer_version": "10.0", "review_subject": subject, "plan": plan,
+                 "active_attempts": {pid: c["review_attempt_id"] for pid, c in contexts.items()}, "responses": responses,
+                 "return_authorities": authorities, "unresolved_conflicts": [], "source_current": True, "producer_current": True,
+                 "source_findings": [], "previously_fixed": [], "snapshot_identity": snapshot, "terminal_barrier": barrier,
+                 "canonical_response_events": {"p1": "event:p1", "p2": "event:p2"},
+                 "request_plan_reconciliation": deepcopy(reconciliation_value)}
+    summary = {"reviewed_scope": ["scope"], "rounds": 1, "final_review_snapshot_id": "snapshot", "final_snapshot_identity": snapshot,
+               "coverage_complete": True, "final_batch_plan": plan,
+               "coverage_ledger": [dict({key: value for key, value in t.items() if key != "review_perspective"}, perspective=t["review_perspective"],
+                                        batch_id="batch", review_snapshot_id="snapshot", assigned_scope=["scope"], terminal_state="completed",
+                                        coverage_status="complete", coverage_disposition="inspected_no_risk", evidence="source inspected") for t in tuples],
+               "batch_summaries": [{"started_batch_ordinal": 1, "batch_id": "batch", "review_snapshot_id": "snapshot", "snapshot_identity": snapshot,
+                                    "batch_status": "complete", "expected_response_count": 2, "terminal_response_count": 2, "aggregate_rubric_recomputed": True}],
+               "aggregation_ledger": [], "aggregated_findings": [], "result": result, "fixed_items": [], "nits": []}
+    if result == "CLEAN":
+        summary["evidence_bounded_claim"] = "No material findings within the reviewed scope and available evidence"
+    return {"operation": "validate_aggregate_accounting", "authority": authority, "candidate": summary}
+
+
+def round2_authority_controls():
+    """Round-2 discriminating controls: reconciliation rule, review independence,
+    dispatch stamps and plan review ordering. Each asserts the exact code."""
+    total = 0
+
+    def expect(request, status, code=None, name=None):
+        nonlocal total
+        before = deepcopy(request)
+        result = API.admission(request)
+        assert result["status"] == status and (code is None or result["code"] == code), (name, status, code, result)
+        assert request == before, "Admission mutated caller state"
+        total += 1
+        return result
+
+    plan_case = valid_request()
+    plan_case["plan"]["plan_schema_version"] = "16.0"
+    seal(plan_case)
+    expect(plan_case, "accepted", name="baseline current plan review")
+    plan_ref = "review:synthetic-approved-plan"
+    writer = plan_case["context"]["writer_actor_ids"]["accepted-outcome"]
+
+    # R1 consumer: unfinished_task_wide_work is string[] for plan review; missing
+    # unresolved lists are unknown, hence incomplete, for both subjects.
+    for label, value, code in (("non-string item", [7], "malformed"), ("blank item", [""], "malformed"),
+                               ("object item", [{"work": "docs"}], "malformed")):
+        trial = deepcopy(plan_case)
+        trial["context"]["review_authorities"][plan_ref]["request_plan_reconciliation"]["unfinished_task_wide_work"] = value
+        expect(trial, "blocked", code, name="plan review unfinished_task_wide_work rejects " + label)
+    for field in ("unresolved_requirement_ids", "unresolved_finding_ids"):
+        trial = deepcopy(plan_case)
+        trial["context"]["review_authorities"][plan_ref]["request_plan_reconciliation"].pop(field)
+        expect(trial, "blocked", "review_authority", name="plan review missing " + field + " is incomplete")
+    completion = current_completion_request()
+    expect(completion, "accepted", name="baseline current completion")
+    review_ref = completion["context"]["completion_evidence"]["terminal_gates"]["independent_review"]["canonical_review_ref"]
+    qa_ref = completion["context"]["completion_evidence"]["terminal_gates"]["qa"]["canonical_review_ref"]
+    for field in ("unresolved_requirement_ids", "unresolved_finding_ids"):
+        trial = deepcopy(completion)
+        trial["context"]["review_authorities"][review_ref]["request_plan_reconciliation"].pop(field)
+        expect(trial, "blocked", "review_authority", name="acceptance review missing " + field + " is incomplete")
+
+    # R2: plan review needs completed validated delegated authority from a nonblank
+    # actor outside the reviewed work; completion reviewers likewise.
+    builder = "native-builder:accepted-outcome"
+    for label, mutate, code in (
+            ("direct fallback", lambda f, c: f.update(subagent_execution_mode="direct_fallback"), "review_authority"),
+            ("missing mode", lambda f, c: f.pop("subagent_execution_mode"), "review_authority"),
+            ("unvalidated", lambda f, c: f.update(validation_status="invalid"), "review_authority"),
+            ("failed terminal", lambda f, c: f.update(terminal_state="failed"), "review_authority"),
+            ("missing actor", lambda f, c: f.pop("actor_id"), "malformed"),
+            ("blank actor", lambda f, c: f.update(actor_id=" "), "malformed"),
+            ("writer actor", lambda f, c: f.update(actor_id=writer), "review_authority"),
+            ("builder actor", lambda f, c: (c.update(builder_actor_ids={"accepted-outcome": builder}), f.update(actor_id=builder)), "review_authority")):
+        trial = deepcopy(plan_case)
+        mutate(trial["context"]["review_authorities"][plan_ref], trial["context"])
+        expect(trial, "blocked", code, name="plan review rejects " + label)
+    main = valid_request()
+    main["plan"]["plan_schema_version"] = "16.0"
+    main["context"]["build_execution_lane"] = "direct_main"
+    main["context"]["execution_actor_bindings"] = {"accepted-outcome": {"kind": "main", "actor_id": "native-main", "runtime_evidence_ref": "native:main-session"}}
+    main["context"].pop("writer_actor_ids")
+    main["context"]["packet_evidence"] = {}
+    seal(main)
+    expect(main, "accepted", name="baseline direct_main plan review")
+    trial = deepcopy(main)
+    trial["context"]["review_authorities"][plan_ref]["actor_id"] = "native-main"
+    expect(trial, "blocked", "review_authority", name="plan review cannot be the main execution binding")
+    for gate_ref, label in ((review_ref, "final review"), (qa_ref, "QA")):
+        for actor_label, setup in (("writer", lambda c: c["writer_actor_ids"]["accepted-outcome"]),
+                                   ("builder", lambda c: c["builder_actor_ids"].update({"dependent-outcome": [builder]}) or builder)):
+            trial = deepcopy(completion)
+            trial["context"]["review_authorities"][gate_ref]["actor_id"] = setup(trial["context"])
+            expect(trial, "blocked", "review_authority", name=label + " actor cannot be the " + actor_label)
+
+    # R4: dispatch lane/actor stamps bind verification and reconciliation.
+    for lane in ("direct_main", "separated_workers"):
+        case = valid_request(boundary="verification")
+        pid = "accepted-outcome"
+        packet = case["plan"]["implementation_steps"][0]
+        if lane == "direct_main":
+            case["context"]["build_execution_lane"] = "direct_main"
+            case["context"]["execution_actor_bindings"] = {pid: {"kind": "main", "actor_id": "native-main", "runtime_evidence_ref": "native:main-session"}}
+            case["context"].pop("writer_actor_ids")
+            case["context"]["packet_evidence"] = {}
+            seal(case)
+            packet = case["plan"]["implementation_steps"][0]
+            proof = evidence(case, packet)
+            for key in ("builder_evidence_ref", "writer_actor_id"):
+                proof.pop(key)
+            proof.update(build_execution_lane="direct_main", native_evidence_ref="native:main-session", execution_actor_id="native-main")
+            stamped = "native-main"
+        else:
+            proof = evidence(case, packet)
+            stamped = writer
+        packet["execution"].update(state="RUNNING", build_execution_lane=lane, execution_actor_id=stamped)
+        case["context"]["packet_evidence"][pid] = proof
+        expect(case, "accepted", name=lane + " verification by the stamped actor")
+        other = deepcopy(case)
+        if lane == "direct_main":
+            other["context"]["execution_actor_bindings"][pid] = {"kind": "main", "actor_id": "other-main", "runtime_evidence_ref": "native:other"}
+            other["context"]["packet_evidence"][pid].update(execution_actor_id="other-main", native_evidence_ref="native:other")
+        else:
+            other["context"]["writer_actor_ids"][pid] = "writer-B"
+            other["context"]["packet_evidence"][pid]["writer_actor_id"] = "writer-B"
+        expect(other, "blocked", "execution_actor", name=lane + " verification by another actor than stamped")
+        relabelled = deepcopy(case)
+        relabelled["plan"]["implementation_steps"][0]["execution"]["build_execution_lane"] = "bounded_executor"
+        expect(relabelled, "blocked", "lane_evidence", name=lane + " verification under another lane than stamped")
+        retained = deepcopy(other)
+        retained["plan"]["implementation_steps"][0]["execution"]["state"] = "VERIFIED"
+        refused = expect(retained, "blocked", "invalidated", name=lane + " reconciliation invalidates a VERIFIED packet with a foreign stamp")
+        assert refused["canonical_plan"]["implementation_steps"][0]["execution"]["state"] == "INVALIDATED"
+
+    # R19: the plan review precedes approval and the approval references it.
+    for label, mutate, code in (
+            ("review bound to an approval", lambda f, c: f.update(approved_plan_identity=deepcopy(c["approved_plan_identity"])), "review_authority"),
+            ("reviewed identity carries approval_ref", lambda f, c: f["reviewed_plan_identity"].update(approval_ref=c["approved_plan_identity"]["approval_ref"]), "review_authority"),
+            ("reviewed an earlier definition", lambda f, c: f["reviewed_plan_identity"].update(definition_digest="0" * 64), "review_authority"),
+            ("reviewed another plan version", lambda f, c: f["reviewed_plan_identity"].update(plan_version="draft-0"), "review_authority"),
+            ("missing reviewed identity", lambda f, c: f.pop("reviewed_plan_identity"), "malformed"),
+            ("approval before review", lambda f, c: c["plan_approval_authorities"][c["approved_plan_identity"]["approval_ref"]].pop("plan_review_ref"), "review_authority"),
+            ("approval references another review", lambda f, c: c["plan_approval_authorities"][c["approved_plan_identity"]["approval_ref"]].update(plan_review_ref="review:earlier-draft"), "review_authority"),
+            ("approval of another identity", lambda f, c: c["plan_approval_authorities"][c["approved_plan_identity"]["approval_ref"]]["approved_plan_identity"].update(plan_version="other"), "review_authority"),
+            ("missing approval authority", lambda f, c: c.pop("plan_approval_authorities"), "malformed")):
+        trial = deepcopy(plan_case)
+        mutate(trial["context"]["review_authorities"][plan_ref], trial["context"])
+        expect(trial, "blocked", code, name="plan review ordering rejects " + label)
+
+    # R1 integration: the real Review v10 aggregate API output feeds admission.
+    tools = review_tools_module()
+
+    def full_for(case):
+        ids = [row["requirement_id"] for row in case["context"]["requirements"]]
+        return {"original_request_ref": "request:original", "approved_plan_ref": "plan:approved", "required_requirement_ids": list(ids),
+                "observed_requirement_ids": list(ids), "unresolved_requirement_ids": [], "unfinished_task_wide_work": [], "unresolved_finding_ids": []}
+    full = full_for(plan_case)
+
+    def produced(subject, coverage, result):
+        answer = tools.call(review_tools_v10_aggregate(subject, coverage, result))
+        return answer
+
+    def project(fact, answer):
+        fact.update(result=answer["result"]["result"], coverage_complete=answer["result"]["coverage_complete"],
+                    request_plan_reconciliation=deepcopy(answer["result"]["request_plan_reconciliation"]))
+
+    integration_failures = []
+    plan_cases = (("full", deepcopy(full), "accepted"),
+                  ("nonempty unfinished work", dict(deepcopy(full), unfinished_task_wide_work=["final integration"]), "accepted"),
+                  ("absent unfinished work", {k: v for k, v in full.items() if k != "unfinished_task_wide_work"}, "accepted"))
+    for label, coverage, status in plan_cases:
+        answer = produced("plan", coverage, "CLEAN")
+        if not answer["valid"]:
+            integration_failures.append("review-tools plan " + label + ": " + str(answer["diagnostics"]))
+            continue
+        trial = deepcopy(plan_case)
+        project(trial["context"]["review_authorities"][plan_ref], answer)
+        expect(trial, status, None if status == "accepted" else "review_authority", name="review-tools plan " + label + " feeds admission")
+    for subject, label, field in (("plan", "absent unresolved requirements", "unresolved_requirement_ids"),
+                                  ("plan", "absent unresolved findings", "unresolved_finding_ids"),
+                                  ("acceptance", "absent unfinished work", "unfinished_task_wide_work"),
+                                  ("acceptance", "absent unresolved requirements", "unresolved_requirement_ids")):
+        coverage = {k: v for k, v in full_for(plan_case if subject == "plan" else completion).items() if k != field}
+        clean = produced(subject, coverage, "CLEAN")
+        assert not clean["valid"] and clean["diagnostics"] == ["request_plan_incomplete"], (subject, label, clean)
+        remaining = produced(subject, coverage, "HAS_REMAINING_ITEMS")
+        assert remaining["valid"] and remaining["result"]["result"] == "HAS_REMAINING_ITEMS", (subject, label, remaining)
+        trial = deepcopy(plan_case if subject == "plan" else completion)
+        fact = trial["context"]["review_authorities"][plan_ref if subject == "plan" else review_ref]
+        project(fact, remaining)
+        expect(trial, "blocked", "review_authority", name="review-tools " + subject + " " + label + " blocks admission")
+        # Even a relabelled CLEAN over the producer's incomplete object stays blocked.
+        fact["result"] = "CLEAN"
+        expect(trial, "blocked", "review_authority", name="relabelled CLEAN " + subject + " " + label + " blocks admission")
+    for label, coverage in (("full", full_for(completion)),):
+        answer = produced("acceptance", coverage, "CLEAN")
+        assert answer["valid"] and answer["result"]["result"] == "CLEAN", answer
+        trial = deepcopy(completion)
+        project(trial["context"]["review_authorities"][review_ref], answer)
+        expect(trial, "accepted", name="review-tools acceptance " + label + " feeds completion")
+    unfinished = dict(full_for(completion), unfinished_task_wide_work=["documentation update"])
+    remaining = produced("acceptance", unfinished, "HAS_REMAINING_ITEMS")
+    assert remaining["valid"], remaining
+    trial = deepcopy(completion)
+    project(trial["context"]["review_authorities"][review_ref], remaining)
+    expect(trial, "blocked", "review_authority", name="review-tools acceptance unfinished work blocks completion")
+    assert not integration_failures, "Review producer disagrees with the agreed plan reconciliation rule: " + "; ".join(integration_failures)
+    return total
+
+
+def digest_reuse_controls(detailed_case):
+    """D1 default digest mode: no edit after GREEN and an equal caller-resolved digest."""
+    total = 0
+    case = deepcopy(detailed_case)
+    packet = case["plan"]["implementation_steps"][0]
+    pid = packet["packet_id"]
+    context = case["context"]
+    proof = context["packet_evidence"][pid]
+    cycle = proof["tdd_cycle"]
+    cycle.pop("reuse_identity_mode")
+    cycle["green"].pop("relevant_input_identity")
+    green_digest = "sha256:" + "a" * 64
+    cycle["green"]["reuse_digest"] = green_digest
+    for field in ("green_invocation_refs", "reuse_assessment_ref"):
+        cycle["refactor"].pop(field)
+    context.pop("verification_reuse_authority")
+    current = context["current_input_identities"][pid]
+    current.pop("relevant_input_identity")
+    current["reuse_digest"] = green_digest
+    # Per-row invocation_ref is optional except the GREEN target row.
+    for row in proof["validation_results"][1:]:
+        row.pop("invocation_ref", None)
+
+    def rebind(trial):
+        ids = trial["context"]["current_input_identities"][pid]
+        trial["context"]["packet_evidence"][pid]["input_identity"] = deepcopy(ids)
+        trial["context"]["test_applicability"][pid]["input_identity"] = deepcopy(ids)
+        return trial
+
+    def verify(trial):
+        nonlocal total
+        total += 1
+        return API.verified_packet(trial["plan"]["implementation_steps"][0], trial["context"]["packet_evidence"][pid],
+                                   trial["plan"], trial["context"], API.check_specs(trial["context"]["verification_decision"])[0])
+
+    rebind(case)
+    verify(case)  # accepted when digests match, without a detailed assessment
+    explicit = deepcopy(case)
+    explicit["context"]["packet_evidence"][pid]["tdd_cycle"]["reuse_identity_mode"] = "digest"
+    verify(explicit)
+    # B6: equal sentinel or non-digest values on both sides never support reuse.
+    for sentinel in ("UNKNOWN", "Unknown", "n/a", "N/A", "none", "None", "snapshot:green-run", "sha256:" + "a" * 63,
+                     "sha256:" + "A" * 64, "sha1:" + "a" * 64, " " + "a" * 64, "b" * 64,
+                     "SHA256:" + "a" * 64, "Sha256:" + "a" * 64, " sha256:" + "a" * 64):
+        trial = deepcopy(case)
+        trial["context"]["current_input_identities"][pid]["reuse_digest"] = sentinel
+        trial["context"]["packet_evidence"][pid]["tdd_cycle"]["green"]["reuse_digest"] = sentinel
+        try:
+            verify(rebind(trial))
+        except API.AdmissionError as error:
+            assert error.code == "tdd_reuse" and error.details.startswith("Missing, unknown or non-digest"), (sentinel, error.code, error.details)
+        else:
+            raise AssertionError("Sentinel or non-digest reuse_digest accepted: " + sentinel)
+    for mutation in ("current_missing", "current_unknown", "current_blank", "current_different", "green_digest_missing",
+                     "refactor_ran_commands", "changes_made", "green_failed_row", "green_failed_flag", "refactor_ref",
+                     "detailed_without_identity", "unknown_mode", "copied_from_log_only", "both_unknown", "both_missing"):
+        trial = deepcopy(case)
+        tproof = trial["context"]["packet_evidence"][pid]
+        tcycle = tproof["tdd_cycle"]
+        ids = trial["context"]["current_input_identities"][pid]
+        if mutation == "current_missing": ids.pop("reuse_digest")
+        elif mutation == "current_unknown": ids["reuse_digest"] = "unknown"
+        elif mutation == "current_blank": ids["reuse_digest"] = " "
+        elif mutation == "current_different": ids["reuse_digest"] = "sha256:" + "c" * 64
+        elif mutation == "green_digest_missing": tcycle["green"].pop("reuse_digest")
+        elif mutation == "refactor_ran_commands":
+            tcycle["refactor"]["command_results"] = [{"target": "verify.py", "argv": deepcopy(packet["red_command"]), "cwd": "/workspace",
+                                                      "result": "passed", "freshness": "current", "invocation_ref": "refactor:new"}]
+        elif mutation == "changes_made": tcycle["refactor"]["changes_made"] = "extracted helper"
+        elif mutation == "green_failed_row": tproof["validation_results"][0]["result"] = "failed"
+        elif mutation == "green_failed_flag": tcycle["green"]["all_tests_pass"] = False
+        elif mutation == "refactor_ref": tcycle["refactor"]["invocation_ref"] = "refactor:new"
+        elif mutation == "detailed_without_identity": tcycle["reuse_identity_mode"] = "detailed"
+        elif mutation == "unknown_mode": tcycle["reuse_identity_mode"] = "loose"
+        elif mutation == "both_unknown": ids["reuse_digest"] = tcycle["green"]["reuse_digest"] = "unknown"
+        elif mutation == "both_missing": ids.pop("reuse_digest"); tcycle["green"].pop("reuse_digest")
+        else:
+            # The current digest is never taken from the TDD log itself.
+            ids.pop("reuse_digest")
+            tcycle["current_reuse_digest"] = tcycle["green"]["reuse_digest"]
+        rebind(trial)
+        try:
+            verify(trial)
+        except API.AdmissionError as error:
+            assert error.code == "tdd_reuse", ("Digest reuse rejected for the wrong reason", mutation, error.code, error.details)
+        else:
+            raise AssertionError("Invalid digest reuse accepted: " + mutation)
+    return total
+
+
+def historical_fallback_completion():
+    """Attested 14.0 completion whose v9 direct_fallback acceptance kept the writer actor."""
+    historical = verify_all(valid_request(2, "completion"))
+    historical["context"].update(current_snapshot_identity="snapshot:historical", required_terminal_gates=["independent_review"])
+    historical["context"]["completion_evidence"] = {
+        "approved_plan_identity": deepcopy(historical["plan"]["approved_plan_identity"]), "snapshot_identity": "snapshot:historical",
+        "acceptance_results": [], "validation_results": [{"selected_check_ids": ["integrated"], "binding_obligation_refs": [],
+            "result": "passed", "evidence_ref": "integration:historical", "procedure": "Inspect the current integrated acceptance evidence"}],
+        "terminal_gates": {"independent_review": {"passed": True, "after_integration": True,
+            "snapshot_identity": "snapshot:historical", "evidence_ref": "review:historical"}}}
+    completion_authorities(historical)
+    review_ref = historical["context"]["completion_evidence"]["terminal_gates"]["independent_review"]["canonical_review_ref"]
+    historical["context"]["review_authorities"][review_ref]["actor_id"] = historical["context"]["writer_actor_ids"]["accepted-outcome"]
+    return historical, review_ref
+
+
+def round4_authority_controls():
+    """Round-4 controls: attested historical provenance, plan review at every
+    boundary, retained stamps, distinct review authorities, Builder actors,
+    blocked verification state and v10 acceptance mode. Each asserts the exact code."""
+    total = 0
+
+    def expect(request, status, code=None, name=None, path=None):
+        nonlocal total
+        before = deepcopy(request)
+        result = API.admission(request)
+        assert result["status"] == status and (code is None or result["code"] == code), (name, status, code, result)
+        assert path is None or result["path"] == path, (name, path, result["path"])
+        assert request == before, "Admission mutated caller state"
+        total += 1
+        return result
+
+    # A1: a 14.0/15.0 label without independent attestation is not provenance.
+    for version in ("14.0", "15.0"):
+        case = valid_request()
+        case["plan"]["plan_schema_version"] = version
+        seal(case)
+        admitted = expect(case, "accepted", name=version + " attested historical approval")
+        assert admitted["canonical_plan"]["reconciliation_provenance"]["workflow_v16_migration"]["historical_attestation"]["verified"] is True
+        unattested = deepcopy(case)
+        unattested["context"].pop("historical_plan_attestation")
+        refused = expect(unattested, "blocked", "review_authority", name=version + " unattested label still needs plan review", path="plan.review_ref")
+        assert refused["details"].startswith("plan_review_missing"), refused["details"]
+        assert refused["canonical_plan"]["reconciliation_provenance"]["workflow_v16_migration"]["historical_attestation"] is None
+        for label, mutate in (("version", lambda a: a.update(schema_version="13.0")),
+                              ("unverified", lambda a: a.update(verified=False)),
+                              ("definition", lambda a: a.update(definition_sha256="0" * 64)),
+                              ("missing producer", lambda a: a.pop("producer_ref")),
+                              ("blank producer", lambda a: a.update(producer_ref=" ")),
+                              ("extra key", lambda a: a.update(self_attested=True))):
+            trial = deepcopy(case)
+            mutate(trial["context"]["historical_plan_attestation"])
+            expect(trial, "blocked", "legacy_provenance" if label != "blank producer" else "malformed",
+                   name=version + " contradicting attestation: " + label)
+    historical, review_ref = historical_fallback_completion()
+    expect(historical, "accepted", name="attested historical v9 direct_fallback keeps its original same-session actor")
+    unattested = deepcopy(historical)
+    unattested["context"].pop("historical_plan_attestation")
+    bind_plan_review_exception(unattested)
+    unattested["context"]["plan_review_applicability_authority"]["applicability:synthetic-plan-review-exception"][
+        "approved_plan_identity"] = deepcopy(admitted_identity(unattested))
+    unattested["context"]["builder_actor_ids"] = {pid: "native-builder:" + pid for pid in unattested["context"]["writer_actor_ids"]}
+    refused = expect(unattested, "blocked", "review_authority", name="unattested v9 direct_fallback cannot let the writer review")
+    assert refused["details"] == "A review actor cannot be a writer, Builder or execution actor of the reviewed work", refused["details"]
+    unattested["context"]["review_authorities"][review_ref]["actor_id"] = "original-native:independent_review"
+    refused = expect(unattested, "blocked", "review_authority", name="unattested v9 completion is not historical authority")
+    assert refused["details"] == "Historical completion needs original approval/provenance and actual original policy", refused["details"]
+
+    # A2: plan review is re-evaluated at verification and completion.
+    verification = valid_request(boundary="verification")
+    verification["plan"]["plan_schema_version"] = "16.0"
+    seal(verification)
+    packet = verification["plan"]["implementation_steps"][0]
+    packet["execution"]["state"] = "RUNNING"
+    verification["context"]["packet_evidence"][packet["packet_id"]] = evidence(verification, packet)
+    unstamped = deepcopy(verification)
+    packet["execution"].update(build_execution_lane=verification["context"]["build_execution_lane"],
+                               execution_actor_id=verification["context"]["writer_actor_ids"][packet["packet_id"]])
+    expect(verification, "accepted", name="current verification with a valid plan review")
+    # B1: without a retained snapshot, unstamped started work cannot verify.
+    expect(unstamped, "blocked", "lane_evidence", name="verification without stamps or previous_plan", path=packet["packet_id"])
+    plan_ref = "review:synthetic-approved-plan"
+    for label, case in (("verification", verification), ("completion", current_completion_request())):
+        trial = deepcopy(case)
+        trial["context"]["review_authorities"][plan_ref]["result"] = "HAS_REMAINING_ITEMS"
+        refused = expect(trial, "blocked", "review_authority", name=label + " re-evaluates the plan-review gate", path="plan")
+
+    # A3: started work retains its admitted dispatch stamps.
+    stamped = deepcopy(verification)
+    writer = stamped["context"]["writer_actor_ids"]["accepted-outcome"]
+    stamped["plan"]["implementation_steps"][0]["execution"].update(build_execution_lane="separated_workers", execution_actor_id=writer)
+    stamped["context"]["previous_plan"] = deepcopy(stamped["plan"])
+    expect(stamped, "accepted", name="retained stamps verify")
+    for field, code in (("build_execution_lane", "lane_evidence"), ("execution_actor_id", "execution_actor")):
+        trial = deepcopy(stamped)
+        trial["plan"]["implementation_steps"][0]["execution"].pop(field)
+        expect(trial, "blocked", code, name="stripped " + field + " stamp cannot relabel started work")
+    relabel = deepcopy(stamped)
+    relabel["plan"]["implementation_steps"][0]["execution"].pop("execution_actor_id")
+    relabel["context"]["writer_actor_ids"]["accepted-outcome"] = "writer-B"
+    relabel["context"]["packet_evidence"]["accepted-outcome"]["writer_actor_id"] = "writer-B"
+    expect(relabel, "blocked", "execution_actor", name="stripped stamp cannot hide an actor relabel")
+    # B1: dispatch leaves the packet PENDING with stamps; a later snapshot must retain them.
+    pending = deepcopy(stamped)
+    pending["context"]["previous_plan"]["implementation_steps"][0]["execution"]["state"] = "PENDING"
+    expect(pending, "accepted", name="retained stamps verify after a PENDING dispatch snapshot")
+    for field, code in (("build_execution_lane", "lane_evidence"), ("execution_actor_id", "execution_actor")):
+        trial = deepcopy(pending)
+        trial["plan"]["implementation_steps"][0]["execution"].pop(field)
+        expect(trial, "blocked", code, name="stripped " + field + " stamp after a PENDING dispatch snapshot")
+    # M1: a newly admitted dispatch replaces a differing PENDING stamp only before
+    # old-actor stage evidence, recording the replaced stamp in history.
+    redispatch = valid_request()
+    redispatch["plan"]["plan_schema_version"] = "16.0"
+    seal(redispatch)
+    first = expect(redispatch, "accepted", name="first dispatch writes stamps")
+    stamps = first["canonical_plan"]["implementation_steps"][0]["execution"]
+    assert stamps["build_execution_lane"] == redispatch["context"]["build_execution_lane"], stamps
+    assert stamps["history"] == [stamp_baseline_row(redispatch["plan"]["implementation_steps"][0]["execution"])], stamps
+    pid = redispatch["target_packet_id"]
+    for field, value, code in (("build_execution_lane", "bounded_executor", "lane_evidence"),
+                               ("execution_actor_id", "writer-B", "execution_actor")):
+        trial = deepcopy(redispatch)
+        trial["plan"]["implementation_steps"][0]["execution"][field] = value
+        trial["context"]["previous_plan"] = deepcopy(trial["plan"])
+        replaced = expect(trial, "accepted", name="re-dispatch replaces a differing PENDING " + field + " stamp before evidence")
+        execution = replaced["canonical_plan"]["implementation_steps"][0]["execution"]
+        assert execution[field] == stamps[field] and execution["history"][-1]["replaced_stamps"] == {field: value}, execution
+        assert replaced["current_task_packet"]["execution"]["history"] == execution["history"], replaced["current_task_packet"]
+        # Old-actor authored tests are stage evidence (top-level writer evidence already blocks as writer_lineage).
+        for label, mutate in (("old-actor evidence", lambda t: t["context"]["packet_evidence"][pid].update(
+                                   {"build_execution_lane": value} if field == "build_execution_lane" else
+                                   {"tests": {"mode": "authored", "evidence_ref": "tests:old", "writer_actor_id": value}})),
+                              ("evidence_refs recorded after the retained snapshot", lambda t: t["plan"]["implementation_steps"][0]["execution"].update(evidence_refs=["writer:old"]))):
+            evidenced = deepcopy(trial)
+            mutate(evidenced)
+            expect(evidenced, "blocked", code, name="re-dispatch cannot replace a " + field + " stamp after " + label, path=pid)
+
+    # A4/A5/A7: distinct review authorities, resolved Builder actors, delegated acceptance.
+    completion = current_completion_request()
+    expect(completion, "accepted", name="baseline current completion with plan review")
+    final_ref = completion["context"]["completion_evidence"]["terminal_gates"]["independent_review"]["canonical_review_ref"]
+    for label, mutate in (("plan reviewer actor", lambda c: c["review_authorities"][final_ref].update(actor_id=c["review_authorities"][plan_ref]["actor_id"])),
+                          ("plan review dispatch", lambda c: c["review_authorities"][final_ref].update(
+                              fresh_dispatch_evidence_ref=c["review_authorities"][plan_ref]["fresh_dispatch_evidence_ref"])),
+                          ("plan reviewer invocation", lambda c: (c["review_authorities"][plan_ref].update(native_invocation_id="inv:shared"),
+                                                                  c["review_authorities"][final_ref].update(native_invocation_id="inv:shared"))),
+                          ("missing builder ids", lambda c: c.pop("builder_actor_ids")),
+                          ("blank builder id", lambda c: c["builder_actor_ids"].update({"dependent-outcome": " "})),
+                          ("empty builder list", lambda c: c["builder_actor_ids"].update({"dependent-outcome": []})),
+                          ("v10 acceptance fallback", lambda c: c["review_authorities"][final_ref].update(subagent_execution_mode="direct_fallback"))):
+        trial = deepcopy(completion)
+        mutate(trial["context"])
+        refused = expect(trial, "blocked", "review_authority", name="completion rejects " + label)
+        expected = ("Resolve builder_actor_ids for every packet with Builder evidence" if "builder" in label else
+                    "Current acceptance needs validated fresh native authority independently of plan review" if "fallback" in label else
+                    "A current review authority cannot reuse another review's ")
+        assert refused["details"].startswith(expected), (label, refused["details"])
+
+    # A6: a blocked verification never reports VERIFIED.
+    blocked = deepcopy(verification)
+    blocked["current_task_packet"] = {"forged": "projection"}
+    refused = expect(blocked, "blocked", "projection_mismatch", name="verification projection mismatch")
+    assert refused["canonical_plan"]["implementation_steps"][0]["execution"]["state"] == "RUNNING", refused["canonical_plan"]
+
+    # C4: a plan review references the reviewed definition, never the later approval.
+    plan_case = valid_request()
+    plan_case["plan"]["plan_schema_version"] = "16.0"
+    seal(plan_case)
+    trial = deepcopy(plan_case)
+    trial["context"]["review_authorities"][plan_ref]["request_plan_reconciliation"]["approved_plan_ref"] = \
+        trial["plan"]["approved_plan_identity"]["approval_ref"]
+    expect(trial, "blocked", "review_authority", name="plan review approved_plan_ref names the later approval")
+    return total
+
+
+def round5_admission_controls():
+    """Round-5 controls: re-derived migration provenance (B2), re-approval loses
+    grandfathering (B4), already-running exception (B3) and exact actor ids (B5).
+    B1 stamps and B6 digests extend round4_authority_controls and digest_reuse_controls."""
+    total = 0
+
+    def expect(request, status, code=None, name=None, path=None, details=None):
+        nonlocal total
+        before = deepcopy(request)
+        result = API.admission(request)
+        assert result["status"] == status and (code is None or result["code"] == code), (name, status, code, result)
+        assert path is None or result["path"] == path, (name, path, result["path"])
+        assert details is None or result["details"].startswith(details), (name, details, result["details"])
+        assert request == before, "Admission mutated caller state"
+        total += 1
+        return result
+
+    def canonical16(source, boundary):
+        """The retained 16.0 snapshot and context a caller replays after migration."""
+        migrated = API.admission(source)
+        assert migrated["status"] == "accepted", migrated
+        request = {"boundary": boundary, "plan": deepcopy(migrated["canonical_plan"]),
+                   "context": deepcopy(migrated["canonical_context"])}
+        if "target_packet_id" in source:
+            request["target_packet_id"] = source["target_packet_id"]
+        return request
+
+    # B2: retained provenance is re-derived from the current definition and attestation.
+    historical, _ = historical_fallback_completion()
+    retained = canonical16(historical, "completion")
+    assert retained["plan"]["plan_schema_version"] == "16.0" and "workflow_migration" in retained["plan"]["reconciliation_provenance"]
+    expect(retained, "accepted", name="retained attested 16.0 provenance keeps the historical v9 fallback")
+    identity = retained["plan"]["approved_plan_identity"]
+    # The round-4 forgery: a bare verified flag plus the original identity the v9 source binds.
+    forged_minimal = {"workflow_v16_migration": {"historical_attestation": {"verified": True}, "consumer_schema_version": "16.0",
+        "normalized_definition_digest": identity["definition_digest"],
+        "original_approved_plan_identity": deepcopy(retained["plan"]["reconciliation_provenance"]["workflow_migration"]["original_approved_plan_identity"])}}
+    rows = ("workflow_migration", "workflow_v16_migration")
+    for label, mutate in (
+            ("forged minimal provenance", lambda prov: (prov.clear(), prov.update(deepcopy(forged_minimal)))),
+            ("attestation definition digest", lambda prov: [prov[row]["historical_attestation"].update(definition_sha256="0" * 64) for row in rows]),
+            ("attestation extra key", lambda prov: [prov[row]["historical_attestation"].update(self_attested=True) for row in rows]),
+            ("attestation version", lambda prov: [prov[row]["historical_attestation"].update(schema_version="15.0") for row in rows]),
+            ("attestation blank producer", lambda prov: [prov[row]["historical_attestation"].update(producer_ref=" ") for row in rows]),
+            ("v16 producer version", lambda prov: prov["workflow_v16_migration"].update(producer_schema_version="16.0")),
+            ("v16 original identity digest", lambda prov: prov["workflow_v16_migration"]["original_approved_plan_identity"].update(definition_digest="0" * 64)),
+            ("v15 normalized digest", lambda prov: prov["workflow_migration"].update(normalized_definition_digest="0" * 64)),
+            ("chain attestation mismatch", lambda prov: prov["workflow_migration"]["historical_attestation"].update(producer_ref="producer:other"))):
+        trial = deepcopy(retained)
+        for owner in (trial["plan"], trial["context"]["previous_plan"]):
+            mutate(owner["reconciliation_provenance"])
+        expect(trial, "blocked", "review_authority", name="16.0 provenance cannot grandfather: " + label, path="plan.review_ref",
+               details="plan_review_missing")
+
+    # B4: an authenticated migration loses grandfathering once the plan is changed and re-approved.
+    base = canonical16(valid_request(), "dispatch")
+    pid = base["target_packet_id"]
+
+    def reapproved(mutate):
+        request = deepcopy(base)
+        plan, context = request["plan"], request["context"]
+        mutate(plan, context)
+        plan["approved_plan_identity"].update(task_identity=plan["task_identity"], plan_version=plan["plan_version"],
+                                              definition_digest=API.digest(API.definition(plan)))
+        context["approved_plan_identity"] = deepcopy(plan["approved_plan_identity"])
+        context["previous_plan"] = deepcopy(plan)
+        context["test_applicability"] = {p["packet_id"]: applicability(request, p) for p in plan["implementation_steps"]}
+        return request
+
+    expect(reapproved(lambda plan, context: None), "accepted", name="unchanged migrated approval needs no current plan review")
+    for label, mutate in (
+            ("changed definition", lambda plan, context: plan["implementation_steps"][0].update(description="Revised accepted packet outcome")),
+            ("changed task identity", lambda plan, context: (plan.update(task_identity="synthetic-task-revised"),
+                                                             context.update(task_identity="synthetic-task-revised"))),
+            ("changed plan version", lambda plan, context: plan.update(plan_version="approved-2"))):
+        expect(reapproved(mutate), "blocked", "review_authority", name="re-approved migrated plan needs plan review: " + label,
+               path="plan.review_ref", details="plan_review_missing")
+
+    # B3: the already-running exception needs a retained same-approval snapshot with started work.
+    running = valid_request(boundary="verification")
+    running["plan"]["plan_schema_version"] = "16.0"
+    seal(running)
+    packet = running["plan"]["implementation_steps"][0]
+    stamp_dispatch(running, packet)
+    running["context"]["packet_evidence"][packet["packet_id"]] = evidence(running, packet)
+    bind_plan_review_exception(running, "unchanged_already_running_approved_plan")
+    running["context"]["previous_plan"] = deepcopy(running["plan"])
+    expect(running, "accepted", name="already-running exception with a retained started snapshot")
+    ref = running["context"]["readiness"]["plan_review_applicability_ref"]
+    missing = deepcopy(running)
+    missing["context"].pop("previous_plan")
+    expect(missing, "blocked", "review_authority", name="already-running exception without a retained snapshot", path=ref,
+           details="An already-running exception needs")
+    pending = deepcopy(running)
+    pending["context"]["previous_plan"]["implementation_steps"][0]["execution"]["state"] = "PENDING"
+    expect(pending, "blocked", "review_authority", name="already-running exception without started work", path=ref,
+           details="An already-running exception needs")
+    unrestricted = deepcopy(missing)
+    unrestricted["context"]["plan_review_applicability_authority"][ref]["reason"] = "no_plan_required"
+    expect(unrestricted, "accepted", name="no_plan_required exception does not need started work")
+
+    # B5: padded actor ids cannot pass independence by inequality.
+    completion = current_completion_request()
+    expect(completion, "accepted", name="baseline current completion for exact actor ids")
+    context = completion["context"]
+    final_ref = context["completion_evidence"]["terminal_gates"]["independent_review"]["canonical_review_ref"]
+    plan_ref = context["readiness"]["plan_review_ref"]
+    for label, mutate in (
+            ("final reviewer padded writer", lambda c: c["review_authorities"][final_ref].update(actor_id=c["writer_actor_ids"]["accepted-outcome"] + " ")),
+            ("padded builder id", lambda c: c["builder_actor_ids"].update({"accepted-outcome": " " + c["builder_actor_ids"]["accepted-outcome"]})),
+            ("plan reviewer padded final reviewer", lambda c: c["review_authorities"][plan_ref].update(actor_id=c["review_authorities"][final_ref]["actor_id"] + "\t"))):
+        trial = deepcopy(completion)
+        mutate(trial["context"])
+        expect(trial, "blocked", "review_authority", name="exact actor ids: " + label,
+               details="Actor ids cannot carry surrounding whitespace")
+    return total
+
+
+def round6_admission_controls():
+    """Round-6 controls: stamp recovery before start (M1), completion stamps (L9)
+    and the missing plan-review diagnostic (L6). Each asserts the exact code."""
+    total = 0
+
+    def expect(request, status, code=None, name=None, path=None, details=None):
+        nonlocal total
+        before = deepcopy(request)
+        result = API.admission(request)
+        assert result["status"] == status and (code is None or result["code"] == code), (name, status, code, result)
+        assert path is None or result["path"] == path, (name, path, result["path"])
+        assert details is None or result["details"].startswith(details), (name, details, result["details"])
+        assert request == before, "Admission mutated caller state"
+        total += 1
+        return result
+
+    def current(lane="separated_workers"):
+        request = valid_request()
+        request["plan"]["plan_schema_version"] = "16.0"
+        seal(request)
+        if lane == "direct_main":
+            request["context"].update(build_execution_lane="direct_main", packet_evidence={},
+                execution_actor_bindings={"accepted-outcome": {"kind": "main", "actor_id": "native-main", "runtime_evidence_ref": "native:main-session"}})
+            request["context"].pop("writer_actor_ids")
+            request["context"]["test_applicability"] = {p["packet_id"]: applicability(request, p) for p in request["plan"]["implementation_steps"]}
+        return request
+
+    def stamped(request, lane, actor):
+        """A prior admitted dispatch left this PENDING packet stamped; previous_plan retains it."""
+        request["plan"]["implementation_steps"][0]["execution"].update(build_execution_lane=lane, execution_actor_id=actor)
+        request["context"]["previous_plan"] = deepcopy(request["plan"])
+        return request
+
+    def replaced(result, lane, actor, old):
+        execution = result["canonical_plan"]["implementation_steps"][0]["execution"]
+        assert execution["state"] == "PENDING" and execution["build_execution_lane"] == lane, execution
+        assert execution["execution_actor_id"] == actor and execution["history"][-1]["replaced_stamps"] == old, execution
+        assert result["canonical_context"]["previous_plan"]["implementation_steps"][0]["execution"] == execution
+        return execution
+
+    pid = "accepted-outcome"
+    # M1: a new writer after the old writer returned BLOCKED or was lost, before any evidence.
+    for label, mutate in (("lost writer", lambda c: c["packet_evidence"].pop(pid)), ("blocked writer", lambda c: None)):
+        case = stamped(current(), "separated_workers", "native-writer:lost")
+        mutate(case["context"])
+        result = expect(case, "accepted", name="new writer replaces the stamp after a " + label)
+        replaced(result, "separated_workers", "native-writer:" + pid, {"build_execution_lane": "separated_workers", "execution_actor_id": "native-writer:lost"})
+        # The replaced stamp then binds verification of the new writer's work.
+        follow = {"boundary": "verification", "target_packet_id": pid, "plan": deepcopy(result["canonical_plan"]),
+                  "context": deepcopy(result["canonical_context"])}
+        follow["plan"]["implementation_steps"][0]["execution"]["state"] = "RUNNING"
+        follow["context"]["packet_evidence"][pid] = evidence(follow, follow["plan"]["implementation_steps"][0])
+        expect(follow, "accepted", name="replaced stamp verifies the new writer after a " + label)
+        foreign = deepcopy(follow)
+        foreign["plan"]["implementation_steps"][0]["execution"]["execution_actor_id"] = "native-writer:lost"
+        expect(foreign, "blocked", "execution_actor", name="restored old stamp cannot verify after a " + label, path=pid)
+    # The old writer's evidence, or a RUNNING packet, keeps the stamp immutable.
+    evidenced = stamped(current(), "separated_workers", "native-writer:lost")
+    evidenced["context"]["packet_evidence"][pid]["tests"] = {"mode": "authored", "evidence_ref": "tests:old", "writer_actor_id": "native-writer:lost"}
+    expect(evidenced, "blocked", "execution_actor", name="old writer's authored tests keep the stamp", path=pid)
+    running = stamped(current(), "separated_workers", "native-writer:lost")
+    running["plan"]["implementation_steps"][0]["execution"]["state"] = "RUNNING"
+    running["context"]["previous_plan"] = deepcopy(running["plan"])
+    running["context"]["packet_evidence"][pid] = evidence(running, running["plan"]["implementation_steps"][0])
+    running.update(worker_stage="final_verification", worker_role="builder_tester")
+    expect(running, "blocked", "execution_actor", name="RUNNING packet keeps its stamp", path=pid)
+
+    # M1: a separated_workers spawn failure falls back to direct_main before any evidence.
+    fallback = stamped(current("direct_main"), "separated_workers", "native-writer:spawn-failed")
+    result = expect(fallback, "accepted", name="spawn failure falls back to direct_main")
+    replaced(result, "direct_main", "native-main", {"build_execution_lane": "separated_workers", "execution_actor_id": "native-writer:spawn-failed"})
+    stripped = deepcopy(fallback)
+    stripped["plan"]["implementation_steps"][0]["execution"].pop("build_execution_lane")
+    expect(stripped, "blocked", "lane_evidence", name="stripping the old stamp instead of replacing it stays blocked", path=pid)
+
+    # M1: a new-session direct_main actor on a not-started packet.
+    session = stamped(current("direct_main"), "direct_main", "native-main:old-session")
+    result = expect(session, "accepted", name="new-session main actor replaces a not-started stamp")
+    replaced(result, "direct_main", "native-main", {"build_execution_lane": "direct_main", "execution_actor_id": "native-main:old-session"})
+    started = deepcopy(session)
+    started["plan"]["implementation_steps"][0]["execution"]["evidence_refs"] = ["main:old-session"]
+    expect(started, "blocked", "execution_actor", name="old-session evidence keeps the main actor stamp", path=pid)
+
+    # L9: unstamped current VERIFIED work needs the retained previous_plan at completion.
+    completion = current_completion_request()
+    expect(completion, "accepted", name="stamped VERIFIED completion")
+    unstamped = deepcopy(completion)
+    for packet in unstamped["plan"]["implementation_steps"]:
+        for field in ("build_execution_lane", "execution_actor_id"):
+            packet["execution"].pop(field)
+    expect(unstamped, "blocked", "lane_evidence", name="unstamped VERIFIED completion without previous_plan", path=pid)
+    retained = deepcopy(unstamped)
+    retained["context"]["previous_plan"] = deepcopy(retained["plan"])
+    expect(retained, "accepted", name="unstamped VERIFIED completion with the retained previous_plan")
+
+    # L6: a missing current plan review is review_authority, never malformed.
+    missing = current()
+    missing["context"]["readiness"].pop("plan_review_ref")
+    expect(missing, "blocked", "review_authority", name="missing plan review", path="plan.review_ref", details="plan_review_missing")
+    return total
+
+
+def round7_admission_controls():
+    """Round-7 controls: delegated progress projection (A1), stamp evidence
+    attribution (A2), retained-start stamp lock (A3), malformed stamps (A4) and
+    stamp-replacement edges (A6). Each asserts the exact code."""
+    total = 0
+
+    def expect(request, status, code=None, name=None, path=None):
+        nonlocal total
+        before = deepcopy(request)
+        result = API.admission(request)
+        assert result["status"] == status and (code is None or result["code"] == code), (name, status, code, result)
+        assert path is None or result["path"] == path, (name, path, result["path"])
+        assert request == before, "Admission mutated caller state"
+        total += 1
+        return result
+
+    pid = "accepted-outcome"
+
+    def current():
+        request = valid_request()
+        request["plan"]["plan_schema_version"] = "16.0"
+        seal(request)
+        return request
+
+    def stamped(request, actor="native-writer:lost", state="PENDING"):
+        """A prior admitted dispatch stamped the packet; previous_plan retains it in state."""
+        execution = request["plan"]["implementation_steps"][0]["execution"]
+        execution.update(build_execution_lane="separated_workers", execution_actor_id=actor)
+        request["context"]["previous_plan"] = deepcopy(request["plan"])
+        request["context"]["previous_plan"]["implementation_steps"][0]["execution"]["state"] = state
+        return request
+
+    def replaced(result, old):
+        execution = result["canonical_plan"]["implementation_steps"][0]["execution"]
+        assert execution["history"][-1]["replaced_stamps"] == old, execution
+        return execution
+
+    # A1: an ordinary delegated progress dispatch projects the admitted progress state.
+    progress = expect(released_v14_productive_fourth_attempt(), "accepted", name="delegated progress dispatch")
+    assert "action_admission" in progress["canonical_progress_state"], progress["canonical_progress_state"]
+    assert progress["current_task_packet"]["progress_state"] == progress["canonical_progress_state"], progress["current_task_packet"]
+
+    # A2: refs carried in the retained previous_plan predate the start.
+    legacy = current()
+    legacy["plan"]["implementation_steps"][0]["execution"]["evidence_refs"] = ["legacy:prior-recovery"]
+    stamped(legacy)
+    result = expect(legacy, "accepted", name="v16 retry with carried legacy evidence_refs")
+    replaced(result, {"build_execution_lane": "separated_workers", "execution_actor_id": "native-writer:lost"})
+    newer = deepcopy(legacy)
+    newer["plan"]["implementation_steps"][0]["execution"]["evidence_refs"].append("writer:lost-output")
+    expect(newer, "blocked", "execution_actor", name="evidence_refs produced after the stamp", path=pid)
+    unknown = deepcopy(legacy)
+    unknown["context"].pop("previous_plan")
+    expect(unknown, "blocked", "execution_actor", name="unattributable evidence_refs without previous_plan", path=pid)
+    for label, carried, status in (("carried", True, "accepted"), ("new", False, "blocked")):
+        log = current()
+        log["plan"]["implementation_steps"][0]["execution"]["tdd_cycle_log_ref"] = "tdd-log:packet"
+        stamped(log)
+        if not carried:
+            log["context"]["previous_plan"]["implementation_steps"][0]["execution"].pop("tdd_cycle_log_ref")
+        expect(log, status, None if carried else "execution_actor", name="PENDING retry with a " + label + " tdd_cycle_log_ref")
+
+    # A2: a v14-normalized packet carrying legacy evidence_refs can still be retried.
+    v14 = valid_request()
+    assert v14["plan"]["plan_schema_version"] == "14.0"
+    v14["plan"]["implementation_steps"][0]["execution"]["evidence_refs"] = ["v14:legacy-run"]
+    seal(v14)
+    v14["context"]["writer_actor_ids"][pid] = "native-writer:first"
+    v14["context"]["packet_evidence"].pop(pid)
+    first = expect(v14, "accepted", name="v14 dispatch normalizes and stamps the first writer")
+    assert first["canonical_plan"]["implementation_steps"][0]["execution"]["execution_actor_id"] == "native-writer:first"
+    retry = {"boundary": "dispatch", "target_packet_id": pid, "plan": deepcopy(first["canonical_plan"]),
+             "context": deepcopy(first["canonical_context"])}
+    retry["context"]["writer_actor_ids"][pid] = "native-writer:" + pid
+    result = expect(retry, "accepted", name="v14-normalized retry with legacy evidence_refs")
+    replaced(result, {"build_execution_lane": "separated_workers", "execution_actor_id": "native-writer:first"})
+    produced = deepcopy(retry)
+    produced["plan"]["implementation_steps"][0]["execution"]["evidence_refs"].append("writer:first-output")
+    expect(produced, "blocked", "execution_actor", name="v14-normalized retry after first-writer evidence", path=pid)
+
+    # A3: a retained start locks the stamp even when the current state is PENDING.
+    for state in ("RUNNING", "BLOCKED", "VERIFIED"):
+        trial = stamped(current(), state=state)
+        if state == "VERIFIED":
+            expect(trial, "blocked", "invalid_state", name="VERIFIED cannot regress to PENDING", path=pid)
+            continue
+        expect(trial, "blocked", "execution_actor", name=state + "->PENDING cannot replace the actor stamp", path=pid)
+        same = deepcopy(trial)
+        same["plan"]["implementation_steps"][0]["execution"]["execution_actor_id"] = "native-writer:" + pid
+        same["context"]["previous_plan"]["implementation_steps"][0]["execution"]["execution_actor_id"] = "native-writer:" + pid
+        expect(same, "accepted", name="same-actor retry after " + state)
+    relabel = stamped(current(), state="RUNNING")
+    relabel["context"]["build_execution_lane"] = "bounded_executor"
+    relabel["context"]["test_applicability"] = {p["packet_id"]: applicability(relabel, p) for p in relabel["plan"]["implementation_steps"]}
+    expect(relabel, "blocked", "lane_evidence", name="RUNNING->PENDING cannot relabel the lane stamp", path=pid)
+    invalidated = stamped(current(), state="INVALIDATED")
+    invalidated["context"]["previous_plan"]["implementation_steps"][0]["execution"]["history"] = [
+        {"state": "RUNNING", "evidence_refs": [], "reason": "relevant inputs or prerequisite/evidence changed"}]
+    invalidated["plan"]["implementation_steps"][0]["execution"]["history"] = deepcopy(
+        invalidated["context"]["previous_plan"]["implementation_steps"][0]["execution"]["history"])
+    expect(invalidated, "blocked", "execution_actor", name="INVALIDATED after RUNNING keeps the stamp", path=pid)
+    reset = deepcopy(invalidated)
+    for execution in (reset["plan"]["implementation_steps"][0]["execution"], reset["context"]["previous_plan"]["implementation_steps"][0]["execution"]):
+        execution["history"][0]["state"] = "PENDING"
+    expect(reset, "accepted", name="INVALIDATED before start allows replacement")
+
+    # A4: malformed stamps are malformed.
+    for field, value in (("build_execution_lane", "fast_lane"), ("build_execution_lane", "none"), ("build_execution_lane", ["separated_workers"]),
+                         ("execution_actor_id", ""), ("execution_actor_id", " native-writer:lost"), ("execution_actor_id", 7)):
+        trial = current()
+        trial["plan"]["implementation_steps"][0]["execution"][field] = value
+        expect(trial, "blocked", "malformed", name="malformed " + field + " " + repr(value), path=pid + "." + field)
+
+    # A6: a lane-only replacing dispatch pops the old actor stamp.
+    lane_only = stamped(current())
+    lane_only["context"]["writer_actor_ids"].pop(pid)
+    lane_only["context"]["packet_evidence"].pop(pid)
+    result = expect(lane_only, "accepted", name="lane-only re-dispatch")
+    execution = replaced(result, {"build_execution_lane": "separated_workers", "execution_actor_id": "native-writer:lost"})
+    assert "execution_actor_id" not in execution and execution["build_execution_lane"] == "separated_workers", execution
+    assert "execution_actor_id" not in result["current_task_packet"]["execution"], result["current_task_packet"]
+    # A6/L9: lane-only stamped VERIFIED work completes without previous_plan.
+    completion = current_completion_request()
+    for packet in completion["plan"]["implementation_steps"]:
+        packet["execution"].pop("execution_actor_id")
+    assert "previous_plan" not in completion["context"]
+    expect(completion, "accepted", name="lane-only stamped VERIFIED completion")
+    return total
+
+
+def round8_admission_controls():
+    """Round-8 controls (X1): the stamp lock and old-actor attribution use the
+    durable stamp baseline and started marker, not one snapshot back. Each
+    multi-call sequence commits the accepted canonical plan/context."""
+    total = 0
+
+    def expect(request, status, code=None, name=None, path=None):
+        nonlocal total
+        before = deepcopy(request)
+        result = API.admission(request)
+        assert result["status"] == status and (code is None or result["code"] == code), (name, status, code, result)
+        assert path is None or result["path"] == path, (name, path, result["path"])
+        assert request == before, "Admission mutated caller state"
+        total += 1
+        return result
+
+    pid, sibling = "accepted-outcome", "dependent-outcome"
+
+    def siblings(version="16.0", refs=(), history=()):
+        request = valid_request(2)
+        request["plan"]["plan_schema_version"] = version
+        request["plan"]["implementation_steps"][1]["depends_on"] = []
+        request["plan"]["implementation_steps"][0]["execution"]["evidence_refs"] = list(refs)
+        request["plan"]["implementation_steps"][0]["execution"]["history"] = deepcopy(list(history))
+        seal(request)
+        request["context"]["writer_actor_ids"][pid] = "native-writer:first"
+        request["context"]["packet_evidence"].pop(pid)
+        return request
+
+    def follow(result, boundary="dispatch", target=pid, writer=None, state=None, refs=()):
+        """The caller commits the accepted result, then makes the next call."""
+        request = {"boundary": boundary, "target_packet_id": target, "plan": deepcopy(result["canonical_plan"]),
+                   "context": deepcopy(result["canonical_context"])}
+        execution = request["plan"]["implementation_steps"][0]["execution"]
+        if state is not None:
+            execution["state"] = state
+        execution["evidence_refs"].extend(refs)
+        if writer is not None:
+            request["context"]["writer_actor_ids"][pid] = writer
+        return request
+
+    first = expect(siblings(), "accepted", name="first writer dispatch records the stamp baseline")
+    execution = first["canonical_plan"]["implementation_steps"][0]["execution"]
+    assert execution["execution_actor_id"] == "native-writer:first", execution
+    assert execution["history"] == [{"state": "PENDING", "stamp_baseline": {"evidence_refs": []},
+                                     "reason": "dispatch stamp baseline"}], execution
+    started = expect(follow(first, "resume", state="RUNNING"), "accepted", name="first writer starts")
+
+    # Refs variant: first-writer output, then an accepted sibling dispatch moves previous_plan past it.
+    intermediate = expect(follow(first, target=sibling, refs=["writer:first-output"]), "accepted",
+                          name="sibling dispatch after first-writer output")
+    expect(follow(intermediate, writer="native-writer:" + pid), "blocked", "execution_actor",
+           name="other writer after an intermediate sibling dispatch (refs)", path=pid)
+
+    # Lock variant: started, regressed to PENDING, then an accepted sibling dispatch.
+    regressed = expect(follow(started, target=sibling, state="PENDING"), "accepted",
+                       name="sibling dispatch after a RUNNING->PENDING regression")
+    marker = regressed["canonical_plan"]["implementation_steps"][0]["execution"]["history"][-1:]
+    assert marker == [{"state": "RUNNING", "input_identity": {"source": "source-0"}, "evidence_refs": [],
+                       "reason": "started packet returned to PENDING"}], marker
+    expect(follow(regressed, writer="native-writer:" + pid), "blocked", "execution_actor",
+           name="other writer after an intermediate sibling dispatch (lock)", path=pid)
+    dropped = follow(regressed, writer="native-writer:" + pid)
+    dropped["plan"]["implementation_steps"][0]["execution"]["history"].pop()
+    expect(dropped, "blocked", "recovery_mismatch", name="dropping the started marker", path=pid)
+
+    # Two-admission laundering: same-actor regression dispatch, then another actor.
+    laundered = expect(follow(started, state="PENDING"), "accepted", name="same-actor dispatch after a regression")
+    expect(follow(laundered, writer="native-writer:" + pid), "blocked", "execution_actor",
+           name="other writer after a same-actor regression dispatch", path=pid)
+
+    # Legitimate same-actor next-action cycles stay accepted and keep the first baseline.
+    for label, prior in (("regression dispatch", laundered), ("sibling dispatch", regressed), ("output", intermediate)):
+        cycle = expect(follow(prior), "accepted", name="same-actor next action after a " + label)
+        history = cycle["canonical_plan"]["implementation_steps"][0]["execution"]["history"]
+        assert [row for row in history if "stamp_baseline" in row] == execution["history"], history
+
+    # A v14-normalized packet retains legacy refs in its baseline; an intermediate
+    # sibling dispatch does not block a different writer's retry.
+    v14 = expect(siblings("14.0", ["v14:legacy-run"]), "accepted", name="v14 first dispatch records the legacy baseline")
+    baseline = v14["canonical_plan"]["implementation_steps"][0]["execution"]["history"][-1]["stamp_baseline"]
+    assert baseline == {"evidence_refs": ["v14:legacy-run"]}, baseline
+    between = expect(follow(v14, target=sibling), "accepted", name="v14 sibling dispatch")
+    retry = expect(follow(between, writer="native-writer:" + pid), "accepted", name="v14-normalized legacy refs retry by another writer")
+    assert retry["canonical_plan"]["implementation_steps"][0]["execution"]["execution_actor_id"] == "native-writer:" + pid
+
+    # Started rows before the current stamp (carried legacy history) do not lock it;
+    # a start under the current stamp does.
+    legacy_row = {"state": "RUNNING", "evidence_refs": ["v14:legacy-run"], "reason": "legacy worker started"}
+    carried = expect(siblings("14.0", ["v14:legacy-run"], [legacy_row]), "accepted", name="v14 first dispatch with a legacy RUNNING row")
+    assert carried["canonical_plan"]["implementation_steps"][0]["execution"]["history"][0] == legacy_row
+    expect(follow(carried, writer="native-writer:" + pid), "accepted",
+           name="v14 legacy RUNNING row retry by another writer before a new start")
+    restarted = expect(follow(carried, "resume", state="RUNNING"), "accepted", name="v14 first writer starts under its stamp")
+    for label, step in (("regression", lambda r: follow(r, state="PENDING")),
+                        ("sibling dispatch", lambda r: follow(r, target=sibling, state="PENDING"))):
+        regressed_v14 = expect(step(restarted), "accepted", name="v14 post-stamp start then " + label)
+        expect(follow(regressed_v14, writer="native-writer:" + pid), "blocked", "execution_actor",
+               name="v14 other writer after a post-stamp start and " + label, path=pid)
+    return total
+
+
+def round9_admission_controls():
+    """Round-9 controls (Q1-Q4): any move out of a started state records the
+    started marker; caller-appended rows cannot forge admission rows; stamp
+    baselines and retained states are well formed. Each multi-call sequence
+    commits the accepted canonical plan/context."""
+    total = 0
+
+    def expect(request, status, code=None, name=None, path=None):
+        nonlocal total
+        before = deepcopy(request)
+        result = API.admission(request)
+        assert result["status"] == status and (code is None or result["code"] == code), (name, status, code, result)
+        assert path is None or result["path"] == path, (name, path, result["path"])
+        assert request == before, "Admission mutated caller state"
+        total += 1
+        return result
+
+    pid, other = "accepted-outcome", "native-writer:accepted-outcome"
+
+    def start():
+        request = valid_request(2)
+        request["plan"]["implementation_steps"][1]["depends_on"] = []
+        seal(request)
+        request["context"]["writer_actor_ids"][pid] = "native-writer:first"
+        request["context"]["packet_evidence"].pop(pid)
+        return request
+
+    def follow(result, boundary="dispatch", writer=None, state=None, source=None):
+        request = {"boundary": boundary, "target_packet_id": pid, "plan": deepcopy(result["canonical_plan"]),
+                   "context": deepcopy(result["canonical_context"])}
+        execution = request["plan"]["implementation_steps"][0]["execution"]
+        if state is not None:
+            execution["state"] = state
+        if source is not None:
+            request["context"]["current_input_identities"][pid] = {"source": source}
+            request["context"]["test_applicability"][pid]["input_identity"] = {"source": source}
+            if state == "PENDING":
+                execution["input_identity"] = {"source": source}
+        if writer is not None:
+            request["context"]["writer_actor_ids"][pid] = writer
+        return request
+
+    def markers(result):
+        return [row for row in result["canonical_plan"]["implementation_steps"][0]["execution"]["history"]
+                if row.get("reason") in API.STARTED_MARKER_REASONS]
+
+    first = expect(start(), "accepted", name="round-9 first writer dispatch")
+    running = expect(follow(first, "resume", state="RUNNING"), "accepted", name="round-9 first writer starts")
+    blocked = expect(follow(running, "resume", state="BLOCKED"), "accepted", name="round-9 started packet blocks")
+    assert markers(blocked) == [], "RUNNING->BLOCKED stays started and records no marker"
+
+    # Q1: a caller-set move out of a started state (not to PENDING) records the marker once.
+    for label, prior, source in (("RUNNING->INVALIDATED", running, None), ("BLOCKED->INVALIDATED", blocked, None),
+                                 ("RUNNING->INVALIDATED with an input change", running, "source-0-changed")):
+        invalidated = expect(follow(prior, "resume", state="INVALIDATED", source=source), "accepted", name=label)
+        old = prior["canonical_plan"]["implementation_steps"][0]["execution"]
+        assert markers(invalidated) == [{"state": old["state"], "input_identity": old["input_identity"],
+                                         "evidence_refs": [], "reason": "started packet left started state"}], (label, markers(invalidated))
+        again = expect(follow(invalidated, "resume", source=source), "accepted", name=label + " recommitted")
+        assert markers(again) == markers(invalidated), (label, "marker is written once per transition")
+        expect(follow(invalidated, writer=other, state="PENDING", source=source), "blocked", "execution_actor",
+               name="other writer after " + label + "->PENDING", path=pid)
+
+    # Q1 laundering: same-actor retry after INVALIDATED stays accepted, then another writer is blocked.
+    invalidated = expect(follow(running, "resume", state="INVALIDATED"), "accepted", name="round-9 caller invalidates")
+    retry = expect(follow(invalidated, state="PENDING"), "accepted", name="same-actor retry after INVALIDATED")
+    assert retry["canonical_plan"]["implementation_steps"][0]["execution"]["execution_actor_id"] == "native-writer:first"
+    expect(follow(retry, writer=other), "blocked", "execution_actor",
+           name="other writer after a same-actor INVALIDATED retry", path=pid)
+
+    # Q2: caller-appended admission rows beyond the retained prefix are rejected.
+    regressed = expect(follow(running, "resume", state="PENDING"), "accepted", name="round-9 RUNNING->PENDING")
+    assert markers(regressed)[-1]["reason"] == "started packet returned to PENDING", markers(regressed)
+    forged_rows = ({"state": "PENDING", "stamp_baseline": {"evidence_refs": []}, "reason": "dispatch stamp baseline"},
+                   {"state": "PENDING", "reason": "started packet returned to PENDING"},
+                   {"state": "PENDING", "reason": "started packet left started state"})
+    for row in forged_rows:
+        forged = follow(regressed, writer=other)
+        forged["plan"]["implementation_steps"][0]["execution"]["history"].append(deepcopy(row))
+        expect(forged, "blocked", "recovery_mismatch", name="forged admission row " + row["reason"], path=pid)
+
+    # Q3: every stamp_baseline row is well formed.
+    for baseline in ("baseline", {}, {"evidence_refs": "ref"}, {"evidence_refs": [1]},
+                     {"evidence_refs": [], "tdd_cycle_log_ref": 3}):
+        case = valid_request()
+        case["plan"]["implementation_steps"][0]["execution"]["history"] = [
+            {"state": "PENDING", "stamp_baseline": deepcopy(baseline), "reason": "dispatch stamp baseline"}]
+        expect(case, "blocked", "malformed", name="malformed stamp_baseline " + repr(baseline))
+
+    # Q4: a retained previous_plan state must be a known coordinator state.
+    for state in ("UNKNOWN", None):
+        case = follow(running, "resume")
+        case["context"]["previous_plan"]["implementation_steps"][0]["execution"]["state"] = state
+        expect(case, "blocked", "malformed", name="retained execution state " + repr(state),
+               path="previous_plan." + pid + ".execution.state")
+    return total
+
+
+def round10_admission_controls():
+    """Round-10 controls (G1): replacing an existing stamp needs the retained
+    previous_plan as proof the packet never started under that stamp; a
+    same-stamp re-dispatch does not. Each asserts the exact code."""
+    total = 0
+
+    def expect(request, status, code=None, name=None, path=None, details=None):
+        nonlocal total
+        before = deepcopy(request)
+        result = API.admission(request)
+        assert result["status"] == status and (code is None or result["code"] == code), (name, status, code, result)
+        assert path is None or result["path"] == path, (name, path, result["path"])
+        assert details is None or result["details"] == details, (name, details, result["details"])
+        assert request == before, "Admission mutated caller state"
+        total += 1
+        return result
+
+    pid, other, needs = "accepted-outcome", "native-writer:accepted-outcome", "stamp replacement needs the retained previous_plan"
+
+    def follow(result, boundary="dispatch", writer=None, state=None, retained=True):
+        request = {"boundary": boundary, "target_packet_id": pid, "plan": deepcopy(result["canonical_plan"]),
+                   "context": deepcopy(result["canonical_context"])}
+        if state is not None:
+            request["plan"]["implementation_steps"][0]["execution"]["state"] = state
+        if writer is not None:
+            request["context"]["writer_actor_ids"][pid] = writer
+        if not retained:
+            request["context"].pop("previous_plan")
+        return request
+
+    start = valid_request(2)
+    start["plan"]["implementation_steps"][1]["depends_on"] = []
+    start["plan"]["plan_schema_version"] = "16.0"  # Current schema: no migration snapshot is required.
+    seal(start)
+    start["context"]["writer_actor_ids"][pid] = "native-writer:first"
+    start["context"]["packet_evidence"].pop(pid)
+    first = expect(start, "accepted", name="round-10 first writer dispatch")
+    assert "previous_plan" in first["canonical_context"], first["canonical_context"].keys()
+    running = expect(follow(first, "resume", state="RUNNING"), "accepted", name="round-10 first writer starts")
+
+    # Omitting previous_plan after RUNNING->PENDING hides the start; replacement blocks.
+    expect(follow(running, writer=other, state="PENDING", retained=False), "blocked", "execution_actor",
+           name="RUNNING->PENDING replacement without previous_plan", path=pid, details=needs)
+    relabel = follow(running, state="PENDING", retained=False)
+    relabel["context"]["build_execution_lane"] = "bounded_executor"
+    relabel["context"]["test_applicability"] = {p["packet_id"]: applicability(relabel, p) for p in relabel["plan"]["implementation_steps"]}
+    expect(relabel, "blocked", "lane_evidence", name="RUNNING->PENDING lane relabel without previous_plan", path=pid, details=needs)
+
+    # An unstarted retry replaces the stamp only with the retained snapshot.
+    retried = expect(follow(first, writer=other), "accepted", name="unstarted retry with previous_plan")
+    execution = retried["canonical_plan"]["implementation_steps"][0]["execution"]
+    assert execution["execution_actor_id"] == other, execution
+    assert execution["history"][-1]["replaced_stamps"] == {"build_execution_lane": "separated_workers",
+                                                           "execution_actor_id": "native-writer:first"}, execution
+    expect(follow(first, writer=other, retained=False), "blocked", "execution_actor",
+           name="unstarted retry without previous_plan", path=pid, details=needs)
+
+    # A same-stamp re-dispatch replaces nothing and needs no snapshot.
+    same = expect(follow(first, retained=False), "accepted", name="same-stamp re-dispatch without previous_plan")
+    assert same["canonical_plan"]["implementation_steps"][0]["execution"]["execution_actor_id"] == "native-writer:first"
+    return total
+
+
+def round11_admission_controls():
+    """Round-11 controls: adding an actor to a lane-only stamp is a replacement (H1);
+    a non-string execution.tdd_cycle_log_ref is malformed (H2); committing a stamped
+    packet to RUNNING records one durable started row per stamp (H3). Each
+    multi-call sequence commits the accepted canonical plan/context."""
+    total = 0
+
+    def expect(request, status, code=None, name=None, path=None, details=None):
+        nonlocal total
+        before = deepcopy(request)
+        result = API.admission(request)
+        assert result["status"] == status and (code is None or result["code"] == code), (name, status, code, result)
+        assert path is None or result["path"] == path, (name, path, result["path"])
+        assert details is None or result["details"] == details, (name, details, result["details"])
+        assert request == before, "Admission mutated caller state"
+        total += 1
+        return result
+
+    pid, other = "accepted-outcome", "native-writer:accepted-outcome"
+    locked = "Retain the actual execution actor of a started packet or one with old-actor evidence"
+
+    def start(writer="native-writer:first"):
+        request = valid_request(2)
+        request["plan"]["implementation_steps"][1]["depends_on"] = []
+        request["plan"]["plan_schema_version"] = "16.0"
+        seal(request)
+        if writer is None:
+            request["context"]["writer_actor_ids"].pop(pid)
+        else:
+            request["context"]["writer_actor_ids"][pid] = writer
+        request["context"]["packet_evidence"].pop(pid)
+        return request
+
+    def follow(result, boundary="dispatch", writer=None, state=None):
+        request = {"boundary": boundary, "target_packet_id": pid, "plan": deepcopy(result["canonical_plan"]),
+                   "context": deepcopy(result["canonical_context"])}
+        if state is not None:
+            request["plan"]["implementation_steps"][0]["execution"]["state"] = state
+        if writer is not None:
+            request["context"]["writer_actor_ids"][pid] = writer
+        return request
+
+    def started_rows(result):
+        return [row for row in result["canonical_plan"]["implementation_steps"][0]["execution"]["history"]
+                if row.get("reason") == "started under current stamp"]
+
+    # H1: a lane-only stamp gaining a writer actor is a replacement under the same gate.
+    lane_only = expect(start(None), "accepted", name="lane-only first dispatch")
+    assert "execution_actor_id" not in lane_only["canonical_plan"]["implementation_steps"][0]["execution"]
+    running = expect(follow(lane_only, "resume", state="RUNNING"), "accepted", name="lane-only packet starts")
+    expect(follow(running, writer=other, state="PENDING"), "blocked", "execution_actor",
+           name="lane-only RUNNING->PENDING then a new writer", path=pid, details=locked)
+    # A lane-owned stage of the RUNNING packet fills the lane-only actor once; later actors are blocked.
+    def filled(result, actor):
+        execution = result["canonical_plan"]["implementation_steps"][0]["execution"]
+        assert execution["execution_actor_id"] == actor and execution["build_execution_lane"] == "separated_workers", execution
+        assert execution["history"][-1] == {"state": "RUNNING", "filled_stamps": {"execution_actor_id": actor},
+                                            "reason": "actor resolved for lane-only stamp"}, execution["history"]
+        assert [row for row in execution["history"] if "filled_stamps" in row] == execution["history"][-1:], execution["history"]
+
+    stage = follow(running, writer=other)
+    stage.update(worker_stage="implementation", worker_role="code_writer")
+    fill = expect(stage, "accepted", name="lane-only RUNNING implementation stage fills the writer")
+    filled(fill, other)
+    relabel = follow(running, writer=other)
+    relabel["context"]["build_execution_lane"] = "bounded_executor"
+    relabel["context"]["test_applicability"] = {p["packet_id"]: applicability(relabel, p) for p in relabel["plan"]["implementation_steps"]}
+    relabel.update(worker_stage="implementation", worker_role="code_writer")
+    expect(relabel, "blocked", "lane_evidence", name="lane-only RUNNING stage cannot fill under another lane", path=pid)
+    regressed_stage = follow(running, writer=other, state="PENDING")
+    regressed_stage.update(worker_stage="implementation", worker_role="code_writer")
+    expect(regressed_stage, "blocked", "execution_actor", name="lane-only PENDING-after-start stage cannot fill", path=pid, details=locked)
+    # The fill needs the retained previous_plan, happens once, and only admission writes stamps or fill rows.
+    def stage_call(request):
+        request.update(worker_stage="implementation", worker_role="code_writer")
+        return request
+
+    stripped = stage_call(follow(fill, writer="native-writer:third"))
+    stripped["plan"]["implementation_steps"][0]["execution"].pop("execution_actor_id")
+    stripped["context"].pop("previous_plan")
+    expect(stripped, "blocked", "execution_actor", name="strip and refill without previous_plan", path=pid,
+           details="stamp replacement needs the retained previous_plan")
+    refill = stage_call(follow(fill, writer="native-writer:third"))
+    for plan in (refill["plan"], refill["context"]["previous_plan"]):
+        plan["implementation_steps"][0]["execution"].pop("execution_actor_id")
+    expect(refill, "blocked", "execution_actor", name="second lane-only fill", path=pid, details="A lane-only stamp fills its actor once")
+    forged_fill = stage_call(follow(running, writer=other))
+    forged_fill["plan"]["implementation_steps"][0]["execution"]["history"].append(
+        {"state": "RUNNING", "filled_stamps": {"execution_actor_id": other}, "reason": "actor resolved for lane-only stamp"})
+    expect(forged_fill, "blocked", "recovery_mismatch", name="forged fill row", path=pid,
+           details="Only admission writes stamp_baseline / started-marker rows")
+    caller_actor = stage_call(follow(running, writer=other))
+    caller_actor["plan"]["implementation_steps"][0]["execution"]["execution_actor_id"] = other
+    expect(caller_actor, "blocked", "execution_actor", name="caller-written actor stamp", path=pid,
+           details="Only an admitted dispatch writes the execution_actor_id stamp")
+    caller_lane = follow(lane_only)
+    caller_lane["context"]["previous_plan"]["implementation_steps"][0]["execution"].pop("build_execution_lane")
+    expect(caller_lane, "blocked", "lane_evidence", name="caller-written lane stamp", path=pid,
+           details="Only an admitted dispatch writes the build_execution_lane stamp")
+    later = follow(fill, writer="native-writer:third")
+    later.update(worker_stage="implementation", worker_role="code_writer")
+    expect(later, "blocked", "execution_actor", name="different actor after the lane-only fill", path=pid, details=locked)
+    # Non-TDD implementation->final_verification: the returned writer fills the stamp.
+    final = follow(running, writer=other)
+    final.update(worker_stage="final_verification", worker_role="builder_tester")
+    final["context"]["packet_evidence"][pid] = evidence(final, final["plan"]["implementation_steps"][0])
+    final["context"]["packet_evidence"][pid]["writer_actor_id"] = other
+    filled(expect(final, "accepted", name="lane-only final_verification fills the returned writer"), other)
+    conflicting = deepcopy(final)
+    conflicting["context"]["packet_evidence"][pid]["test_source"] = {"writer_actor_id": "native-writer:third"}
+    expect(conflicting, "blocked", "execution_actor", name="lane-only fill with a conflicting evidence actor", path=pid,
+           details="Stage evidence names another actor than the one filling the lane-only stamp")
+    # TDD separated test_authoring->production: the returned test author fills the stamp.
+    tdd = current_authored_dispatch("production")
+    tdd["plan"]["plan_schema_version"] = "16.0"
+    proof = tdd["context"]["packet_evidence"].pop(pid)
+    tdd["plan"]["implementation_steps"][0]["execution"].pop("tdd_cycle_log_ref")
+    tdd["plan"]["implementation_steps"][0]["execution"]["state"] = "PENDING"
+    seal(tdd)
+    author = tdd["context"]["writer_actor_ids"].pop(pid)
+    tdd.update(worker_stage="test_authoring", worker_role="code_writer")
+    authored = expect(tdd, "accepted", name="lane-only TDD test_authoring dispatch")
+    tdd_running = expect(follow(authored, "resume", state="RUNNING"), "accepted", name="lane-only TDD packet starts")
+
+    def production(writer):
+        request = follow(tdd_running, writer=writer)
+        request["plan"]["implementation_steps"][0]["execution"]["tdd_cycle_log_ref"] = "cycle:new-owned"
+        current = evidence(request, request["plan"]["implementation_steps"][0])
+        request["context"]["packet_evidence"][pid] = dict(deepcopy(proof), **{key: current[key] for key in
+                                                          ("approved_plan_identity", "packet_definition_digest", "input_identity")})
+        request["context"]["test_applicability"] = {p["packet_id"]: applicability(request, p) for p in request["plan"]["implementation_steps"]}
+        request.update(worker_stage="production", worker_role="code_writer")
+        return request
+
+    tdd_fill = expect(production(author), "accepted", name="lane-only TDD production fills the test author")
+    filled(tdd_fill, author)
+    second = follow(tdd_fill, writer="native-writer:third")
+    second.update(worker_stage="production", worker_role="code_writer")
+    expect(second, "blocked", "writer_lineage", name="different production writer after the TDD fill", path=pid)
+    # Even with evidence relabelled to the new writer, the filled stamp keeps the author.
+    relabelled = deepcopy(second)
+    relabelled["context"]["packet_evidence"][pid]["writer_actor_id"] = "native-writer:third"
+    relabelled["context"]["packet_evidence"][pid]["tests"]["writer_actor_id"] = "native-writer:third"
+    expect(relabelled, "blocked", "execution_actor", name="relabelled production writer after the TDD fill", path=pid, details=locked)
+    retry = expect(follow(lane_only, writer=other), "accepted", name="lane-only unstarted retry resolves the writer")
+    execution = retry["canonical_plan"]["implementation_steps"][0]["execution"]
+    assert execution["execution_actor_id"] == other, execution
+    assert execution["history"][-1]["replaced_stamps"] == {"build_execution_lane": "separated_workers"}, execution
+
+    # H2: execution.tdd_cycle_log_ref, when present, is a nonblank string.
+    for value in (None, "", "  ", 3):
+        case = start()
+        case["plan"]["implementation_steps"][0]["execution"]["tdd_cycle_log_ref"] = value
+        expect(case, "blocked", "malformed", name="execution.tdd_cycle_log_ref " + repr(value),
+               path=pid + ".execution.tdd_cycle_log_ref")
+
+    # H3: committing RUNNING under the current stamp records one durable started row.
+    first = expect(start(), "accepted", name="round-11 first writer dispatch")
+    committed = expect(follow(first, "resume", state="RUNNING"), "accepted", name="round-11 RUNNING committed through admission")
+    old = committed["canonical_plan"]["implementation_steps"][0]["execution"]
+    assert started_rows(committed) == [started_row(old)], started_rows(committed)
+    # A stale pre-RUNNING previous_plan cannot unlock the stamp after a regression.
+    stale = follow(committed, writer=other, state="PENDING")
+    stale["context"]["previous_plan"] = deepcopy(first["canonical_plan"])
+    expect(stale, "blocked", "execution_actor", name="stale pre-RUNNING snapshot then another writer", path=pid, details=locked)
+    # Repeated RUNNING resumes do not grow history.
+    again = expect(follow(committed, "resume"), "accepted", name="repeated RUNNING resume")
+    assert again["canonical_plan"]["implementation_steps"][0]["execution"]["history"] == old["history"], "no history growth"
+    # Legitimate same-actor cycles stay accepted.
+    regressed = expect(follow(again, state="PENDING"), "accepted", name="same-actor dispatch after the committed start")
+    rerun = expect(follow(regressed, "resume", state="RUNNING"), "accepted", name="same-actor restart")
+    assert started_rows(rerun) == started_rows(committed), "one started row per stamp"
+    return total
+
+
+def admitted_identity(request):
+    """Current normalized identity the helper derives for a historical request."""
+    probe = deepcopy(request)
+    probe["boundary"] = "plan"
+    return API.admission(probe)["canonical_plan"]["approved_plan_identity"]
+
+
 def run_controls():
     # Run the dedicated source-backed authorizer before later guard controls;
     # unsupported versions, missing helper APIs and setup errors are not RED.
@@ -2693,7 +4203,7 @@ def run_controls():
     guarded_parallel_second_member_admission()
     restored_completed_action_history_uniqueness()
     terminal_stage_and_provenance_controls()
-    total = 4 + shared_progress_controls() + completion_progress_closure_controls()
+    total = 4 + shared_progress_controls() + completion_progress_closure_controls() + round2_authority_controls() + round4_authority_controls() + round5_admission_controls() + round6_admission_controls() + round7_admission_controls() + round8_admission_controls() + round9_admission_controls() + round10_admission_controls() + round11_admission_controls()
 
     def expect(request, status, code=None, name=None):
         nonlocal total
@@ -2716,7 +4226,7 @@ def run_controls():
         case["context"]["build_execution_lane"] = lane
         seal(case)
         packet = case["plan"]["implementation_steps"][0]
-        packet["execution"]["state"] = "RUNNING"
+        stamp_dispatch(case, packet)
         proof = evidence(case, packet)
         proof["build_execution_lane"] = lane
         case["context"]["packet_evidence"][packet["packet_id"]] = proof
@@ -2741,7 +4251,7 @@ def run_controls():
     target["depends_on"] = []
     seal(isolated)
     for packet in (first, target):
-        packet["execution"]["state"] = "RUNNING"
+        stamp_dispatch(isolated, packet)
         isolated["context"]["packet_evidence"][packet["packet_id"]] = evidence(isolated, packet)
     isolated["target_packet_id"] = target["packet_id"]
     isolated["context"]["workspace"] = {"mode": "isolated", "active_source_writer_ids": [first["packet_id"]],
@@ -2753,7 +4263,7 @@ def run_controls():
     # Unknown/malformed activity cannot stand in for a terminal-Writer observation.
     terminal = valid_request(boundary="verification")
     packet = terminal["plan"]["implementation_steps"][0]
-    packet["execution"]["state"] = "RUNNING"
+    stamp_dispatch(terminal, packet)
     terminal["context"]["packet_evidence"][packet["packet_id"]] = evidence(terminal, packet)
     for mutation in ("missing_workspace", "missing_activity", "not_array", "non_string", "duplicate", "unknown"):
         malformed = deepcopy(terminal)
@@ -2831,6 +4341,7 @@ def run_controls():
         ev["tdd_cycle"]["refactor"] = {"changes_made": "none needed", "all_tests_pass": True,
             "command": deepcopy(ev["tdd_cycle"]["green"]["command"]), "cwd": "/workspace", "invocation_ref": "ref:new-owned"}
         trial["boundary"] = "verification"
+        stamp_dispatch(trial, trial["plan"]["implementation_steps"][0])
         if mutation == "missing_tests": ev.pop("tests")
         elif mutation == "malformed_tests": ev["tests"] = []
         elif mutation == "missing_test_ref": ev["tests"].pop("evidence_ref")
@@ -2963,6 +4474,8 @@ def run_controls():
         observed = API.admission(case)
         if observed["status"] != "accepted":
             raise AssertionError(("Valid history object was rejected", entry, observed))
+        # Retained verbatim; the first stamp appends only its baseline row (X1).
+        history.append(stamp_baseline_row(case["plan"]["implementation_steps"][0]["execution"]))
         if (API.digest(observed["canonical_plan"]["implementation_steps"][0]["execution"]["history"]) != API.digest(history)
                 or API.digest(observed["current_task_packet"]["execution"]["history"]) != API.digest(history)):
             raise AssertionError("Valid history object changed in canonical or worker output")
@@ -3181,7 +4694,7 @@ def run_controls():
         for boundary in ("verification", "dispatch"):
             case = valid_request(boundary=boundary)
             packet = case["plan"]["implementation_steps"][0]
-            packet["execution"]["state"] = "RUNNING"
+            stamp_dispatch(case, packet)
             packet["execution"]["input_identity"]["generation"] = flag
             case["context"]["current_input_identities"][packet["packet_id"]]["generation"] = flag
             case["context"]["test_applicability"][packet["packet_id"]] = applicability(case, packet)
@@ -3231,6 +4744,8 @@ def run_controls():
     for state in ("PENDING", "RUNNING", "VERIFIED"):
         case = valid_request()
         case["plan"]["implementation_steps"][0]["execution"]["state"] = state
+        if state == "RUNNING":
+            stamp_dispatch(case, case["plan"]["implementation_steps"][0])
         if state == "VERIFIED":
             expect(case, "blocked", "invalidated")
         else:
@@ -3304,7 +4819,7 @@ def run_controls():
     for mutation in ("command", "cwd", "failed", "partial", "missing", "acceptance", "binding", "lane", "self_check", "stale", "native"):
         case = valid_request(boundary="verification")
         packet = case["plan"]["implementation_steps"][0]
-        packet["execution"]["state"] = "RUNNING"
+        stamp_dispatch(case, packet)
         result = evidence(case, packet)
         case["context"]["packet_evidence"][packet["packet_id"]] = result
         if mutation in {"command", "cwd"}:
@@ -3329,7 +4844,7 @@ def run_controls():
     # Current evidence verifies; relevant edits invalidate transitive dependents while retaining history.
     case = valid_request(boundary="verification")
     packet = case["plan"]["implementation_steps"][0]
-    packet["execution"]["state"] = "RUNNING"
+    stamp_dispatch(case, packet)
     case["context"]["packet_evidence"][packet["packet_id"]] = evidence(case, packet)
     assert expect(case, "accepted")["canonical_plan"]["implementation_steps"][0]["execution"]["state"] == "VERIFIED"
     case = verify_all(valid_request(3, "resume"))
@@ -3459,6 +4974,7 @@ def run_controls():
         initial.update(boundary="dispatch", worker_stage="production", worker_role="code_writer")
         initial["context"]["writer_actor_ids"] = {}
         initial["context"]["packet_evidence"][packet["packet_id"]].pop("writer_actor_id")
+        initial["plan"]["implementation_steps"][0]["execution"].pop("execution_actor_id")  # No actor was known to stamp.
         expect(initial, "accepted")
         initial.update(worker_stage="final_verification", worker_role="builder_tester")
         expect(initial, "blocked", "writer_lineage")
@@ -3477,6 +4993,7 @@ def run_controls():
                     if command else {"procedure": "Inspect the current integrated acceptance evidence"})}],
             "terminal_gates": {"independent_review": {"passed": True, "after_integration": True,
                 "snapshot_identity": "snapshot:no-tests", "evidence_ref": "review:actual"}}}
+        completion_authorities(completed)
         expect(completed, "accepted")
     case = no_tests_request()
     for mutation in ("missing_map", "missing_row", "unknown_status", "unresolved", "approval", "packet", "input",
@@ -3535,7 +5052,7 @@ def run_controls():
     packet.pop("verification_command")
     case["plan"]["completion_allocation"]["selected_check_ids"] = ["focused", "integrated"]
     seal(case)
-    packet["execution"]["state"] = "RUNNING"
+    stamp_dispatch(case, packet)
     case["context"]["packet_evidence"][packet["packet_id"]] = evidence(case, packet)
     expect(case, "accepted")
     case["context"]["packet_evidence"][packet["packet_id"]]["validation_results"][0]["procedure"] = "Read any old artifact"
@@ -3598,7 +5115,7 @@ def run_controls():
     first = expect(case, "accepted")
     assert "tdd_cycle_log_ref" not in first["current_task_packet"]
     assert "red_evidence" not in first["current_task_packet"]
-    packet["execution"]["state"] = "RUNNING"
+    stamp_dispatch(case, packet)
     # The RED owner is terminal; no source Writer is still active at transition.
     case["context"]["workspace"]["active_source_writer_ids"] = []
     case.update(worker_stage="production", worker_role="code_writer")
@@ -3686,6 +5203,7 @@ def run_controls():
             expect(stored, "blocked", "mixed_schema")
     bounded = deepcopy(case)
     bounded["context"]["build_execution_lane"] = "bounded_executor"
+    bounded["plan"]["implementation_steps"][0]["execution"]["build_execution_lane"] = "bounded_executor"  # Admitted in this lane.
     bounded["context"]["test_applicability"] = {p["packet_id"]: applicability(bounded, p) for p in bounded["plan"]["implementation_steps"]}
     bounded["context"]["packet_evidence"][packet["packet_id"]]["build_execution_lane"] = "bounded_executor"
     assert "red_evidence" not in expect(bounded, "accepted")["current_task_packet"]
@@ -3700,6 +5218,7 @@ def run_controls():
         for count, status in ((3, "blocked"), (4, "blocked")):
             trial = deepcopy(case)
             trial["context"]["build_execution_lane"] = lane
+            trial["plan"]["implementation_steps"][0]["execution"]["build_execution_lane"] = lane
             trial["context"]["test_applicability"] = {p["packet_id"]: applicability(trial, p) for p in trial["plan"]["implementation_steps"]}
             if lane == "bounded_executor": trial["worker_role"] = "code_writer"
             trial["context"]["packet_evidence"][packet["packet_id"]]["build_execution_lane"] = lane
@@ -3723,6 +5242,7 @@ def run_controls():
         for count, status in ((3, "blocked"), (4, "blocked")):
             trial = deepcopy(case)
             trial["context"]["build_execution_lane"] = lane
+            trial["plan"]["implementation_steps"][0]["execution"]["build_execution_lane"] = lane
             trial["context"]["test_applicability"] = {p["packet_id"]: applicability(trial, p) for p in trial["plan"]["implementation_steps"]}
             if lane == "bounded_executor": trial["worker_role"] = "code_writer"
             trial["context"]["packet_evidence"][packet["packet_id"]]["build_execution_lane"] = lane
@@ -3740,6 +5260,7 @@ def run_controls():
         for count, status in ((3, "blocked"), (4, "blocked")):
             trial = deepcopy(case)
             trial["context"]["build_execution_lane"] = lane
+            trial["plan"]["implementation_steps"][0]["execution"]["build_execution_lane"] = lane
             trial["context"]["test_applicability"] = {p["packet_id"]: applicability(trial, p) for p in trial["plan"]["implementation_steps"]}
             if lane == "bounded_executor": trial["worker_role"] = "code_writer"
             trial["context"]["packet_evidence"][packet["packet_id"]]["build_execution_lane"] = lane
@@ -3757,6 +5278,7 @@ def run_controls():
         for count, status in ((3, "blocked"), (4, "blocked")):
             trial = deepcopy(case)
             trial["context"]["build_execution_lane"] = lane
+            trial["plan"]["implementation_steps"][0]["execution"]["build_execution_lane"] = lane
             trial["context"]["test_applicability"] = {p["packet_id"]: applicability(trial, p) for p in trial["plan"]["implementation_steps"]}
             if lane == "bounded_executor": trial["worker_role"] = "code_writer"
             trial["context"]["packet_evidence"][packet["packet_id"]]["build_execution_lane"] = lane
@@ -3772,7 +5294,308 @@ def run_controls():
     expect(case, "accepted")
     assert case["plan"]["approved_plan_identity"] == approved and API.digest(API.definition(case["plan"])) == approved["definition_digest"]
     ev["tdd_cycle"]["refactor"]["invocation_ref"] = "green:actual"
-    expect(case, "blocked", "tdd_evidence")
+    rerun = expect(case, "blocked", "tdd_evidence")
+    assert rerun["details"] == "REFACTOR rerun must be distinct", rerun
+    # WE-05: existing APIs and a valid sealed complete cycle must admit explicit
+    # unchanged GREEN reuse. The baseline fails at its distinct-invocation guard,
+    # not at a new version tag, missing API, or malformed setup.
+    reuse_case = deepcopy(case)
+    reuse_packet = reuse_case["plan"]["implementation_steps"][0]
+    reuse_context = reuse_case["context"]
+    reuse_evidence = reuse_context["packet_evidence"][reuse_packet["packet_id"]]
+    relevant = {key: {"identity": "fixed:" + key, "freshness": "current"}
+                for key in ("source", "tests", "configuration", "dependencies", "toolchain", "environment", "external_inputs")}
+    original_ref = "assessment:unchanged-green-reuse"
+    # Independently resolved current inputs carry the same relevant categories.
+    reuse_context["current_input_identities"][reuse_packet["packet_id"]]["relevant_input_identity"] = deepcopy(relevant)
+    reuse_evidence["input_identity"] = deepcopy(reuse_context["current_input_identities"][reuse_packet["packet_id"]])
+    reuse_context["test_applicability"][reuse_packet["packet_id"]]["input_identity"] = deepcopy(reuse_evidence["input_identity"])
+    reuse_cycle = reuse_evidence["tdd_cycle"]
+    reuse_cycle["schema_version"] = "3.0"
+    # v3-detailed opt-in control: the seven-category identity plus assessment.
+    reuse_cycle["reuse_identity_mode"] = "detailed"
+    reuse_cycle["green"]["relevant_input_identity"] = deepcopy(relevant)
+    for row in reuse_evidence["validation_results"]:
+        row["invocation_ref"] = "green:actual"
+    reuse_cycle["refactor"].update(verification_disposition="reuse_green", command_results=[],
+        green_invocation_refs=["green:actual"], reuse_assessment_ref=original_ref)
+    reuse_context["verification_reuse_authority"] = {original_ref: {
+        "packet_id": reuse_packet["packet_id"], "verification_decision_ref": deepcopy(reuse_context["verification_decision_ref"]),
+        "check_id": reuse_packet["red_check_id"], "command": deepcopy(reuse_packet["red_command"]), "cwd": reuse_packet["red_cwd"],
+        "oracle": reuse_packet["expected_red_failure"], "green_invocation_refs": ["green:actual"],
+        "green_input_identity": deepcopy(relevant), "current_input_identity": deepcopy(relevant),
+        "post_green_changes": [], "fresh_run_obligations": [], "result": "sufficient", "evidence_ref": original_ref}}
+    API.verified_packet(reuse_packet, reuse_evidence, reuse_case["plan"], reuse_context,
+                        API.check_specs(reuse_context["verification_decision"])[0])
+    # Each mutation destroys a distinct reuse prerequisite while the underlying
+    # completed TDD fixture stays valid. Existing distinct-run protection remains.
+    for mutation in ("source", "tests", "configuration", "dependencies", "toolchain", "environment", "external_inputs",
+                     "argv", "cwd", "oracle", "failed_green", "unknown_input", "fresh_run", "actual_edit", "missing_authority",
+                     "edit_after_green_stale_assessment", "unknown_current_identity", "unobserved_green_ref"):
+        trial = deepcopy(reuse_case)
+        current_ids = trial["context"]["current_input_identities"][reuse_packet["packet_id"]]
+        proof = trial["context"]["packet_evidence"][reuse_packet["packet_id"]]
+        auth = trial["context"]["verification_reuse_authority"][original_ref]
+        if mutation in relevant: auth["current_input_identity"][mutation]["identity"] = "changed"
+        elif mutation == "argv": auth["command"].append("changed")
+        elif mutation == "cwd": auth["cwd"] = "/changed"
+        elif mutation == "oracle": auth["oracle"] = "changed"
+        elif mutation == "failed_green": proof["validation_results"][0]["result"] = "failed"
+        elif mutation == "unknown_input": auth["current_input_identity"]["external_inputs"]["freshness"] = "unknown"
+        elif mutation == "fresh_run": auth["fresh_run_obligations"] = [{"source_ref": "policy:fresh", "value": "run again"}]
+        elif mutation == "actual_edit": proof["tdd_cycle"]["refactor"]["changes_made"] = "production edit"
+        elif mutation == "missing_authority": trial["context"]["verification_reuse_authority"] = {}
+        elif mutation == "edit_after_green_stale_assessment":
+            # A real post-GREEN edit changes the independently resolved inputs and
+            # rebinds evidence; the stale self-attested assessment still claims the old identity.
+            current_ids["relevant_input_identity"]["source"]["identity"] = "edited-after-green"
+            current_ids["source"] = "edited-after-green"
+        elif mutation == "unknown_current_identity":
+            current_ids.pop("relevant_input_identity")
+        elif mutation == "unobserved_green_ref":
+            # A declared original run that no retained result row owns (observed_refs == set(refs)).
+            proof["tdd_cycle"]["refactor"]["green_invocation_refs"].append("green:never-observed")
+            auth["green_invocation_refs"] = deepcopy(proof["tdd_cycle"]["refactor"]["green_invocation_refs"])
+        # Evidence and applicability always rebind current inputs so only reuse can reject.
+        proof["input_identity"] = deepcopy(current_ids)
+        trial["context"]["test_applicability"][reuse_packet["packet_id"]]["input_identity"] = deepcopy(current_ids)
+        # Failed GREEN is never reused: rejected as tdd_reuse before ordinary result validation.
+        expected_code = "tdd_reuse"
+        try:
+            API.verified_packet(trial["plan"]["implementation_steps"][0], proof, trial["plan"], trial["context"],
+                                API.check_specs(trial["context"]["verification_decision"])[0])
+        except API.AdmissionError as error:
+            assert error.code == expected_code, ("Reuse rejected for the wrong reason", mutation, error.code, error.details)
+            if mutation == "unobserved_green_ref":
+                assert error.details == "Reuse references exactly the real original due run set", error.details
+        else:
+            raise AssertionError("Invalid reuse accepted: " + mutation)
+    total += digest_reuse_controls(reuse_case)
+    multi = deepcopy(reuse_case)
+    multi_packet = multi["plan"]["implementation_steps"][0]
+    multi_proof = multi["context"]["packet_evidence"][multi_packet["packet_id"]]
+    regression = {"check_id": "regression", "method": "automated_test",
+        "command": {"argv": ["python3", "regression.py"], "cwd": "/workspace"},
+        "check_ref_or_method": {"reference_or_procedure": "Check independently fixed regression behavior"}}
+    multi["context"]["verification_decision"]["checks"].append(regression)
+    multi["context"]["verification_decision_ref"]["sha256"] = API.digest(multi["context"]["verification_decision"])
+    multi["plan"]["verification_decision_ref"] = deepcopy(multi["context"]["verification_decision_ref"])
+    multi_packet["verification_decision_ref"] = deepcopy(multi["context"]["verification_decision_ref"])
+    multi_packet["selected_check_ids"].append("regression")
+    multi_packet.pop("verification_command")
+    seal(multi)
+    multi_proof["approved_plan_identity"] = deepcopy(multi["plan"]["approved_plan_identity"])
+    multi_proof["packet_definition_digest"] = API.digest(API.packet_definition(multi_packet))
+    multi_proof["validation_results"].append({"selected_check_ids": ["regression"], "binding_obligation_refs": [],
+        "result": "passed", "evidence_ref": "regression:original", "invocation_ref": "regression:actual",
+        "executed_command": {"check_id": "regression", **deepcopy(regression["command"])}})
+    multi["context"]["verification_reuse_authority"][original_ref]["verification_decision_ref"] = deepcopy(multi["context"]["verification_decision_ref"])
+    multi_proof["binding_results"] = [{"binding_obligation_ref": deepcopy(multi_packet["binding_obligation_refs"][0]),
+        "result": "passed", "evidence_ref": "binding:original", "invocation_ref": "binding:actual"}]
+    multi_proof["tdd_cycle"]["refactor"]["green_invocation_refs"] = ["green:actual", "regression:actual", "binding:actual"]
+    multi["context"]["verification_reuse_authority"][original_ref]["green_invocation_refs"] = ["green:actual", "regression:actual", "binding:actual"]
+    API.verified_packet(multi_packet, multi_proof, multi["plan"], multi["context"],
+                        API.check_specs(multi["context"]["verification_decision"])[0])
+    # Authenticated old provenance cannot exempt a materially revised definition.
+    migrated = API.admission(valid_request())
+    retained_plan = migrated["canonical_plan"]
+    retained_context = migrated["canonical_context"]
+    assert API.current_review_required(retained_plan, retained_context) is False
+    revised = deepcopy(retained_plan)
+    revised["plan_version"] = "approved-material-revision"
+    revised["approved_plan_identity"]["plan_version"] = revised["plan_version"]
+    revised["approved_plan_identity"]["definition_digest"] = API.digest(API.definition(revised))
+    assert API.current_review_required(revised, retained_context) is True
+    # No reuse invocation/result is appended or counted.
+    assert reuse_cycle["refactor"]["command_results"] == []
+    assert len(reuse_evidence["validation_results"]) == len(ev["validation_results"])
+    # Optional delegated bindings cannot contradict existing native ownership.
+    # No prior coverage supplies this table on delegated lanes; distinct creation
+    # and return refs must stay compatible without inventing bootstrap actors.
+    for lane in ("bounded_executor", "separated_workers"):
+        delegated = valid_request()
+        delegated["context"]["build_execution_lane"] = lane
+        pid = delegated["plan"]["implementation_steps"][0]["packet_id"]
+        delegated["context"]["execution_actor_bindings"] = {pid: {"kind": "delegated",
+            "actor_id": delegated["context"]["writer_actor_ids"][pid],
+            "runtime_evidence_ref": "native:writer-creation"}}
+        seal(delegated)
+        expect(delegated, "accepted", name=lane + " consistent supplied actor binding")
+        verified = verify_all(deepcopy(delegated))
+        verified["context"]["packet_evidence"][pid]["build_execution_lane"] = lane
+        stamp_dispatch(verified, verified["plan"]["implementation_steps"][0], "VERIFIED")
+        verified["boundary"] = "verification"
+        expect(verified, "accepted", name=lane + " creation and return refs retain distinct semantics")
+        for mutation in ("kind", "actor", "missing_runtime", "malformed_table"):
+            trial = deepcopy(delegated)
+            binding = trial["context"]["execution_actor_bindings"][pid]
+            if mutation == "kind": binding["kind"] = "main"
+            elif mutation == "actor": binding["actor_id"] = "native:wrong-writer"
+            elif mutation == "missing_runtime": binding.pop("runtime_evidence_ref")
+            else: trial["context"]["execution_actor_bindings"] = []
+            expect(trial, "blocked", "malformed" if mutation == "malformed_table" else "execution_actor",
+                   name=lane + " supplied actor contradiction: " + mutation)
+        bootstrap = deepcopy(delegated)
+        bootstrap["context"]["writer_actor_ids"] = {}
+        bootstrap["context"]["packet_evidence"] = {}
+        started = expect(bootstrap, "accepted", name=lane + " unresolved initial actor stays unclaimed")
+        assert "execution_actor_id" not in started["canonical_plan"]["implementation_steps"][0]["execution"]
+    main = valid_request()
+    main["context"]["build_execution_lane"] = "direct_main"
+    main.pop("worker_stage", None); main.pop("worker_role", None)
+    pid = main["plan"]["implementation_steps"][0]["packet_id"]
+    main["context"]["execution_actor_bindings"] = {pid: {"kind": "main", "actor_id": "native-main", "runtime_evidence_ref": "native:main-session"}}
+    main["context"].pop("writer_actor_ids", None)
+    main["context"]["packet_evidence"] = {}
+    seal(main)
+    admitted = expect(main, "accepted")
+    assert not any(key in admitted for key in ("current_task_packet", "worker_stage", "worker_role", "verification_stage"))
+    current_plan = valid_request()
+    current_plan["plan"]["plan_schema_version"] = "16.0"
+    seal(current_plan)
+    expect(current_plan, "accepted")
+    plan_ref = "review:synthetic-approved-plan"
+    # The pre-Build plan review consumes the Review v10 producer shape and does
+    # not require delivered-outcome fields; final acceptance does (below).
+    assert "unfinished_task_wide_work" not in current_plan["context"]["review_authorities"][plan_ref]["request_plan_reconciliation"]
+    for mutation, code in (("missing_review", "review_authority"), ("unresolved_requirement", "review_authority"),
+                           ("partial_review", "review_authority"), ("observed_missing", "review_authority"),
+                           ("required_foreign", "review_authority"), ("unresolved_finding", "review_authority"),
+                           ("missing_reconciliation", "malformed"), ("flat_synthetic_shape", "malformed"),
+                           ("wrong_subject", "review_authority"), ("other_review_ref", "review_authority"),
+                           ("missing_request_ref", "malformed"), ("malformed_unfinished", "malformed")):
+        trial = deepcopy(current_plan)
+        review = trial["context"]["review_authorities"][plan_ref]
+        coverage = review["request_plan_reconciliation"]
+        if mutation == "missing_review": trial["context"]["review_authorities"] = {}
+        elif mutation == "unresolved_requirement": coverage["unresolved_requirement_ids"] = ["R-0"]
+        elif mutation == "partial_review": review["result"] = "HAS_REMAINING_ITEMS"
+        elif mutation == "observed_missing": coverage["observed_requirement_ids"] = []
+        elif mutation == "required_foreign": coverage["required_requirement_ids"] = ["R-0", "R-foreign"]
+        elif mutation == "unresolved_finding": coverage["unresolved_finding_ids"] = ["F-1"]
+        elif mutation == "missing_reconciliation": review.pop("request_plan_reconciliation")
+        elif mutation == "flat_synthetic_shape":
+            review.update(review.pop("request_plan_reconciliation"))
+        elif mutation == "wrong_subject": review["review_subject"] = "implementation"
+        elif mutation == "other_review_ref": review["canonical_review_ref"] = "review:other"
+        elif mutation == "missing_request_ref": coverage.pop("original_request_ref")
+        else: coverage["unfinished_task_wide_work"] = "pending"
+        expect(trial, "blocked", code, name="plan review rejects " + mutation)
+    pre_build = deepcopy(current_plan)
+    pre_build["context"]["review_authorities"][plan_ref]["request_plan_reconciliation"]["unfinished_task_wide_work"] = ["final integration"]
+    expect(pre_build, "accepted", name="pre-Build plan review does not require delivered task-wide work")
+    # Applicability exception: plan_review_required=False with an exact authority.
+    exempt = deepcopy(current_plan)
+    exempt["context"]["review_authorities"] = {}
+    exempt["context"]["readiness"].pop("plan_review_ref")
+    exempt["context"]["readiness"].update(plan_review_required=False, plan_review_applicability_ref="applicability:no-plan")
+    exempt["context"]["plan_review_applicability_authority"] = {"applicability:no-plan": {
+        "approved_plan_identity": deepcopy(exempt["plan"]["approved_plan_identity"]), "reason": "no_plan_required"}}
+    expect(exempt, "accepted", name="exact plan-review applicability exception")
+    for mutation, code in (("missing_ref", "malformed"), ("missing_authority", "malformed"), ("reason", "review_authority"),
+                           ("stale_approval", "review_authority"), ("non_boolean", "review_authority")):
+        trial = deepcopy(exempt)
+        fact = trial["context"]["plan_review_applicability_authority"]["applicability:no-plan"]
+        if mutation == "missing_ref": trial["context"]["readiness"].pop("plan_review_applicability_ref")
+        elif mutation == "missing_authority": trial["context"]["plan_review_applicability_authority"] = {}
+        elif mutation == "reason": fact["reason"] = "reviewer_unavailable"
+        elif mutation == "stale_approval": fact["approved_plan_identity"]["plan_version"] = "older"
+        else: trial["context"]["readiness"]["plan_review_required"] = "no"
+        expect(trial, "blocked", code, name="plan-review applicability exception rejects " + mutation)
+    required_again = deepcopy(exempt)
+    required_again["context"]["readiness"]["plan_review_required"] = True
+    expect(required_again, "blocked", name="explicitly required plan review cannot use the exception")
+    for mutation in ("missing_actor", "child_fields", "wrong_kind"):
+        trial = deepcopy(main)
+        if mutation == "missing_actor": trial["context"]["execution_actor_bindings"] = {}
+        elif mutation == "child_fields": trial["worker_role"] = "code_writer"
+        else: trial["context"]["execution_actor_bindings"][pid]["kind"] = "delegated"
+        expect(trial, "blocked", "execution_actor" if mutation != "missing_actor" else "malformed")
+    # A blocked dispatch writes no lane/actor stamps: the returned PENDING packet
+    # stays free to dispatch under another lane and writer.
+    blocked_main = deepcopy(main)
+    blocked_main["context"]["workspace"]["active_source_writer_ids"] = [pid]
+    blocked_result = expect(blocked_main, "blocked", "workspace_overlap", name="blocked direct_main dispatch")
+    blocked_execution = blocked_result["canonical_plan"]["implementation_steps"][0]["execution"]
+    assert blocked_execution["state"] == "PENDING"
+    assert not {"build_execution_lane", "execution_actor_id", "action_admission_ref"} & set(blocked_execution), blocked_execution
+    assert "build_execution_lane" in admitted["canonical_plan"]["implementation_steps"][0]["execution"]
+    assert admitted["canonical_plan"]["implementation_steps"][0]["execution"]["execution_actor_id"] == "native-main"
+    blocked_delegated = valid_request()
+    blocked_delegated["context"]["workspace"]["active_source_writer_ids"] = [pid]
+    stale = expect(blocked_delegated, "blocked", "workspace_overlap", name="blocked delegated dispatch")
+    assert not {"build_execution_lane", "execution_actor_id"} & set(stale["canonical_plan"]["implementation_steps"][0]["execution"])
+    # Blocked dispatches write no stamps, so stamps on a PENDING packet record an
+    # admitted dispatch: re-dispatch under another lane and actor replaces them only
+    # before old-actor stage evidence (M1), recording the replaced stamps.
+    redispatch = valid_request()
+    redispatch["plan"]["implementation_steps"][0]["execution"].update(build_execution_lane="direct_main", execution_actor_id="native-main")
+    redispatch["context"]["previous_plan"] = deepcopy(redispatch["plan"])  # G1: replacement needs the retained snapshot.
+    replaced = expect(redispatch, "accepted", name="PENDING re-dispatch replaces another lane and writer before evidence")
+    replaced_execution = replaced["canonical_plan"]["implementation_steps"][0]["execution"]
+    assert replaced_execution["build_execution_lane"] == "separated_workers" and replaced_execution["execution_actor_id"] == "native-writer:" + pid
+    assert replaced_execution["history"][-1]["replaced_stamps"] == {"build_execution_lane": "direct_main", "execution_actor_id": "native-main"}
+    evidenced = deepcopy(redispatch)
+    evidenced["context"]["packet_evidence"][pid]["execution_actor_id"] = "native-main"
+    expect(evidenced, "blocked", "lane_evidence", name="PENDING re-dispatch cannot overwrite another lane and writer after its evidence")
+    # The same RUNNING action retains its lane and actual actor; keys stay lane-owned.
+    running_main = deepcopy(main)
+    running_packet = running_main["plan"]["implementation_steps"][0]
+    running_packet["execution"].update(state="RUNNING", build_execution_lane="direct_main", execution_actor_id="native-main")
+    main_proof = evidence(running_main, running_packet)
+    for key in ("builder_evidence_ref", "writer_actor_id"):
+        main_proof.pop(key)
+    main_proof.update(build_execution_lane="direct_main", native_evidence_ref="native:main-session", execution_actor_id="native-main")
+    running_main["context"]["packet_evidence"] = {pid: main_proof}
+    running_main["execution_stage"] = "final_verification"
+    expect(running_main, "accepted", name="direct_main RUNNING stage retains lane and actor")
+    for mutation, code in (("relabel_lane", "lane_evidence"), ("other_actor", "execution_actor"),
+                           ("worker_key_on_direct", "invalid_state")):
+        trial = deepcopy(running_main)
+        execution = trial["plan"]["implementation_steps"][0]["execution"]
+        if mutation == "relabel_lane": execution["build_execution_lane"] = "bounded_executor"
+        elif mutation == "other_actor": execution["execution_actor_id"] = "native-main:other-session"
+        else:
+            trial.pop("execution_stage")
+            trial["worker_stage"] = "final_verification"
+        expect(trial, "blocked", code, name="direct_main RUNNING guard: " + mutation)
+    delegated_running = valid_request()
+    delegated_running["plan"]["implementation_steps"][0]["execution"].update(
+        state="RUNNING", build_execution_lane="separated_workers", execution_actor_id="native-writer:" + pid)
+    delegated_running.update(execution_stage="final_verification")
+    expect(delegated_running, "blocked", "invalid_state", name="execution_stage cannot advance a delegated RUNNING packet")
+    delegated_pending = valid_request()
+    delegated_pending["execution_stage"] = "production"
+    expect(delegated_pending, "blocked", "worker_stage", name="execution_stage is rejected on delegated lanes")
+    delegated_running.pop("execution_stage")
+    delegated_running.update(worker_stage="final_verification", worker_role="builder_tester")
+    delegated_running["context"]["packet_evidence"][pid] = evidence(delegated_running, delegated_running["plan"]["implementation_steps"][0])
+    expect(delegated_running, "accepted", name="delegated RUNNING stage retains actual writer")
+    for mutation, code in (("relabel_lane", "lane_evidence"), ("other_actor", "execution_actor")):
+        trial = deepcopy(delegated_running)
+        execution = trial["plan"]["implementation_steps"][0]["execution"]
+        if mutation == "relabel_lane": execution["build_execution_lane"] = "bounded_executor"
+        else: execution["execution_actor_id"] = "native-writer:replaced"
+        expect(trial, "blocked", code, name="delegated RUNNING guard: " + mutation)
+    # direct_main at the verification boundary binds actual main identity only.
+    main_verification = deepcopy(running_main)
+    main_verification.pop("execution_stage")
+    main_verification["boundary"] = "verification"
+    verified_main = expect(main_verification, "accepted", name="direct_main verification")
+    assert verified_main["canonical_plan"]["implementation_steps"][0]["execution"]["state"] == "VERIFIED"
+    assert not any(key in verified_main for key in ("current_task_packet", "worker_stage", "verification_stage"))
+    for mutation, code in (("writer_actor_ids", "execution_actor"), ("builder_actor_ids", "execution_actor"),
+                           ("child_evidence", "execution_actor"), ("native_ref", "execution_actor"),
+                           ("other_actor", "writer_lineage"), ("lane", "lane_evidence")):
+        trial = deepcopy(main_verification)
+        proof = trial["context"]["packet_evidence"][pid]
+        if mutation == "writer_actor_ids": trial["context"]["writer_actor_ids"] = {pid: "native-main"}
+        elif mutation == "builder_actor_ids": trial["context"]["builder_actor_ids"] = {pid: "native-builder"}
+        elif mutation == "child_evidence": proof["writer_actor_id"] = "native-main"
+        elif mutation == "native_ref": proof["native_evidence_ref"] = "native:other-session"
+        elif mutation == "other_actor": proof["execution_actor_id"] = "native-main:other-session"
+        else: proof["build_execution_lane"] = "bounded_executor"
+        expect(trial, "blocked", code, name="direct_main verification rejects " + mutation)
     wrong_role = deepcopy(case)
     wrong_role.update(boundary="dispatch", worker_stage="production", worker_role="builder_tester")
     expect(wrong_role, "blocked", "worker_stage")
@@ -3786,6 +5609,123 @@ def run_controls():
     case["context"]["packet_evidence"][packet["packet_id"]] = evidence(case, packet)
     current = expect(case, "accepted")
     assert "tdd_cycle_log_ref" not in current["current_task_packet"]
+    # QA scope is independently accepted and can be a strict subset of task
+    # requirements; the separate final review still reconciles the whole request.
+    current_completion = verify_all(valid_request(2, "completion"))
+    current_completion["plan"]["plan_schema_version"] = "16.0"
+    seal(current_completion)
+    verify_all(current_completion)
+    context = current_completion["context"]
+    context.update(current_snapshot_identity="snapshot:current-authority", required_terminal_gates=["independent_review", "qa"])
+    bind_plan_review_exception(current_completion)
+    context["completion_evidence"] = {"approved_plan_identity": deepcopy(current_completion["plan"]["approved_plan_identity"]),
+        "snapshot_identity": context["current_snapshot_identity"], "acceptance_results": [],
+        "validation_results": [{"selected_check_ids": ["integrated"], "binding_obligation_refs": [], "result": "passed",
+            "evidence_ref": "integration:current", "procedure": "Inspect the current integrated acceptance evidence"}],
+        "terminal_gates": {gate: {"passed": True, "after_integration": True, "snapshot_identity": context["current_snapshot_identity"],
+            "evidence_ref": gate + ":source"} for gate in ("independent_review", "qa")}}
+    completion_authorities(current_completion, current=True, qa_criteria=[context["requirements"][1]["acceptance_criterion"]])
+    expect(current_completion, "accepted", name="current scoped-subset QA and full final reconciliation")
+    qa_ref = context["completion_evidence"]["terminal_gates"]["qa"]["canonical_review_ref"]
+    review_ref = context["completion_evidence"]["terminal_gates"]["independent_review"]["canonical_review_ref"]
+    code_reviewer_source = deepcopy(current_completion)
+    code_reviewer_source["context"]["review_authorities"][review_ref]["role"] = "CodeReviewer"
+    expect(code_reviewer_source, "accepted", name="canonical CodeReviewer and Reviewer completion roles stay compatible")
+    for mutation in ("missing", "missing_ref", "code_ref", "code_actor", "code_invocation", "code_dispatch", "snapshot", "role", "contract", "verdict", "result", "freshness", "scope_missing", "scope_empty", "scope_foreign", "scope_source", "expected_scope_missing"):
+        trial = deepcopy(current_completion)
+        auth = trial["context"]["review_authorities"]
+        qa = auth[qa_ref]
+        gate = trial["context"]["completion_evidence"]["terminal_gates"]["qa"]
+        if mutation == "missing": del auth[qa_ref]
+        elif mutation == "missing_ref": gate.pop("canonical_review_ref")
+        elif mutation == "code_ref": gate["canonical_review_ref"] = review_ref
+        elif mutation.startswith("code_"):
+            field = {"code_actor": "actor_id", "code_invocation": "native_invocation_id", "code_dispatch": "fresh_dispatch_evidence_ref"}[mutation]
+            qa[field] = auth[review_ref][field]
+        elif mutation == "snapshot": qa["snapshot_identity"] = "snapshot:old"
+        elif mutation == "role": qa["role"] = "Reviewer"
+        elif mutation == "contract": qa["canonical_contract"] = "assistant-review/contracts/output.yaml#final_summary"
+        elif mutation == "verdict": qa["final_verdict"] = "rejected"
+        elif mutation == "result": qa["result"] = "HAS_REMAINING_ITEMS"
+        elif mutation == "freshness": qa.pop("fresh_dispatch_evidence_ref")
+        elif mutation == "scope_missing": qa.pop("covered_acceptance_criteria")
+        elif mutation == "scope_empty": qa["covered_acceptance_criteria"] = []
+        elif mutation == "scope_foreign": qa["covered_acceptance_criteria"] = [context["requirements"][0]["acceptance_criterion"]]
+        elif mutation == "scope_source": qa["acceptance_source_ref"] = "accepted-qa-context:foreign"
+        else: trial["context"].pop("qa_acceptance_context")
+        expect(trial, "blocked", name="current QA authority rejects " + mutation + " despite plan-review exception")
+    no_final = deepcopy(current_completion)
+    del no_final["context"]["review_authorities"][review_ref]
+    expect(no_final, "blocked", name="plan review exemption cannot waive current final reconciliation")
+    # Final acceptance reconciles delivered outcomes, unlike the pre-Build plan review.
+    for mutation in ("unfinished_work", "missing_unfinished", "observed_missing", "unresolved_finding", "flat_synthetic_shape"):
+        trial = deepcopy(current_completion)
+        final = trial["context"]["review_authorities"][review_ref]
+        coverage = final["request_plan_reconciliation"]
+        if mutation == "unfinished_work": coverage["unfinished_task_wide_work"] = ["integration remains"]
+        elif mutation == "missing_unfinished": coverage.pop("unfinished_task_wide_work")
+        elif mutation == "observed_missing": coverage["observed_requirement_ids"] = coverage["observed_requirement_ids"][:1]
+        elif mutation == "unresolved_finding": coverage["unresolved_finding_ids"] = ["F-final"]
+        else: final.update(final.pop("request_plan_reconciliation"))
+        expect(trial, "blocked", "malformed" if mutation == "flat_synthetic_shape" else "review_authority",
+               name="final reconciliation rejects " + mutation)
+    # Historical fallback can retain the actual same native actor. Independently
+    # retained completed-source facts, not plan migration or passed flags, authorize it.
+    historical = deepcopy(current_completion)
+    historical["plan"]["plan_schema_version"] = "14.0"
+    seal(historical)
+    verify_all(historical)
+    historical["context"]["completion_evidence"]["approved_plan_identity"] = deepcopy(historical["plan"]["approved_plan_identity"])
+    completion_authorities(historical, qa_criteria=[context["requirements"][1]["acceptance_criterion"]])
+    original_qa = historical["context"]["review_authorities"][qa_ref]
+    original_review = historical["context"]["review_authorities"][review_ref]
+    original_qa["actor_id"] = original_review["actor_id"]
+    original_qa["native_invocation_id"] = original_review["native_invocation_id"]
+    admitted_history = expect(historical, "accepted", name="authentic completed historical same-actor fallback keeps its original verdict")
+    retained_history = deepcopy(historical)
+    retained_history["plan"] = deepcopy(admitted_history["canonical_plan"])
+    retained_history["context"] = deepcopy(admitted_history["canonical_context"])
+    expect(retained_history, "accepted", name="historical completed source survives authenticated migration")
+    materially_revised = deepcopy(retained_history["plan"])
+    materially_revised["plan_version"] = "new-material-plan"
+    materially_revised["approved_plan_identity"]["plan_version"] = "new-material-plan"
+    materially_revised["approved_plan_identity"]["definition_digest"] = API.digest(API.definition(materially_revised))
+    try:
+        API.validate_completion_authority("qa", retained_history["context"]["completion_evidence"]["terminal_gates"]["qa"],
+            materially_revised, retained_history["context"], retained_history["context"]["current_snapshot_identity"])
+    except API.AdmissionError:
+        pass
+    else:
+        raise AssertionError("Historical completion cannot close a materially revised plan through retained provenance")
+    # A native v15 (not v14) source also normalizes to v16 at completion and keeps
+    # its completed historical v9 review under the original approval.
+    historical_v15 = deepcopy(current_completion)
+    historical_v15["plan"]["plan_schema_version"] = "15.0"
+    seal(historical_v15)
+    verify_all(historical_v15)
+    historical_v15["context"]["completion_evidence"]["approved_plan_identity"] = deepcopy(historical_v15["plan"]["approved_plan_identity"])
+    completion_authorities(historical_v15, qa_criteria=[context["requirements"][1]["acceptance_criterion"]])
+    assert historical_v15["context"]["review_authorities"][review_ref]["producer_version"] == "9.0"
+    admitted_v15 = expect(historical_v15, "accepted", name="v15 source normalizes to v16 at completion with a v9 review")
+    v15_plan = admitted_v15["canonical_plan"]
+    assert v15_plan["plan_schema_version"] == "16.0" and "workflow_migration" not in v15_plan["reconciliation_provenance"]
+    v15_migration = v15_plan["reconciliation_provenance"]["workflow_v16_migration"]
+    assert v15_migration["producer_schema_version"] == "15.0"
+    assert v15_migration["original_approved_plan_identity"] == historical_v15["plan"]["approved_plan_identity"]
+    relabelled_v15 = deepcopy(historical_v15)
+    relabelled_v15["context"]["review_authorities"][review_ref]["subagent_execution_mode"] = "sequential_fallback"
+    expect(relabelled_v15, "blocked", "review_authority", name="v15 historical review keeps its original policy label")
+    for mutation in ("missing", "approval", "snapshot", "actor", "role", "policy", "relabel"):
+        trial = deepcopy(retained_history)
+        source = trial["context"]["review_authorities"][qa_ref]
+        if mutation == "missing": del trial["context"]["review_authorities"][qa_ref]
+        elif mutation == "approval": source["approved_plan_identity"]["plan_version"] = "unrelated"
+        elif mutation == "snapshot": source["snapshot_identity"] = "snapshot:old"
+        elif mutation == "actor": source.pop("actor_id")
+        elif mutation == "role": source["role"] = "Reviewer"
+        elif mutation == "policy": source.pop("subagent_execution_mode")
+        else: source["producer_version"] = "10.0"
+        expect(trial, "blocked", name="historical completion rejects " + mutation + " without inventing source authority")
     # Full integration is due with one packet as well as multiple packets.
     for count in (1, 3):
         case = verify_all(valid_request(count, "completion"))
@@ -3794,6 +5734,7 @@ def run_controls():
                 "validation_results": [{"selected_check_ids": ["integrated"], "binding_obligation_refs": [], "result": "passed", "evidence_ref": "integration:actual", "procedure": "Inspect the current integrated acceptance evidence"}],
                 "terminal_gates": {key: {"passed": True, "after_integration": True, "snapshot_identity": "snapshot:current", "evidence_ref": key + ":actual"} for key in ("independent_review", "qa")}}
         case["context"]["completion_evidence"] = comp
+        completion_authorities(case)
         expect(case, "accepted")
         active = deepcopy(case)
         active["context"]["workspace"]["active_source_writer_ids"] = ["accepted-outcome"]

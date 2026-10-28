@@ -170,7 +170,7 @@ Pack, strict-lane, or QA requirements.
 
 For multi-slice work, Assistant Workflow uses descriptive outcome-oriented
 packet identifiers rather than ordinal-only labels, explicit dependencies, and
-native subagents only for independent packets.
+optional native subagents only for independent packets.
 
 The architecture is an adaptive loop implemented through native skill routing;
 there is no installed lifecycle engine. Its conceptual states map to the public
@@ -215,7 +215,7 @@ Each canonical executable packet carries its exact selected verification procedu
 may run in parallel for independent packets with non-overlapping ownership.
 Source-changing packets in a shared or unknown workspace remain sequential;
 parallel source-changing packets require runtime proof of isolated workspaces.
-Canonical v15 Plans use one implementation_steps collection with descriptive packet_id values. Coherent work defaults to one packet; additional boundaries require acceptance, ownership/context, prerequisite, recovery/rollout or binding protocol purpose. Stored packets reference one unchanged specialist decision and carry coordinator execution evidence. Deep worker projections cannot redefine approved work. All due integrated selected/binding checks precede fresh independent review for one or multiple packets; conditional QA/harness and exact final snapshot binding remain. The pure shipped admission helper checks current approval, graph, evidence, isolation and source-verified v12/v13/v14 migration authority. Local checks do not establish native runtime consumption or efficiency; default promotion and a bounded comparative pilot remain separately gated.
+Canonical v16 Plans use one implementation_steps collection with descriptive packet_id values. Coherent work defaults to one packet; additional boundaries require acceptance, ownership/context, prerequisite, recovery/rollout or binding protocol purpose. Stored packets reference one unchanged specialist decision and carry coordinator execution evidence. Deep worker projections cannot redefine approved work. Build runs directly in the main actor by default; native delegation is optional and chosen only for a concrete benefit. All due integrated selected/binding checks precede a newly created, independent reviewer for one or multiple packets; conditional QA/harness and exact final snapshot binding remain. The pure shipped admission helper checks current approval, graph, evidence, isolation and source-verified v12/v13/v14/v15 migration authority. Local checks do not establish native runtime consumption or efficiency; default promotion and a bounded comparative pilot remain separately gated.
 
 For compression-safe work, the orchestrator keeps concise, root-scoped task and
 session state under `.codex/`. Resume reconciles that journal with the newest
@@ -257,7 +257,7 @@ STRIDE threat model, OWASP code review, CVE dependency audit, attack surface map
 Triggers on: security, threat model, audit, vulnerability, OWASP
 
 ### assistant-review
-Evidence-bounded code review: audits use one frozen multi-pass batch with two independent narrow passes, plus integration for medium scope and architecture for large scope. Review-fix work normally uses an initial batch, authorized productive correction, and one fresh post-fix re-review batch. Additional rounds require new evidence and a recorded reason, under the same shared task guard. Prioritizes concrete bugs, regressions, risks, and missing tests.
+Evidence-bounded code review: trivial/small light review uses one fresh pass plus one fresh re-review after a fix, and plan review uses one fresh pass; medium+ audits use one frozen multi-pass batch at the canonical count of two independent narrow passes, plus integration for medium scope and architecture for large scope. Review-fix work normally uses an initial batch, authorized productive correction, and one fresh post-fix re-review batch. Additional rounds require new evidence and a recorded reason, under the same shared task guard. Prioritizes concrete bugs, regressions, risks, and missing tests.
 
 Triggers on: review, fresh review, code review, review this, check the code
 
@@ -580,7 +580,7 @@ Workflow skill: Inspects existing behavior, resolves material choices, and plans
 ### For tasks (concrete)
 ```
 You: "Fix the null reference in UserService.GetById"
-Workflow skill: Triages as Small, quick discovery, lightweight plan, fix + test + self-review
+Workflow skill: Triages as Small, quick discovery, lightweight plan, fix + test + fresh independent review
 ```
 
 ### For TDD
@@ -721,9 +721,11 @@ for standing coverage. Installers take no new global-file ownership. Source
 references and installation parity do not prove native activation; automatic
 provider coverage is claimed only for observed standing-instruction support.
 
-Workflow v15 validates/migrates original v14 authority, retaining original and
-normalized digests, execution, actors, selected TDD and results. Review v9 and
-five-lens research v4 use the same three-consecutive-unproductive-cycle policy.
+Workflow v16 validates/migrates original v14/v15 authority, retaining original and
+normalized digests, execution, actors, selected TDD and results. Review v10 and
+five-lens research v5 use the same three-consecutive-unproductive-cycle policy.
+Research v5 needs five separate lens agents and a newly created peer reviewer;
+historical v4 fallback records stay readable only.
 Productive attempts and review/QA rounds have no cumulative ceiling. Historical
 counters/labels remain evidence; missing progress history is an explicit gap.
 No native/model pilot, reduced-friction, quality, time or cost improvement has
@@ -731,4 +733,4 @@ been established by structural checks alone.
 
 Review helper input details: run `python3 -I -S -B <loaded-review-skill>/scripts/review-tools.py --help`.
 Mechanical validation consumes independently retained caller authority and keeps
-transport receipts outside canonical v9 returns.
+transport receipts outside canonical v10 returns.

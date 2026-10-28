@@ -1,14 +1,14 @@
 # Review Handoff Contracts
 # Defines the data shape between Orchestrator and Reviewer subagent.
 # The review skill, when subagent_execution_mode=delegated, dispatches a fresh Reviewer for every planned pass,
-# including triggered trivial/small scope. Direct fallback uses the same review
-# fields as local evidence without spawning a subagent.
+# including trivial/small scope, whose light review plans one fresh pass covering both concerns. Current review and required independent QA use
+# newly created actors; explicit historical v9 fallback keeps its original authority.
 
-schema_version: "9.0"
+schema_version: "10.0"
 contract: handoffs
 skill: assistant-review
-# v9.0 migration: persisted 6.0 and incompatible 7.0/7.1/7.2/8.0 packets are invalidated and
-# rebuilt from a freshly rehashed 9.0 snapshot before CLEAN or ISSUES_FIXED. Preserve a
+# pre-10.0 migration: persisted 6.0 and incompatible 7.0/7.1/7.2/8.0 packets are invalidated and
+# rebuilt from a freshly rehashed 10.0 snapshot before CLEAN or ISSUES_FIXED. Preserve a
 # legacy closure ledger by preserving complete identity tuples. For a partial
 # v6/v7.0 tuple, preserve a supplied aggregate_finding_id and fill only missing
 # source IDs/provenance. When that ID is absent, normalize UTF-8
@@ -35,7 +35,7 @@ worker_status_protocol:
     - "Every expected review pass reaches a terminal state before aggregation; the first response never establishes batch coverage."
     - "evidence is required to support the verdict and any findings."
     - "open_questions is required for NEEDS_CONTEXT and BLOCKED."
-    - "Persisted 6.0/7.0/7.1/7.2/8.0 packets are invalidated and rebuilt from a fresh 9.0 snapshot before CLEAN or ISSUES_FIXED. Preserve complete closure identity tuples and raw history; for partial v6/v7.0 tuples preserve a supplied aggregate_finding_id, fill only missing source IDs/provenance, and use the versioned UTF-8 NFC/SHA-256 legacy ID only when absent. Non-colliding IDs use the base; every colliding record appends :<ordinal> in original packet order."
+    - "Persisted 6.0/7.0/7.1/7.2/8.0 packets are invalidated and rebuilt from a fresh 10.0 snapshot before CLEAN or ISSUES_FIXED. Preserve complete closure identity tuples and raw history; for partial v6/v7.0 tuples preserve a supplied aggregate_finding_id, fill only missing source IDs/provenance, and use the versioned UTF-8 NFC/SHA-256 legacy ID only when absent. Non-colliding IDs use the base; every colliding record appends :<ordinal> in original packet order."
     - "status is required on every QAEvaluator return."
     - "QAEvaluator returns acceptance_findings, qa_scorecard, final_verdict, result, evidence, and every-round score_entry; score_progression is optional history. Selected_domain_rubrics and domain_quality_scores are required only when scoped. QA does not replace Reviewer/code-reviewer findings."
     - "Reviewer and QAEvaluator return pivot_restart_signal for genuine shared semantic stagnation or material change, with independent evidence; score labels alone do not trigger it. The orchestrator owns the final pivot_restart_decision."
@@ -68,7 +68,7 @@ dispatch_context_bundles:
       - path: references/lifecycle-verification.md
         sections: [all]
         condition: "assigned_scope or coverage_obligations affect acquisition/readiness, active work, cancellation, collection/finalization, shutdown, owned resources, cleanup or retry"
-    direct_fallback: "Sibling-blind; two passes."
+    direct_fallback: "Historical v9 only; current v10 requires new native actors."
     excludes: [review_batch, pre_batch_findings, sibling_outputs]
     worker_return_schema_selector:
       return_schema_ref: "handoffs.orchestrator_to_reviewer.return_fields"
@@ -94,9 +94,9 @@ return_validation_bundles:
   - name: reviewer_return_validation
     phase: REVIEW_STEP
     return_schema_ref: "handoffs.orchestrator_to_reviewer.return_fields"
-    activation: "Resolve only after the Reviewer or direct-fallback result exists and before EVALUATE."
+    activation: "Resolve only after the actual Reviewer result exists and before EVALUATE; historical v9 fallback retains its original authority."
     validation: "Validate batch_id, review_pass_id, review_attempt_id against the active dispatch, review_snapshot_id, perspective, terminal pass state, non-empty reviewed_scope, assigned scope/obligation membership, structured finding aggregation keys, coverage_entries, summary, evidence, applicable checklist/principle checks including architecture_decision_pack_checks when triggered, canonical architecture_design_mode equals architecture_decision_pack.mode, review_intensive independent challenge evidence, verdict, rubric scores when required, and pivot_restart_signal when applicable."
-    mechanical_validation: "Use scripts/review-tools.py with independently retained caller authority; keep raw payload/digest and occurrence refs in caller evidence, never in v9 return fields. Changed payload conflicts retain evidence and block closure until resolved."
+    mechanical_validation: "Use scripts/review-tools.py with independently retained caller authority; keep raw payload/digest and occurrence refs in caller evidence, never in canonical return fields. Changed payload conflicts retain evidence and block closure until resolved."
     dispatch_context_excluded: true
 
   - name: qa_evaluator_return_validation
@@ -115,7 +115,7 @@ handoffs:
     from: Orchestrator
     to: Reviewer
     phase: REVIEW_STEP
-    notes: "Each review round is one frozen-snapshot batch. Dispatch independent narrow, sibling-blind passes; never treat one broad pass as sufficient coverage. For direct_fallback, preserve the same fields as local evidence without spawning."
+    notes: "Each review round is one frozen-snapshot batch. Dispatch independent narrow, sibling-blind passes; only trivial/small light review uses one fresh light_contract_and_runtime pass covering both concerns, plan review (review_subject plan) uses one fresh plan_coverage_and_feasibility pass, and medium+ never treats one broad pass as sufficient coverage. Current v10 requires newly created independent actors; explicit historical v9 retains its original native binding only."
 
     context_fields:
       - name: review_preparation_mode
@@ -127,13 +127,13 @@ handoffs:
       - name: spec_review_pass_ref
         type: string
         required: true
-        description: "Pointer to the current Spec Review result recorded against the user request/review scope before batch planning"
-        validation: "Standalone points to Spec Review against user request/review scope; workflow_composed points to carried Spec PASS. In audit, an evidence-backed FAIL is retained as an aggregate finding and does not block the frozen read-only batch."
+        description: "Standalone: pointer to the current Spec Review result recorded against the user request/review scope before batch planning. Workflow-composed: pointer to the final acceptance batch's spec obligations; it needs no separate Spec PASS."
+        validation: "Standalone points to Spec Review against user request/review scope; workflow_composed points to the final acceptance batch's spec obligations (missing acceptance criteria, extra scope, changed-files mismatch, verification mismatch), with no separate Spec agent; a historical record that points to carried Spec PASS stays readable. In audit, an evidence-backed FAIL is retained as an aggregate finding and does not block the frozen read-only batch."
 
       - name: pre_batch_criteria_ref
         type: string
         required: true
-        description: "Sanitized Spec Review scope and criterion pointer supplied to a fresh Reviewer pass."
+        description: "Sanitized Spec Review scope and criterion pointer supplied to a fresh Reviewer pass; for workflow-composed review it names the acceptance batch spec obligations."
         validation: "When an explicit reduced-testing instruction applies, retains its scope/source from the canonical assessment instruction row and the expansion boundary; otherwise no instruction row is required. May identify scope and review criterion but excludes pre_batch_findings, mismatch description, evidence, severity, and any sibling output."
 
       - name: build_test_verification_ref
@@ -253,17 +253,17 @@ handoffs:
           - name: topology
             type: object
             required: true
-            validation: "trivial/small=2 independent discovery passes; medium=3; large=4; an optional triggered security specialist and post-fix closure verification may raise required responses to a maximum of 6; response correction uses the same shared task guard; preserve typed lifecycle failures and complete coverage."
+            validation: "trivial/small light review=1 fresh light_contract_and_runtime pass covering both trivial_small concerns (light_review true, controller_intensity light); trivial/small standard/strict=2 (historical two-pass trivial/small batches remain valid); medium=3; large=4; light review folds post-fix closure into its single fresh re-review, so closure_verification_required is false; plan review (review_subject plan, plan_review true)=1 fresh plan_coverage_and_feasibility pass at any scope size, closure folded into its single fresh post-fix re-review (historical multi-pass plan reviews stay readable; new plan reviews use exactly one pass); an optional triggered security specialist and post-fix closure verification may raise required responses to a maximum of 6; response correction uses the same shared task guard; preserve typed lifecycle failures and complete coverage."
             object_fields:
               - name: discovery_pass_count
                 type: int
                 required: true
-                validation: "Must equal the length of topology.canonical_discovery_perspectives for scope_size."
+                validation: "Must equal the length of topology.canonical_discovery_perspectives for scope_size, except that trivial/small light review (light_review true) and plan review (plan_review true) use 1."
               - name: canonical_discovery_perspectives
                 type: object
                 required: true
                 description: "Canonical distinct discovery perspectives; expected_passes derives from this set, never a self-declared count alone."
-                validation: "Each list is unique and exact: trivial_small=2, medium=3, large=4. Every canonical discovery perspective has exactly one expected_passes record and no discovery record lies outside the scope-size list; specialist and closure are additive only."
+                validation: "Each list is unique and exact: trivial_small=2, medium=3, large=4. Every canonical discovery perspective has exactly one expected_passes record and no discovery record lies outside the scope-size list, except that trivial/small light review replaces the trivial_small pair with one light_contract_and_runtime pass covering both, and plan review replaces the scope-size list with one plan_coverage_and_feasibility pass; specialist and closure are additive only."
                 object_fields:
                   - name: trivial_small
                     type: string[]
@@ -292,17 +292,27 @@ handoffs:
               - name: closure_verification_required
                 type: boolean
                 required: true
-                validation: "True only for a post-fix batch with previously_fixed items pending verification"
+                validation: "True only for a post-fix batch with previously_fixed items pending verification; always false for trivial/small light review and plan review, whose single fresh re-review receives the closure ledger."
               - name: max_required_responses
                 type: int
                 required: true
                 validation: "Equals expected_passes length and is <= 6."
+              - name: light_review
+                type: boolean
+                required: false
+                description: "Explicit indicator for the structured one-pass trivial/small light topology"
+                validation: "true only when scope_size is trivial or small, discovery_pass_count is 1 and the caller's controller_intensity is light; required true for that one-pass topology. Absent or false selects the canonical topology with at least two discovery passes; historical two-pass trivial/small batches stay valid without it."
+              - name: plan_review
+                type: boolean
+                required: false
+                description: "Explicit indicator for the one-pass plan review topology"
+                validation: "true only when review_subject is plan; required true for a plan_coverage_and_feasibility pass. True requires exactly one plan_coverage_and_feasibility discovery pass, discovery_pass_count 1 and closure_verification_required false. Absent or false keeps the canonical topology; historical multi-pass plan reviews stay readable; new plan reviews use exactly one pass."
           - name: expected_passes
             type: object[]
             required: true
-            min_items: 2
+            min_items: 1
             max_items: 6
-            validation: "For discovery perspectives, exactly one pass exists for each canonical_discovery_perspectives value for scope_size, with no duplicate, missing, or extra discovery perspective; discovery_pass_count equals that canonical set cardinality. security_specialist_triggered requires exactly one risk_selected_specialist pass dispatched through Code Reviewer with review_focus=[security] and the assistant-security checklist/perspective; false forbids it. closure_verification_required likewise requires exactly one closure_verification pass; false forbids it."
+            validation: "Only trivial/small light review and plan review (plan_review true) have one discovery pass; every other batch has at least two. For discovery perspectives, exactly one pass exists for each canonical_discovery_perspectives value for scope_size, with no duplicate, missing, or extra discovery perspective; discovery_pass_count equals that canonical set cardinality. security_specialist_triggered requires exactly one risk_selected_specialist pass dispatched through Code Reviewer with review_focus=[security] and the assistant-security checklist/perspective; false forbids it. closure_verification_required likewise requires exactly one closure_verification pass; false forbids it."
             object_fields:
               - name: review_pass_id
                 type: string
@@ -311,7 +321,7 @@ handoffs:
               - name: perspective
                 type: enum
                 required: true
-                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification, light_contract_and_runtime, plan_coverage_and_feasibility]
               - name: assigned_scope
                 type: string[]
                 required: true
@@ -326,7 +336,7 @@ handoffs:
                 type: enum
                 required: true
                 enum_values: [none, closure_ledger]
-                validation: "closure_ledger only when perspective == closure_verification; discovery perspectives are sibling-blind and prior-finding-blind"
+                validation: "closure_ledger when perspective == closure_verification, or for the light_contract_and_runtime or plan_coverage_and_feasibility pass of a post-fix light or plan re-review; other discovery perspectives are sibling-blind and prior-finding-blind"
           - name: required_coverage_tuples
             type: object[]
             required: true
@@ -346,7 +356,7 @@ handoffs:
               - name: review_perspective
                 type: enum
                 required: true
-                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification, light_contract_and_runtime, plan_coverage_and_feasibility]
               - name: coverage_obligation
                 type: string
                 required: true
@@ -502,7 +512,7 @@ handoffs:
       - name: review_perspective
         type: enum
         required: true
-        enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+        enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification, light_contract_and_runtime, plan_coverage_and_feasibility]
         description: "Narrow purpose for this sibling-blind pass; it does not make the overall batch verdict"
 
       - name: assigned_scope
@@ -583,9 +593,9 @@ handoffs:
       - name: previously_fixed
         type: object[]
         required: conditional
-        condition: "review_perspective == closure_verification"
+        condition: "review_perspective == closure_verification, or a post-fix re-review with review_perspective in [light_contract_and_runtime, plan_coverage_and_feasibility]"
         min_items: 1
-        description: "Immutable pre-fix ledger for closure_verification only; discovery passes receive no prior findings."
+        description: "Immutable pre-fix ledger for closure_verification or a post-fix light/plan re-review; other passes get no prior findings."
         object_fields:
           - name: description
             type: string
@@ -705,6 +715,33 @@ handoffs:
         description: "Whether the reviewer must return rubric scores (default: true for medium+ scope)"
         notes: "Set to false for trivial/small scope single-round clean passes."
 
+      - name: reviewer_actor_id
+        type: string
+        required: conditional
+        condition: "current Review v10 return authority"
+        description: "Caller-retained return-authority key: actor of the newly created reviewer; never dispatched to the Reviewer."
+        validation: "Equals fresh_dispatch.actor_id."
+        on_missing: fail
+        on_fail: "Block return validation and re-resolve the retained native creation record."
+
+      - name: native_invocation_id
+        type: string
+        required: conditional
+        condition: "current Review v10 return authority"
+        description: "Caller-retained return-authority key: native invocation of this pass attempt; never dispatched to the Reviewer."
+        validation: "Equals fresh_dispatch.native_invocation_id and the native dispatch binding."
+        on_missing: fail
+        on_fail: "Block return validation and re-resolve the retained native invocation."
+
+      - name: handoff_digest
+        type: string
+        required: conditional
+        condition: "current Review v10 return authority"
+        description: "Caller-retained return-authority key: digest of the frozen dispatched handoff; never dispatched to the Reviewer."
+        validation: "Equals fresh_dispatch.handoff_digest."
+        on_missing: fail
+        on_fail: "Block return validation and re-hash the retained frozen handoff."
+
     reviewer_pass_context_fields:
       derived_from: "dispatch_context_bundles.fresh_reviewer_context.context_fields_from_dispatch"
       validation: "Exact pass-only projection: listed fields plus bounded return-schema selector; excludes review_batch, pre_batch_findings, sibling outputs, return fields; preserves budget."
@@ -766,7 +803,7 @@ handoffs:
       - name: review_perspective
         type: enum
         required: true
-        enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+        enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification, light_contract_and_runtime, plan_coverage_and_feasibility]
         description: "Echo back the pass perspective"
 
       - name: pass_completion_state
@@ -853,7 +890,7 @@ handoffs:
           - name: review_perspective
             type: enum
             required: true
-            enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+            enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification, light_contract_and_runtime, plan_coverage_and_feasibility]
             validation: "Equals this pass review_perspective and one required_coverage_tuples member."
           - name: coverage_obligation
             type: string
@@ -877,7 +914,7 @@ handoffs:
       - name: closure_results
         type: object[]
         required: conditional
-        condition: "review_perspective == closure_verification"
+        condition: "review_perspective == closure_verification, or (review_perspective in [light_contract_and_runtime, plan_coverage_and_feasibility] and previously_fixed is non-empty)"
         min_items: 1
         validation: "Exact equality with pending previously_fixed IDs; preserve their source IDs/provenance. Missing IDs are invalid. Assessed incomplete/regressed IDs remain findings and block CLEAN. Unassessed closure returns NEEDS_CONTEXT/BLOCKED with incomplete rows for every pending fixed ID and evidence explaining the unavailable assessment; findings stay empty and coverage remains blocked/incomplete. Never invent a finding to represent nonassessment."
         object_fields:
@@ -1262,7 +1299,7 @@ handoffs:
             required: true
             description: "Lowest-scoring dimensions, stale-context concern, or blocker evidence the orchestrator should consider"
 
-    on_missing_field: "Use the same orchestrator-owned shared progress guard for transient/schema correction. When genuinely stalled, record failed or timed_out with typed failure_kind/failure_evidence and aggregate the coverage gap. In direct fallback mode, complete the local review evidence before continuing. status, findings, evidence, and verdict are never optional — a review without them is not a review."
+    on_missing_field: "Use the same orchestrator-owned shared progress guard for transient/schema correction. Native creation failures retain typed failure_kind/failure_evidence and incomplete coverage without invented actors/responses. Actual responses: status, findings, evidence, and verdict are never optional. Historical v9 preserves original fallback policy."
 
   # ─────────────────────────────────────────────
   # Orchestrator → QAEvaluator (per QA round)
@@ -1730,11 +1767,11 @@ handoffs:
             required: true
             description: "Acceptance gap, evidence gap, domain pivot evidence, or stale QA context the orchestrator should consider"
 
-    on_missing_field: "In delegated mode, re-dispatch QAEvaluator. In direct fallback mode, complete the local QA evidence before continuing. status, acceptance_findings, qa_scorecard, final_verdict, result, evidence, and score_entry are never optional. When scoped domain rubrics are selected, selected_domain_rubrics and domain_quality_scores are also required; when not scoped, do not fabricate them."
+    on_missing_field: "Obtain a newly created independent QAEvaluator for current acceptance or report incomplete isolation; historical v9 fallback keeps original authority. status, acceptance_findings, qa_scorecard, final_verdict, result, evidence, and score_entry are never optional. When scoped domain rubrics are selected, selected_domain_rubrics and domain_quality_scores are also required; when not scoped, do not fabricate them."
 
 # ─────────────────────────────────────────────
 # Validation behavior:
-# 1. Before delegated dispatch or direct-fallback review: verify all required context_fields are populated
+# 1. Before current independent review/QA dispatch: verify all required context_fields are populated
 # 2. Build finding_filter_policy from evidence and impact with stable standards at every positive ordinal; no confidence tiers or round cap
 # 3. After each return: enforce the Reviewer status/pass_completion_state/verdict/findings/coverage_entries/open_questions truth table; verify batch_id, review_pass_id, review_attempt_id, review_snapshot_id, summary, and evidence. Response-backed terminals have exactly one active response; the orchestrator owns timed_out/failed/invalidated typed terminal failures.
 # 4. Move speculative or low-evidence items to observations; findings require file/line evidence, concrete impact, and a smallest useful fix
@@ -1746,7 +1783,7 @@ handoffs:
 # 10. If round >= 3, require additional_round_reason backed by new evidence; score below threshold alone is invalid
 # 11. Wait until every expected review pass reaches terminal accounting: completed, needs_context, and blocked are response-backed; timed_out, failed, and invalidated may have zero response only with typed failure evidence. Current incomplete or invalidated coverage maps to HAS_REMAINING_ITEMS, never CLEAN or ISSUES_FIXED.
 # 12. Apply the same shared semantic progress guard; productive work may continue beyond round 10. Keep complete-coverage exit gates.
-# 12. If delegated re-dispatch or direct-fallback completion is needed: include explicit note about what was missing
+# 12. If a fresh replacement dispatch is needed: include explicit note about what was missing; retain incomplete coverage
 # 13. If qa_evaluation_mode=required, run orchestrator_to_qa_evaluator after build/test and code-review evidence; include debate_record when Done Contract exists; never treat QA evaluation as a replacement for Reviewer/code-reviewer.
 # 14. QA acceptance/verdict standards remain unchanged at every positive ordinal; use the shared task guard for repeated correction.
 # 15. If domain_context/rubric_refs or subjective/product/UX/docs/DX/UI/domain acceptance scope exists: verify selected_domain_rubrics and domain_quality_scores are present and evidence-backed.

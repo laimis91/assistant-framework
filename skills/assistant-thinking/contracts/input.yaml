@@ -41,10 +41,10 @@ fields:
     required: false
     enum_values: [delegated, sequential_fallback, not_applicable]
     description: "Whether independent roles are executed by subagents, sequentially in the main session, or not needed"
-    validation: "delegated requires subagent_policy_state=delegation_triggered; sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"
+    validation: "delegated requires subagent_policy_state=delegation_triggered; for discretionary perspective execution only, sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source. A required independent challenge never uses sequential_fallback: it is delegated to a newly created fresh-context reviewer or recorded incomplete."
     default: not_applicable
     on_missing: infer
-    infer_from: "Use delegated only with subagent_policy_state=delegation_triggered for perspectives or high-stakes stress-test subagents. Use sequential_fallback only for delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source. Use not_applicable for tools that do not use independent subagents."
+    infer_from: "Thinking execution delegation is optional at every scope; formal independent challenge follows fresh-review isolation. Use delegated only for actual spawned actors. Use sequential_fallback only for discretionary perspectives with delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source; never for a required independent challenge, which is delegated or recorded incomplete. Use not_applicable for tools that do not use independent subagents."
 
   - name: subagent_trigger_scope
     type: string[]

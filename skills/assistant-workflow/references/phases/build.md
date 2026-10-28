@@ -18,8 +18,8 @@ compact applicability evidence. Only shared, materially unresolved, or
 explicitly carried expanded work requires the common pre-build result and its
 completion projection when `execution_intent != prepare_only`; prepare-only
 work retains discovery applicability and artifact identity without implementation
-completion claims. Evidenced local work keeps ordinary relevant verification and
-self-review without a Node gate. Shared fanout alone does not activate an
+completion claims. Evidenced local work keeps ordinary relevant verification, a
+local self-check and fresh independent review without a Node gate. Shared fanout alone does not activate an
 Architecture Decision Pack, strict controller, QA, or a different Build/delegation lane.
 
 ## Progress Updates
@@ -47,6 +47,18 @@ logs/reasoning, prune stale or unsafe residue, and end with the exact next
 action.
 
 Capture **constraints** from Discovery/Plan (e.g. "don't touch ProjectA", "stay on .NET 8"). Check constraints before each step.
+
+### Direct execution and plan review
+
+Main-agent direct execution is permitted at every size/risk. Choose optional
+execution delegation for concrete benefit. Required/requested plans receive fresh
+independent review before approval and implementation: one fresh
+`plan_coverage_and_feasibility` pass. Fix material plan findings and obtain one
+fresh re-review; already-running approved plans keep their authority on
+upgrade. Trivial work does not create a plan solely to review planning.
+At the final acceptance review (`review_subject=acceptance`) reconcile original
+request/approved plan and task-wide completion allocation against actual
+evidence; missing work prevents a completed verdict.
 
 ### Reuse before creating
 
@@ -94,7 +106,7 @@ for every `depends_on` prerequisite to be `VERIFIED`. Print `>> Slice
 [S]/[total]: [packet_id] [name]`. In `bounded_executor`, the bounded executor
 owns selected implementation and verification; RED/GREEN/REFACTOR apply only
 when the canonical decision activates TDD. In `separated_workers`, active TDD
-runs SAME selected Code Writer `worker_stage=test_authoring` when selected assertions need authoring or repair (tests only, no incoming RED), then execution-only Builder/Tester `pre_production_red`; explicit reuse of unchanged assertions skips authoring without fabricated edits. It forwards unchanged current typed RED to that SAME actual writer `worker_stage=production`, then runs Builder/Tester GREEN. Only after current GREEN passes does that writer `worker_stage=refactor` return before distinct Builder/Tester REFACTOR verification. Stage-only DONE never completes Build or permits Review; inactive TDD runs
+runs SAME selected Code Writer `worker_stage=test_authoring` when selected assertions need authoring or repair (tests only, no incoming RED), then execution-only Builder/Tester `pre_production_red`; explicit reuse of unchanged assertions skips authoring without fabricated edits. It forwards unchanged current typed RED to that SAME actual writer `worker_stage=production`, then runs Builder/Tester GREEN. Only after current GREEN passes does that writer `worker_stage=refactor` return before Builder/Tester executed REFACTOR or validated unchanged GREEN reuse. Stage-only DONE never completes Build or permits Review; inactive TDD runs
 Code Writer tests plus code then execution-only Builder/Tester `final_verification`. Verify each acceptance
 criterion, record lane-matched canonical packet execution evidence, and mark the slice
 `VERIFIED` before a dependent packet starts.

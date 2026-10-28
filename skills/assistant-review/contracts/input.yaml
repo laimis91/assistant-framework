@@ -1,9 +1,9 @@
 # Applicability: structured review batches, worker handoffs, persisted results,
-# and workflow/QA consumers use the canonical v9 protocol. Human summaries may
+# and workflow/QA consumers use the canonical v10 protocol. Human summaries may
 # omit empty/internal sections; frozen snapshots, independent passes, coverage,
 # verification, authorization, and the shared semantic guard apply to every selected review.
 
-schema_version: "9.0"
+schema_version: "10.0"
 contract: input
 skill: assistant-review
 
@@ -143,31 +143,40 @@ fields:
       4-10 files, < 500 lines changed → medium.
       10+ files or 500+ lines → large.
 
+  - name: controller_intensity
+    type: enum
+    required: false
+    enum_values: [light, standard, strict]
+    description: "Caller controller intensity; Workflow passes its triage controller_intensity unchanged. review-tools reads it from terminal/aggregate authority."
+    validation: "Only light permits light review. The structured one-pass topology needs topology.light_review true, trivial/small scope and light; small standard/strict keeps at least two passes."
+    on_missing: infer
+    infer_from: "Workflow-composed review uses the carried value. Standalone review infers light only for trivial/small scope without an Architecture Pack, expanded impact or elevated risk; otherwise standard. Absent from review-tools authority is not light."
+
   - name: subagent_policy_state
     type: enum
     required: false
-    enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
-    description: "Whether applicable instructions trigger Reviewer subagent dispatch or require evidenced fallback"
-    validation: "Must be resolved before dispatching a Reviewer subagent"
-    default: not_required
+    enum_values: [delegation_triggered, subagents_unavailable, policy_disallowed, delegation_opted_out, not_required]
+    description: "Current formal review requires newly created independent agents; unavailable isolation is incomplete"
+    validation: "Current v10 producers use only delegation_triggered, subagents_unavailable or policy_disallowed. delegation_opted_out and not_required are historical v9 reader-only labels, valid only on a record that explicitly declares producer_version 9.0 with its original historical_dispatch_binding; they never certify current review."
+    default: delegation_triggered
     on_missing: infer
-    infer_from: "Use delegation_triggered when a direct user request or applicable AGENTS.md or active skill instruction covers Reviewer roles; infer scope without asking. Use delegation_opted_out when the user explicitly declines; use subagents_unavailable after a real dispatch failure or supported configuration proof; use policy_disallowed only when an exact active rule blocks spawning with no applicable trigger exception; use not_required for trivial/small self-review paths."
+    infer_from: "Formal review always triggers independent isolation; record genuine unavailability or a blocking policy without certifying author fallback."
 
   - name: subagent_execution_mode
     type: enum
     required: false
-    enum_values: [delegated, direct_fallback, not_applicable]
-    description: "How Reviewer responsibility is executed"
-    validation: "delegated requires subagent_policy_state=delegation_triggered; direct_fallback requires opted_out, unavailable, policy_disallowed, or trivial/small isolated multi-pass evidence only when no applicable delegation trigger applies; not_applicable never collapses an audit batch to one self-review"
-    default: not_applicable
+    enum_values: [delegated, not_applicable, direct_fallback]
+    description: "Actual isolated review execution; no current direct author fallback"
+    validation: "Current v10 producers use only delegated or not_applicable: only delegated fresh native review can complete; not_applicable records blocked/unstarted isolation. direct_fallback is a historical v9 reader-only label, valid only on a record that explicitly declares producer_version 9.0 with its original historical_dispatch_binding; a current v10 producer never emits it and it never certifies current review."
+    default: delegated
     on_missing: infer
-    infer_from: "Use delegated when an applicable trigger requires Reviewer subagents, including trivial/small scope. Absent an applicable trigger, use direct_fallback for opt-out, unavailability, policy blocks, or trivial/small two-pass isolation. Use not_applicable only when no review batch is required."
+    infer_from: "Use delegated for current review; unavailable isolation remains incomplete."
 
   - name: subagent_trigger_scope
     type: string[]
     required: false
     description: "Direct-user, applicable-AGENTS.md, or active-skill provenance plus review rounds, roles, and files covered by the trigger"
-    validation: "Non-empty when delegation is relevant and inferred without asking; empty only when subagent_policy_state=not_required."
+    validation: "Non-empty independently resolved formal-review provenance; unavailable isolation remains incomplete. Historical v9 retains its original trigger policy."
     default: []
     on_missing: infer
 
@@ -597,8 +606,8 @@ fields:
     type: object
     required: conditional
     condition: "persisted review packet was created under v6"
-    description: "v6 to producer 9.0 migration."
-    validation: "Invalidate v6 and rebuild from a freshly rehashed 9.0 snapshot; block CLEAN/ISSUES_FIXED. Retain raw history and preserve each complete identity tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with it and missing source_provenance with review_pass:persisted-v6-migration. Missing aggregate_finding_id: SHA-256 UTF-8 NFC(description) into legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use the base; every colliding record appends :<ordinal> by packet order from 1. Before closure, source_finding_ids uses that ID with review_pass:persisted-v6-migration provenance only when each field is missing."
+    description: "v6 to producer 10.0 migration."
+    validation: "Invalidate v6 and rebuild from a freshly rehashed 10.0 snapshot; block CLEAN/ISSUES_FIXED. Retain raw history and preserve each complete identity tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with it and missing source_provenance with review_pass:persisted-v6-migration. Missing aggregate_finding_id: SHA-256 UTF-8 NFC(description) into legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use the base; every colliding record appends :<ordinal> by packet order from 1. Before closure, source_finding_ids uses that ID with review_pass:persisted-v6-migration provenance only when each field is missing."
     on_missing: fail
     object_fields:
       - name: source_schema_version
@@ -615,7 +624,7 @@ fields:
       - name: rebuilt_snapshot_identity
         type: object
         required: true
-        description: "Fresh 9.0 identity."
+        description: "Fresh 10.0 identity."
         object_fields:
           - name: basis
             type: enum
@@ -636,7 +645,7 @@ fields:
     type: object
     required: conditional
     condition: "persisted review packet schema_version == 7.0"
-    validation: "Invalidate all 7.0 result/delegation/snapshot/Pack/QA/plan/coverage refs; do not reinterpret as 8.0. Retain every raw 7.0 previously_fixed record unchanged as historical evidence. Before closure dispatch, preserve each complete aggregate_finding_id/source_finding_ids/source_provenance tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with that ID and missing source_provenance with review_pass:persisted-v7-0-migration. When aggregate_finding_id is absent, normalize UTF-8 NFC(description) into UTF-8 bytes, SHA-256 hash it, and use legacy-v7-0:<fixed_in_round>:<first-24-hex>; non-colliding records use the base and every colliding record appends :<ordinal> in original packet order, then fill only missing source_finding_ids with that ID and missing source_provenance with review_pass:persisted-v7-0-migration. Rebuild required review/QA from a fresh 9.0 snapshot before CLEAN/ISSUES_FIXED."
+    validation: "Invalidate all 7.0 result/delegation/snapshot/Pack/QA/plan/coverage refs; do not reinterpret as 8.0. Retain every raw 7.0 previously_fixed record unchanged as historical evidence. Before closure dispatch, preserve each complete aggregate_finding_id/source_finding_ids/source_provenance tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with that ID and missing source_provenance with review_pass:persisted-v7-0-migration. When aggregate_finding_id is absent, normalize UTF-8 NFC(description) into UTF-8 bytes, SHA-256 hash it, and use legacy-v7-0:<fixed_in_round>:<first-24-hex>; non-colliding records use the base and every colliding record appends :<ordinal> in original packet order, then fill only missing source_finding_ids with that ID and missing source_provenance with review_pass:persisted-v7-0-migration. Rebuild required review/QA from a fresh 10.0 snapshot before CLEAN/ISSUES_FIXED."
     on_missing: fail
     object_fields:
       - name: source_schema_version
@@ -653,7 +662,7 @@ fields:
       - name: rebuilt_snapshot_identity
         type: object
         required: true
-        description: "Fresh 9.0 identity after rehash."
+        description: "Fresh 10.0 identity after rehash."
         object_fields:
           - name: basis
             type: enum
@@ -674,7 +683,7 @@ fields:
     type: object
     required: conditional
     condition: "persisted review packet schema_version == 7.1"
-    validation: "Invalidate all 7.1 result/delegation/snapshot/Pack/QA/plan/coverage refs; do not reinterpret as 8.0. Preserve existing 7.1-or-later previously_fixed provenance as historical evidence, then rebuild required review/QA from a fresh 9.0 snapshot before CLEAN/ISSUES_FIXED."
+    validation: "Invalidate all 7.1 result/delegation/snapshot/Pack/QA/plan/coverage refs; do not reinterpret as 8.0. Preserve existing 7.1-or-later previously_fixed provenance as historical evidence, then rebuild required review/QA from a fresh 10.0 snapshot before CLEAN/ISSUES_FIXED."
     on_missing: fail
     object_fields:
       - name: source_schema_version
@@ -691,7 +700,7 @@ fields:
       - name: rebuilt_snapshot_identity
         type: object
         required: true
-        description: "Fresh 9.0 identity after rehash."
+        description: "Fresh 10.0 identity after rehash."
         object_fields:
           - name: basis
             type: enum
@@ -712,8 +721,8 @@ fields:
     type: object
     required: conditional
     condition: "persisted review packet schema_version == 7.2"
-    description: "Invalidates a prior producer packet before Review9.0 admission."
-    validation: "Invalidate active 7.2 result/delegation/snapshot/Pack/QA/plan/coverage refs; preserve raw history and complete finding identity tuples unchanged without reassigning IDs. Rebuild review/QA from a fresh 9.0 snapshot before CLEAN/ISSUES_FIXED."
+    description: "Invalidates a prior producer packet before Review10.0 admission."
+    validation: "Invalidate active 7.2 result/delegation/snapshot/Pack/QA/plan/coverage refs; preserve raw history and complete finding identity tuples unchanged without reassigning IDs. Rebuild review/QA from a fresh 10.0 snapshot before CLEAN/ISSUES_FIXED."
     on_missing: fail
     object_fields:
       - name: source_schema_version
@@ -730,7 +739,7 @@ fields:
       - name: rebuilt_snapshot_identity
         type: object
         required: true
-        description: "Fresh 9.0 identity after rehash."
+        description: "Fresh 10.0 identity after rehash."
         object_fields:
           - name: basis
             type: enum
@@ -747,17 +756,12 @@ fields:
             required: true
             description: "Digest of the ordered scope_manifest and its content digests"
 
-# 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required before entering the loop
-# 2. If review_material_snapshot.material is empty after resolution, inform user "nothing to review" and exit
-# 3. If qa_evaluation_mode=required: require acceptance_criteria, verification_evidence, qa_filter_policy, and Done Contract with debate_record when the task has one before QAEvaluator dispatch
-# 4. Log resolved input as: >> Review scope: {scope_size} | mode: {mode} | kind: {change_kind} | subagent_mode: {subagent_execution_mode} | qa_evaluation_mode: {qa_evaluation_mode} | loop_safety_review: {agentic_loop_safety_review_required} | behavioral_contract_review: {behavioral_contract_review_required} | semantic_contract_review: {semantic_contract_review_required} | architecture_pack_review: {architecture_decision_pack_review_required} | files: {count}
-
   - name: persisted_v8_packet_invalidation
     type: object
     required: conditional
     condition: "persisted review packet schema_version == 8.0"
-    description: "Invalidates a prior producer packet before Review9.0 admission."
-    validation: "Invalidate active 8.0 result/delegation/snapshot/Pack/QA/plan/coverage refs; preserve raw history and complete finding identity tuples unchanged without reassigning IDs. Rebuild review/QA from a fresh 9.0 snapshot before CLEAN/ISSUES_FIXED."
+    description: "Invalidates a prior producer packet before Review10.0 admission."
+    validation: "Invalidate active 8.0 result/delegation/snapshot/Pack/QA/plan/coverage refs; preserve raw history and complete finding identity tuples unchanged without reassigning IDs. Rebuild review/QA from a fresh 10.0 snapshot before CLEAN/ISSUES_FIXED."
     on_missing: fail
     object_fields:
       - name: source_schema_version
@@ -774,7 +778,7 @@ fields:
       - name: rebuilt_snapshot_identity
         type: object
         required: true
-        description: "Fresh 9.0 identity after rehash."
+        description: "Fresh 10.0 identity after rehash."
         object_fields:
           - name: basis
             type: enum
@@ -790,6 +794,188 @@ fields:
             type: string
             required: true
             description: "Digest of the ordered scope_manifest and its content digests"
+
+  - name: review_subject
+    type: enum
+    required: false
+    enum_values: [plan, implementation, closure, acceptance]
+    description: "Current review authority discriminator; plan/final acceptance retains original request and approved-plan reconciliation. The final acceptance review is the single owner of request, plan and delivery reconciliation; its batch carries the spec obligations (missing acceptance criteria, extra scope, changed-files mismatch, verification mismatch) and no separate Spec agent runs. Plan review uses one fresh plan_coverage_and_feasibility pass with topology.plan_review true; historical multi-pass plan reviews stay readable; new plan reviews use exactly one pass. Historical Stage-1 Spec Review records stay readable."
+    default: implementation
+    on_missing: infer
+  - name: producer_version
+    type: enum
+    required: conditional
+    condition: "review-tools.py validate_return, validate_terminal_barrier or validate_aggregate_accounting authority"
+    enum_values: ["10.0", "9.0"]
+    description: "Explicit producer label on each return authority and on terminal/aggregate authority; every return authority equals the top-level label"
+    validation: "Current producers declare 10.0. 9.0 is a historical reader label valid only with historical_dispatch_binding. A missing label never downgrades to 9.0, and a 9.0 top-level label with any 10.0 return authority is relabelling."
+    on_missing: fail
+    on_fail: "Block validation and re-resolve the retained native producer label; never infer it from the payload."
+  - name: historical_dispatch_binding
+    type: object
+    required: conditional
+    condition: "producer_version == 9.0"
+    description: "Original complete native dispatch binding of a historical v9 return, with the binding keys task_id, native_invocation_id, batch_id, review_snapshot_id, review_pass_id, review_attempt_id, producer_id, producer_version and source_digest"
+    validation: "Its producer_version is 9.0 or v9; batch, snapshot, pass and attempt IDs equal the return context, source_digest equals the snapshot identity value, and it equals the retained native binding. It cannot certify current v10 review."
+    on_missing: fail
+    on_fail: "Block historical reading and recover the original native binding; never fabricate one from a current v10 invocation."
+    object_fields:
+      - name: task_id
+        type: string
+        required: true
+        on_missing: fail
+      - name: native_invocation_id
+        type: string
+        required: true
+        on_missing: fail
+      - name: batch_id
+        type: string
+        required: true
+        on_missing: fail
+      - name: review_snapshot_id
+        type: string
+        required: true
+        on_missing: fail
+      - name: review_pass_id
+        type: string
+        required: true
+        on_missing: fail
+      - name: review_attempt_id
+        type: string
+        required: true
+        on_missing: fail
+      - name: producer_id
+        type: string
+        required: true
+        on_missing: fail
+      - name: producer_version
+        type: string
+        required: true
+        on_missing: fail
+      - name: source_digest
+        type: string
+        required: true
+        on_missing: fail
+  - name: fresh_dispatch
+    type: object
+    required: conditional
+    condition: "current Review v10 native return or terminal certification"
+    description: "Independently retained FreshReviewDispatchAuthority parsed by review-tools.py, outside agent payload: actual actor/native creation, authors/prior reviewers, fresh context and frozen handoff/source identity"
+    validation: "Codex fork_turns=none; actor is newly created and disjoint from authors/root/prior reviewers. Across one aggregate every active and retained v10 attempt actor is distinct, all share one root_actor_id, and each attempt's prior_reviewer_actor_ids includes every earlier attempt actor of its pass. Missing version or authority cannot downgrade to historical v9; explicit v9 needs original native binding. Exactly these keys: strings nonblank, author_actor_ids non-empty, fork_turns present only for runtime codex and equal to none, context_isolation fresh_self_contained, review_subject one of plan, implementation, closure or acceptance."
+    on_missing: fail
+    on_fail: "Block validation and re-resolve the retained native creation record; never derive the fact from the reviewer payload or its receipts."
+    object_fields:
+      - name: actor_id
+        type: string
+        required: true
+        on_missing: fail
+      - name: root_actor_id
+        type: string
+        required: true
+        on_missing: fail
+      - name: author_actor_ids
+        type: string[]
+        required: true
+        min_items: 1
+        on_missing: fail
+      - name: prior_reviewer_actor_ids
+        type: string[]
+        required: true
+        min_items: 0
+        on_missing: fail
+      - name: native_invocation_id
+        type: string
+        required: true
+        on_missing: fail
+      - name: creation_evidence_ref
+        type: string
+        required: true
+        on_missing: fail
+      - name: runtime_evidence_ref
+        type: string
+        required: true
+        on_missing: fail
+      - name: runtime
+        type: string
+        required: true
+        validation: "Equals its stripped lowercase form; ' codex', 'codex ' or 'Codex' is invalid."
+        on_missing: fail
+      - name: fork_turns
+        type: enum
+        required: conditional
+        condition: "runtime == codex"
+        enum_values: [none]
+        validation: "Exactly none when runtime is codex; absent when runtime is not codex. The Codex rule compares runtime.strip().lower() == codex; padded or other-case codex is invalid, and other runtimes omit fork_turns."
+        on_missing: fail
+      - name: context_isolation
+        type: enum
+        required: true
+        enum_values: [fresh_self_contained]
+        on_missing: fail
+      - name: handoff_digest
+        type: string
+        required: true
+        on_missing: fail
+      - name: source_digest
+        type: string
+        required: true
+        on_missing: fail
+      - name: review_subject
+        type: enum
+        required: true
+        enum_values: [plan, implementation, closure, acceptance]
+        on_missing: fail
+  - name: request_plan_reconciliation
+    type: object
+    required: conditional
+    condition: "review_subject in [plan, acceptance] and current Review v10 aggregate accounting"
+    description: "Independently retained reconciliation of the original request and approved plan against reviewed outcomes. review-tools.py loads this declaration for validate_aggregate_accounting and echoes the validated object unchanged as result.request_plan_reconciliation; workflow admission consumes that exact object and field names."
+    validation: "Every listed requirement ID is nonblank and unique; observed and unresolved requirement IDs are members of required_requirement_ids. For either subject, CLEAN or ISSUES_FIXED requires observed to equal required and explicit empty unresolved_requirement_ids and unresolved_finding_ids; a missing unresolved list is unknown and the result is HAS_REMAINING_ITEMS. For review_subject plan, unfinished_task_wide_work may be absent or non-empty and does not block the verdict. For review_subject acceptance, CLEAN or ISSUES_FIXED additionally requires explicit empty unfinished_task_wide_work."
+    on_missing: fail
+    on_fail: "Block aggregate certification and re-resolve the retained original request and approved plan; never synthesize coverage from checked boxes or reviewer prose."
+    object_fields:
+      - name: original_request_ref
+        type: string
+        required: true
+        description: "Retained reference to the original user request"
+        on_missing: fail
+      - name: approved_plan_ref
+        type: string
+        required: true
+        description: "For review_subject acceptance, retained reference to the user-approved plan. For review_subject plan, the reviewed plan-definition ref bound to the reviewed plan identity; it is not an approval, which happens only after this review."
+        on_missing: fail
+      - name: required_requirement_ids
+        type: string[]
+        required: true
+        min_items: 1
+        description: "Requirement IDs from the original request and approved plan, including explicitly accepted scope changes"
+        on_missing: fail
+      - name: observed_requirement_ids
+        type: string[]
+        required: false
+        description: "Required IDs the fresh reviewer observed: for review_subject plan, allocated by the plan to work; for review_subject acceptance, delivered"
+        default: []
+        on_missing: infer
+        infer_from: "Absent means no requirement was observed; the result remains HAS_REMAINING_ITEMS."
+      - name: unresolved_requirement_ids
+        type: string[]
+        required: false
+        description: "Required IDs that are omitted, deviated or not credibly evidenced"
+        on_missing: infer
+        infer_from: "Absent means unknown, never empty; the result remains HAS_REMAINING_ITEMS."
+      - name: unfinished_task_wide_work
+        type: string[]
+        required: false
+        description: "Task-wide work such as verification or documentation that remains unfinished; a plan review may list planned work here"
+        validation: "Each entry is nonblank. Gated only for review_subject acceptance, where it must be explicitly empty for CLEAN or ISSUES_FIXED; not gated for review_subject plan."
+        on_missing: infer
+        infer_from: "For review_subject acceptance, absent means unknown, never empty, and the result remains HAS_REMAINING_ITEMS. For review_subject plan, absent is ignored."
+      - name: unresolved_finding_ids
+        type: string[]
+        required: false
+        description: "Material review finding IDs that remain unresolved"
+        on_missing: infer
+        infer_from: "Absent means unknown, never empty; the result remains HAS_REMAINING_ITEMS."
 
 # 1. Resolve review_scope, review_material_snapshot, change_kind, semantic_contract_review_required, behavioral_contract_review_required, agentic_loop_safety_review_required, and conditional architecture_decision_pack_review_required before entering the loop
 # 2. If review_material_snapshot.material is empty after resolution, inform user "nothing to review" and exit

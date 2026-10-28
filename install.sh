@@ -245,6 +245,41 @@ declared_workflow_contract_compatible() {
     ' "$contract_file"
 }
 
+# Reject mixed selected/retained producer-consumer protocols before any writes.
+# Sets PROTOCOL_VERSION from one skill's contracts/index.yaml (LF or CRLF) or
+# fails with the protocol diagnostic before any installation write.
+read_skill_protocol_version() {
+    local skill_path="$1" metadata="$1/contracts/index.yaml" matches
+    if [[ -L "$metadata" || ! -f "$metadata" || ! -r "$metadata" ]]; then
+        fail "INCOMPATIBLE_SKILL_PROTOCOL_UPGRADE: missing or unreadable contracts/index.yaml at $skill_path. Select both compatible skills or perform a full install. No installation files have been changed."
+    fi
+    matches="$(tr -d '\r' <"$metadata" | sed -n 's/^schema_version: "\([0-9.]*\)"$/\1/p')" \
+        || fail "INCOMPATIBLE_SKILL_PROTOCOL_UPGRADE: unreadable contracts/index.yaml at $skill_path. No installation files have been changed."
+    if [[ -z "$matches" || "$matches" == *$'\n'* ]]; then
+        fail "INCOMPATIBLE_SKILL_PROTOCOL_UPGRADE: ambiguous protocol at $skill_path. No installation files have been changed."
+    fi
+    PROTOCOL_VERSION="$matches"
+}
+
+preflight_protocol_compatibility() {
+    local pair left right left_path right_path left_version right_version left_expected right_expected file
+    for pair in 'assistant-workflow:16.0:assistant-review:10.0' 'assistant-workflow:16.0:assistant-tdd:3.0' 'assistant-debugging:3.0:assistant-tdd:3.0' 'assistant-debugging:3.0:assistant-review:10.0'; do
+        IFS=: read -r left left_expected right right_expected <<<"$pair"
+        if ! array_contains "$left" "${SKILLS[@]}" && ! array_contains "$right" "${SKILLS[@]}"; then continue; fi
+        left_path="$SKILLS_TARGET/$left"; right_path="$SKILLS_TARGET/$right"
+        array_contains "$left" "${SKILLS[@]}" && left_path="$SKILLS_SOURCE/$left"
+        array_contains "$right" "${SKILLS[@]}" && right_path="$SKILLS_SOURCE/$right"
+        [[ -e "$left_path" && -e "$right_path" ]] || continue
+        assert_directory_tree_safe "$left_path" "protocol producer"
+        assert_directory_tree_safe "$right_path" "protocol consumer"
+        read_skill_protocol_version "$left_path"; left_version="$PROTOCOL_VERSION"
+        read_skill_protocol_version "$right_path"; right_version="$PROTOCOL_VERSION"
+        if [[ "$left_version" != "$left_expected" || "$right_version" != "$right_expected" ]]; then
+            fail "INCOMPATIBLE_SKILL_PROTOCOL_UPGRADE: $left/$right requires $left_expected/$right_expected. Select both compatible skills or perform a full install. No installation files have been changed."
+        fi
+    done
+}
+
 preflight_workflow_role_compatibility() {
     local extension profile definition workflow="$SKILLS_TARGET/assistant-workflow" file
     if [[ "$AGENT" == codex || "$AGENT" == claude ]]; then
@@ -269,9 +304,9 @@ preflight_workflow_role_compatibility() {
         fi
     done
     if ! cat "$workflow/SKILL.md" >/dev/null \
-        || ! declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index 15.0 \
-        || ! declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs 15.0; then
-        fail "INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE at $workflow: retained controller does not uniquely declare matching schema 15.0 and the supported ownership stage tuples. No installation files have been changed. Run ./install.sh --agent $AGENT --skill assistant-workflow, then retry the original selection; or run ./install.sh --agent $AGENT for a full install."
+        || ! declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index 16.0 \
+        || ! declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs 16.0; then
+        fail "INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE at $workflow: retained controller does not uniquely declare matching schema 16.0 and the supported ownership stage tuples. No installation files have been changed. Run ./install.sh --agent $AGENT --skill assistant-workflow, then retry the original selection; or run ./install.sh --agent $AGENT for a full install."
     fi
 }
 
@@ -680,7 +715,7 @@ cleanup_installed_tool_build_artifacts() {
             else
                 rm -rf "$artifact_dir"
             fi
-        done < <(find "$target_directory" -mindepth 1 -type d \( -name ".publish" -o -name "bin" -o -name "obj" \) -prune -print)
+        done < <(find "$target_directory" -mindepth 1 -type d \( -name ".publish" -o -name "bin" -o -name "obj" -o -name "__pycache__" \) -prune -print)
     done < <(find "$tools_source" -mindepth 1 -maxdepth 1 -type d -print)
 
     if $DRY_RUN && ! $found; then
@@ -814,6 +849,7 @@ preflight_workflow_python
 if array_contains "assistant-review" "${SKILLS[@]}"; then
     preflight_workflow_python "$SKILLS_SOURCE/assistant-review/scripts/review-tools.py"
 fi
+preflight_protocol_compatibility
 preflight_workflow_role_compatibility
 
 SETTINGS_FILE="$AGENT_HOME/settings.json"
@@ -910,6 +946,8 @@ if [[ -d "$TOOLS_SOURCE" ]]; then
             --exclude='.publish' \
             --exclude='bin' \
             --exclude='obj' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
             --exclude='/memory-graph' \
             --exclude='/context-budget-report.sh' \
             --exclude='/evals/run-codex-framework-evals.sh' \
@@ -1075,9 +1113,9 @@ For ordinary repository changes, use assistant-workflow when that skill is insta
 
 ## Operating stance
 
-- For small, low-risk, localized work, act as a hands-on worker: complete it directly with proportionate validation and a fresh self-review.
-- For medium+ or elevated-risk development work, remain the orchestrator: own user communication, task state, scope, decisions, delegation, and final integration; route implementation and independent review through the matching workflow roles when required.
-- Keep orchestration proportional—do not introduce delegation or ceremony when direct lightweight execution is sufficient.
+- Implement and verify directly when useful, at every size/risk. Choose optional execution delegation for concrete benefit; retain proportionate validation and a local self-check.
+- Formal plan, code, finding-closure and acceptance reviews use newly created independent agents with fresh context; Codex uses fork_turns=none. Selected five-lens research keeps separate sibling-blind agents.
+- Keep orchestration proportional; direct work uses actual main identity without fabricated worker records.
 
 ## Boundaries
 

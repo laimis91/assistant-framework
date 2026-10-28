@@ -1,7 +1,7 @@
 # Debugging handoff contracts
 # Handoffs are optional; direct execution is valid when subagents are unavailable or policy-disallowed.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: handoffs
 skill: assistant-debugging
 

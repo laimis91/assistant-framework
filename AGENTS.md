@@ -8,6 +8,9 @@ Root `skills/assistant-*` directories are the editable source of truth. See `REA
 
 ## Workflow
 
+- The main agent may implement and verify directly at every size/risk; choose optional execution delegation for concrete benefit.
+- Formal plan/code/closure/acceptance reviews use newly created independent agents with fresh context (Codex `fork_turns=none`); selected research lenses retain sibling-blind isolation.
+
 - Keep behavior-driving skill prose, contracts, evals, tests, and documentation aligned.
 - Before changing skills, read `docs/skill-contract-design-guide.md`; keep detailed contract rules there.
 - Run focused checks first, then the aggregate verification appropriate to the changed surface.

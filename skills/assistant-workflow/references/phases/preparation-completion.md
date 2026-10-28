@@ -18,8 +18,8 @@ compact applicability evidence. Only shared, materially unresolved, or
 explicitly carried expanded work requires the common pre-build result and its
 completion projection when `execution_intent != prepare_only`; prepare-only
 work retains discovery applicability and artifact identity without implementation
-completion claims. Evidenced local work keeps ordinary relevant verification and
-self-review without a Node gate. Shared fanout alone does not activate an
+completion claims. Evidenced local work keeps ordinary relevant verification, a
+local self-check and fresh independent review without a Node gate. Shared fanout alone does not activate an
 Architecture Decision Pack, strict controller, QA, or a different Build/delegation lane.
 
 ## Progress Updates
@@ -33,7 +33,9 @@ deviation, dispatch, and verification signals remain explicit when applicable.
 ## Phase: Preparation Completion
 
 **Run condition:** `execution_intent=prepare_only` after Discover. Optional
-readiness planning does not create executable packets or delay completion.
+readiness planning creates no executable packets or implementation-approval wait.
+A fresh plan review is due only when that readiness plan was requested or is
+required; never create a readiness plan solely to review it.
 Print: `--- PHASE: PREPARATION COMPLETION ---` before the completion checks and
 `--- PHASE: PREPARATION COMPLETE ---` after they pass. These exact markers are
 declared by `contracts/phase-gates.yaml`; do not derive a synthetic
@@ -41,7 +43,7 @@ declared by `contracts/phase-gates.yaml`; do not derive a synthetic
 Return `completion_policy`, `validation_results`, and `feature_preparation_result`
 as required by PC1 and the `preparation_only` completion tier, plus complete
 `feature_preparation_evidence` for existing-system work. Keep execution
-`not_started`; do not claim Build, changed files, tests, review, final handoff,
+`not_started`; do not claim Build, changed files, tests, post-Build review, final handoff,
 or implementation documentation. Keep `qa_evaluation_mode=not_required` and
 `harness_capable=false`. When explicitly requested future QA/acceptance or
 harness work exists, return it only through the corresponding typed

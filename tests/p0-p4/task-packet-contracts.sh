@@ -731,182 +731,92 @@ else
 fi
 
 
-test_start "workflow subagent policy state dispatches from instruction triggers before fallback"
-missing_workflow_subagent_gate=()
-workflow_subagent_gate_surfaces=(
-    "skills/assistant-workflow/SKILL.md"
-    "skills/assistant-workflow/contracts/index.yaml"
-    "skills/assistant-workflow/contracts/input.yaml"
-    "skills/assistant-workflow/contracts/output.yaml"
-    "skills/assistant-workflow/contracts/phase-gates.yaml"
-    "skills/assistant-workflow/references/subagent-dispatch.md"
-    "skills/assistant-workflow/references/task-journal-template.md"
-    "skills/assistant-workflow/references/phases.md"
-)
-for surface in "${workflow_subagent_gate_surfaces[@]}"; do
-    if [[ ! -f "$FRAMEWORK_DIR/$surface" ]]; then
-        missing_workflow_subagent_gate+=("$surface: file missing")
-    fi
-done
-workflow_subagent_gate_terms=(
-    "skills/assistant-workflow/SKILL.md|references/subagent-dispatch.md"
-    "skills/assistant-workflow/SKILL.md|Required delegation follows"
-    "skills/assistant-workflow/SKILL.md|without a separate spawn permission question"
-    "skills/assistant-workflow/SKILL.md|permitted fallback needs actual opt-out, policy, or unavailability evidence"
-    "skills/assistant-workflow/references/subagent-dispatch.md|subagent_policy_state"
-    "skills/assistant-workflow/references/subagent-dispatch.md|subagent_execution_mode"
-    "skills/assistant-workflow/references/subagent-dispatch.md|subagent_trigger_scope"
-    "skills/assistant-workflow/references/subagent-dispatch.md|subagent_policy_state=delegation_triggered"
-    "skills/assistant-workflow/contracts/index.yaml|id: workflow-delegation-fields"
-    "skills/assistant-workflow/contracts/index.yaml|names: [required_agents, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source]"
-    "skills/assistant-workflow/contracts/input.yaml|subagent_policy_state"
-    "skills/assistant-workflow/contracts/input.yaml|delegation_triggered"
-    "skills/assistant-workflow/contracts/input.yaml|delegation_opted_out"
-    "skills/assistant-workflow/contracts/input.yaml|subagent_execution_mode"
-    "skills/assistant-workflow/contracts/input.yaml|direct_fallback"
-    "skills/assistant-workflow/contracts/input.yaml|not_applicable is invalid for Build"
-    "skills/assistant-workflow/contracts/input.yaml|bounded_executor requires one implementation and selected-verification owner plus independent Code Reviewer responsibility"
-    "skills/assistant-workflow/contracts/input.yaml|separated_workers requires Code Writer, Builder/Tester, and independent Code Reviewer responsibilities"
-    "skills/assistant-workflow/contracts/input.yaml|Reviewer may satisfy only compatibility routing"
-    "skills/assistant-workflow/contracts/input.yaml|subagent_trigger_scope"
-    "skills/assistant-workflow/contracts/output.yaml|subagent_policy_state"
-    "skills/assistant-workflow/contracts/output.yaml|subagent_execution_mode"
-    "skills/assistant-workflow/contracts/output.yaml|subagent_trigger_scope"
-    "skills/assistant-workflow/contracts/output.yaml|- name: subagent_evidence"
-    "skills/assistant-workflow/contracts/output.yaml|Evidence matches build_execution_lane"
-    "skills/assistant-workflow/contracts/output.yaml|per_slice_dispatch_evidence"
-    "skills/assistant-workflow/contracts/output.yaml|delegation_opted_out, subagents_unavailable, or policy_disallowed"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|D_SUBAGENT_TRIGGER"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|delegated dispatch without a separate permission question"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|direct_fallback with delegation_opted_out"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|B_SUBAGENT_EVIDENCE"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|B_SUBAGENT_SLICE_EVIDENCE"
-    "skills/assistant-workflow/references/subagent-dispatch.md|Delegation Policy State"
-    "skills/assistant-workflow/references/subagent-dispatch.md|direct user request or applicable \`AGENTS.md\` or active-skill instruction"
-    "skills/assistant-workflow/references/subagent-dispatch.md|without a separate permission question"
-    "skills/assistant-workflow/references/subagent-dispatch.md|MUST dispatch that role"
-    "skills/assistant-workflow/references/subagent-dispatch.md|MUST NOT spawn subagents"
-    "skills/assistant-workflow/references/subagent-dispatch.md|direct fallback evidence"
-    "skills/assistant-workflow/references/subagent-roles.md|subagent-dispatch.md#delegation-policy-state"
-    "skills/assistant-workflow/references/subagent-roles.md|subagent-dispatch.md#concrete-writer-selection"
-    "skills/assistant-workflow/references/subagent-dispatch.md|Evidence gate for standard/strict work"
-    "skills/assistant-workflow/references/task-journal-template.md|Agent Dispatch Log"
-    "skills/assistant-workflow/references/task-journal-template.md|Code Mapper dispatch"
-    "skills/assistant-workflow/references/task-journal-template.md|Reviewer dispatch"
-    "skills/assistant-workflow/references/task-journal-template.md|not required"
-    "skills/assistant-workflow/references/task-journal-template.md|Code Writer dispatch"
-    "skills/assistant-workflow/references/task-journal-template.md|Builder/Tester dispatch/result/direct evidence"
-    "skills/assistant-workflow/references/task-journal-template.md|Direct fallback reason"
-    "skills/assistant-workflow/references/phases.md|Before any required dispatch, resolve subagent policy/execution/trigger scope through \`references/subagent-dispatch.md\`"
-    "skills/assistant-workflow/references/phases.md|Map files directly when possible"
-    "skills/assistant-workflow/references/phases.md|Use Code Mapper only for unresolved scope/ownership boundaries"
-    "skills/assistant-workflow/references/phases.md|Add Code Reviewer to \`Required agents\` before Stage 2"
-    "skills/assistant-workflow/references/phases.md|\`assistant-review\` SKILL.md and contracts"
-    "skills/assistant-workflow/references/phases.md|any Reviewer compatibility routing"
-    "skills/assistant-workflow/references/subagent-dispatch.md|subagent_execution_mode=delegated"
-    "skills/assistant-workflow/references/build-worker-protocol.md|Direct fallback mode"
-    "skills/assistant-workflow/references/build-worker-protocol.md|Silent fallback cannot complete"
-)
-for pair in "${workflow_subagent_gate_terms[@]}"; do
-    IFS='|' read -r root_surface term <<< "$pair"
-    for surface in "$root_surface"; do
-        if [[ -f "$FRAMEWORK_DIR/$surface" ]] && ! p0p4_contains_text "$FRAMEWORK_DIR/$surface" "$term"; then
-            missing_workflow_subagent_gate+=("$surface: $term")
-        fi
-    done
-done
-if grep -Fq -- "Add Reviewer to \`Required agents\` before Stage 2" "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"; then
-    missing_workflow_subagent_gate+=("skills/assistant-workflow/references/phases.md: stale bare Reviewer Stage 2 required-agent wording")
-fi
-if [[ "${#missing_workflow_subagent_gate[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-workflow must resolve subagent policy state before delegated or direct fallback execution: ${missing_workflow_subagent_gate[*]}"
-fi
+test_start "workflow permits actual direct-main execution without a worker mandate"
+if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
+root=ARGV.fetch(0)
+input=YAML.load_file("#{root}/skills/assistant-workflow/contracts/input.yaml").fetch('fields').to_h{|f|[f['name'],f]}
+abort 'direct lane missing' unless input.fetch('build_execution_lane').fetch('enum_values').include?('direct_main')
+abort 'default still forces a worker' unless input.fetch('build_execution_lane')['default']=='direct_main'
+abort 'direct execution needs fallback exemption' unless input.fetch('subagent_execution_mode').fetch('validation').include?('direct_main Build at every size/risk')
+abort 'actual actor binding missing' unless input.key?('execution_actor_bindings') && input.key?('execution_stage')
+RUBY
+then pass; else fail "direct-main lane/actor contract missing"; fi
 
+test_start "admission authority context is declared and selected where its consumers load"
+if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
+root=ARGV.fetch(0)
+wf="#{root}/skills/assistant-workflow"
+input=YAML.load_file("#{wf}/contracts/input.yaml").fetch('fields').to_h{|f|[f['name'],f]}
+script=File.read("#{wf}/scripts/task-packet-admission.py")
+sets=YAML.load_file("#{wf}/contracts/index.yaml").fetch('load_sets')
+selected=->(set){sets.fetch(set).fetch('selectors').select{|s|s['path']=='contracts/input.yaml'}.flat_map{|s|s['names']||[]}}
+authority=%w[execution_actor_bindings readiness plan_review_applicability_authority historical_plan_attestation writer_actor_ids builder_actor_ids review_authorities plan_approval_authorities qa_acceptance_context current_input_identities verification_reuse_authority]
+authority.each do |name|
+  abort "#{name} not read by admission" unless script.match?(/context(\.get\(|\[)"#{name}"/)
+  abort "#{name} undeclared or lacks on_missing" unless input.key?(name) && input[name]['on_missing']
+  abort "#{name} not selected for build or completion admission" unless selected.('build_admission').include?(name) || selected.('completion_admission').include?(name)
+end
+%w[readiness review_authorities plan_approval_authorities qa_acceptance_context historical_plan_attestation execution_actor_bindings builder_actor_ids writer_actor_ids current_input_identities verification_reuse_authority].each{|n| abort "completion admission omits #{n}" unless selected.('completion_admission').include?(n)}
+%w[execution_actor_bindings execution_stage current_input_identities verification_reuse_authority writer_actor_ids builder_actor_ids].each{|n| abort "build admission omits #{n}" unless selected.('build_admission').include?(n)}
+# previous_plan is read by admission, declared conditionally and selected in both conditional admission sets.
+prior=input['previous_plan']
+abort 'previous_plan not read by admission' unless script.match?(/context(\.get\(|\[)"previous_plan"/)
+abort 'previous_plan undeclared, unconditional or lacks on_missing' unless prior && prior['required']=='conditional' && prior['condition'] && prior['on_missing']
+%w[build_admission completion_admission].each{|set| abort "#{set} omits previous_plan" unless selected.(set).include?('previous_plan')}
+# The durable stamp baseline and started marker rows are stated where admission writes them (X1).
+['stamp_baseline: {evidence_refs, tdd_cycle_log_ref when present}', 'reason is started packet returned to PENDING for a move to PENDING', 'started packet left started state for any other move', 'to any non-started state', 'Only admission writes stamps and stamp_baseline, fill or started-marker rows', 'beyond the latest stamp_baseline', 'appended after the latest stamp_baseline row', 'never lock a newly written stamp', 'reason: started under current stamp}', 'coordinators commit PENDING->RUNNING through an admission call before the worker starts', 'a lane-only stamp gaining execution_actor_id', 'reason: actor resolved for lane-only stamp}', 'execution tdd_cycle_log_ref, when present, is a nonblank string'].each{|t| abort "previous_plan omits stamp rule #{t}" unless prior.fetch('validation').include?(t)}
+abort 'admission does not write the stated stamp rows' unless script.include?('"stamp_baseline": baseline') && script.include?('STARTED_MARKER_REASONS = ("started packet returned to PENDING", "started packet left started state")') && script.include?('execution["state"] not in STARTED_STATES') && script.include?('"Only admission writes stamp_baseline / started-marker rows"') && script.include?('STARTED_UNDER_STAMP_REASON = "started under current stamp"')
+# Admission-only context stays out of the unconditional completion and Build handoff sets.
+%w[completion build_handoff packet_admission].each{|set| abort "#{set} loads admission-only context" unless selected.(set).empty?}
+%w[readiness plan_review_applicability_authority historical_plan_attestation review_authorities plan_approval_authorities].each{|n| abort "build admission omits plan-gate #{n}" unless selected.('build_admission').include?(n)}
+digest=input.fetch('current_input_identities').fetch('object_fields').find{|f|f['name']=='reuse_digest'}
+abort 'digest reuse undeclared' unless digest && digest['on_missing']=='fail' && digest.fetch('condition').include?('digest or absent') && script.include?('resolved.get("reuse_digest")')
+abort 'digest reuse does not reference the canonical TDD recipe' unless digest.fetch('description').include?('assistant-tdd contracts/output.yaml green.reuse_digest') && digest.fetch('validation').include?('lowercase sha256:')
+detailed=input.fetch('verification_reuse_authority')
+abort 'detailed assessment not opt-in' unless detailed.fetch('condition').include?('reuse_identity_mode detailed') && script.include?('cycle.get("reuse_identity_mode", "digest")')
+rec=input.fetch('review_authorities').fetch('object_fields').find{|f|f['name']=='request_plan_reconciliation'}
+abort 'reconciliation fields lack on_missing' unless rec['on_missing'] && rec.fetch('object_fields').all?{|f|f['on_missing']}
+%w[producer_version result coverage_complete].each{|n| abort "#{n} lacks on_missing" unless input.fetch('review_authorities').fetch('object_fields').find{|f|f['name']==n}['on_missing']}
+RUBY
+then pass; else fail "admission authority context undeclared, unselected or drifted from the helper"; fi
 
-test_start "workflow delegation fallback requires trigger evidence or policy block"
-workflow_delegation_proof_failures=()
-workflow_delegation_proof_terms=(
-    "skills/assistant-workflow/contracts/input.yaml|policy_blocking_source"
-    "skills/assistant-workflow/contracts/input.yaml|subagent_policy_state == policy_disallowed"
-    "skills/assistant-workflow/contracts/input.yaml|When required_agents is non-empty"
-    "skills/assistant-workflow/contracts/input.yaml|direct user, applicable AGENTS.md, or active skill instruction"
-    "skills/assistant-workflow/contracts/output.yaml|policy_blocking_source"
-    "skills/assistant-workflow/contracts/output.yaml|policy_disallowed"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|policy_blocking_source"
-    "skills/assistant-workflow/contracts/phase-gates.yaml|no applicable trigger exception"
-    "skills/assistant-workflow/references/subagent-dispatch.md|direct user request or applicable \`AGENTS.md\` or active-skill instruction"
-    "skills/assistant-workflow/references/subagent-dispatch.md|policy_blocking_source"
-    "skills/assistant-workflow/references/subagent-dispatch.md|active skill requires subagents"
-    "skills/assistant-workflow/references/task-journal-template.md|Policy blocking source"
-    "skills/assistant-workflow/references/plan-template.md|Policy blocking source"
-    "skills/assistant-workflow/evals/cases.json|workflow-required-roles-dispatch-from-instruction-trigger"
-    "skills/assistant-workflow/evals/cases.json|delegation_triggered"
-    "skills/assistant-workflow/evals/cases.json|direct user, applicable AGENTS.md, or active skill instruction"
-    "skills/assistant-workflow/evals/cases.json|policy_blocking_source"
-)
-for pair in "${workflow_delegation_proof_terms[@]}"; do
-    IFS='|' read -r root_surface term <<< "$pair"
-    for surface in "$root_surface"; do
-        if [[ ! -f "$FRAMEWORK_DIR/$surface" ]]; then
-            workflow_delegation_proof_failures+=("$surface: file missing")
-        elif ! p0p4_contains_text "$FRAMEWORK_DIR/$surface" "$term"; then
-            workflow_delegation_proof_failures+=("$surface: $term")
-        fi
-    done
-done
-if [[ "${#workflow_delegation_proof_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow delegation fallback must carry trigger or policy-block evidence: ${workflow_delegation_proof_failures[*]}"
-fi
+test_start "workflow delegation policy honors explicit requests, opt-out and policy blocks"
+if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
+root=ARGV.fetch(0)
+wf="#{root}/skills/assistant-workflow"
+input=YAML.load_file("#{wf}/contracts/input.yaml").fetch('fields').to_h{|f|[f['name'],f]}
+output=File.read("#{wf}/contracts/output.yaml")
+gates=YAML.load_file("#{wf}/contracts/phase-gates.yaml")
+assertions=gates.fetch('gates').flat_map{|g|(g['entry_assertions']||[])+(g['exit_assertions']||[])+(g['guidance_assertions']||[])}+(gates['invariants']||[])
+texts=assertions.map{|a|[a['check'],a['on_fail']].compact.join(' ')}
+policy=input.fetch('subagent_policy_state')
+abort 'policy states lost' unless %w[not_required delegation_triggered delegation_opted_out subagents_unavailable policy_disallowed].all?{|v|policy.fetch('enum_values').include?(v)}
+abort 'explicit opt-out inference lost' unless policy.fetch('infer_from').include?('Use delegation_opted_out when the user explicitly declines')
+mode=input.fetch('subagent_execution_mode').fetch('validation')
+abort 'fallback evidence lost' unless mode.include?('direct_fallback requires delegation_opted_out, subagents_unavailable, or policy_disallowed') && mode.include?('policy_disallowed direct_fallback also requires policy_blocking_source')
+block=input.fetch('policy_blocking_source')
+abort 'policy block source not conditional/fail-closed' unless block['required']=='conditional' && block['condition'].include?('policy_disallowed') && block['on_missing']=='fail'
+abort 'output lost policy_blocking_source' unless output.include?('- name: policy_blocking_source')
+# Explicitly requested delegation is honored in the selected lane, not overwritten by direct_main defaults.
+abort 'explicit delegation request not honored' unless texts.any?{|t|t.include?('Honor explicit requested delegation') || t.include?('an explicit user delegation request is reflected in the selected lane')}
+abort 'opt-out may be overwritten' unless texts.any?{|t|t.include?('do not overwrite explicit opt-out')}
+abort 'policy block evidence not retained' unless texts.any?{|t|t.include?('policy blocks retain policy_blocking_source')} && texts.any?{|t|t.include?('policy_disallowed requires a non-empty exact active blocking rule')}
+RUBY
+then pass; else fail "delegation request, opt-out or policy-block evidence is no longer enforced"; fi
 
+test_start "optional execution keeps mandatory formal-review and research isolation"
+if grep -Fq 'Formal plan, code, finding-closure and acceptance reviews always use newly created' "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md" \
+ && grep -Fq 'fork_turns=none' "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md" \
+ && grep -Fq 'Unavailable required isolation leaves the work incomplete' "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md" \
+ && grep -Fq 'sandbox' "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-dispatch.md"; then pass; else fail "required isolation or permission boundary lost"; fi
 
-test_start "workflow loads the delegation trigger invariant"
-workflow_trigger_invariant_failures=()
-for surface_and_term in \
-    "skills/assistant-workflow/contracts/index.yaml|INV_SUBAGENT_TRIGGER_STATE" \
-    "skills/assistant-workflow/contracts/phase-gates.yaml|- id: INV_SUBAGENT_TRIGGER_STATE" \
-    "skills/assistant-workflow/contracts/phase-gates.yaml|direct user, applicable AGENTS.md, or active skill instruction" \
-    "skills/assistant-workflow/contracts/phase-gates.yaml|direct_fallback only after delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"; do
-    IFS='|' read -r root_surface term <<< "$surface_and_term"
-    for surface in "$root_surface"; do
-        if [[ ! -f "$FRAMEWORK_DIR/$surface" ]]; then
-            workflow_trigger_invariant_failures+=("$surface: file missing")
-        elif ! p0p4_contains_text "$FRAMEWORK_DIR/$surface" "$term"; then
-            workflow_trigger_invariant_failures+=("$surface: $term")
-        fi
-    done
-done
-if [[ "${#workflow_trigger_invariant_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow must load a trigger-state invariant for every phase: ${workflow_trigger_invariant_failures[*]}"
-fi
+test_start "workflow retains the actor-neutral delegation invariant"
+if grep -Fq 'INV_SUBAGENT_TRIGGER_STATE' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/index.yaml" \
+ && grep -Fq 'Formal review/lens independence has no author fallback' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then pass; else fail "current isolation invariant missing"; fi
 
-
-test_start "delegation recovery preserves evidenced fallback and dispatches only from triggers"
-delegation_recovery_failures=()
-for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::Otherwise preserve and complete the evidenced fallback state" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::applicable trigger exists" \
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::Otherwise preserve and complete the evidenced sequential fallback state" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::Otherwise preserve and complete the evidenced direct fallback state" \
-    "$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json::active workflow instruction and its covered roles" \
-    "$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json::direct-user opt-out is recorded only in subagent_policy_state=delegation_opted_out"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
-        delegation_recovery_failures+=("${file#$FRAMEWORK_DIR/}: $term")
-    fi
-done
-if [[ "${#delegation_recovery_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "delegation recovery can overwrite opt-out or dispatch without a trigger: ${delegation_recovery_failures[*]}"
-fi
-
+test_start "thinking execution is discretionary and never impersonates independent review"
+if grep -Fq 'discretionary non-independent analysis' "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml" \
+ && grep -Fq 'sequential role-play is not independent evidence' "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml"; then pass; else fail "thinking independence claim is ambiguous"; fi
 
 test_start "active delegation surfaces exclude retired state identifiers"
 retired_delegation_identifiers=(
@@ -1158,7 +1068,7 @@ shapes = packets.map { |f| f.fetch('object_fields').find { |x| x['name'] == 'wri
 raise 'selection drift/missing' if shapes.any?(&:nil?) || shapes.uniq.length != 1
 shape = shapes.first
 raise 'legacy omission broken' unless shape['required'] == 'conditional' && shape['condition'].include?('legacy packets')
-raise 'version changed' unless [h,o].all? { |d| d['schema_version'] == '15.0' }
+raise 'version changed' unless [h,o].all? { |d| d['schema_version'] == '16.0' }
 canonical_versions = o.fetch('artifacts').find { |f| f['name'] == 'plan_schema_version' }.fetch('enum_values')
 gates = YAML.load_file("#{root}/skills/assistant-workflow/contracts/phase-gates.yaml")
 p1 = gates.fetch('gates').find { |g| g['phase'] == 'PLAN' }.fetch('exit_assertions').find { |g| g['id'] == 'P1' }

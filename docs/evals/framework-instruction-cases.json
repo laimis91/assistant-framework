@@ -476,34 +476,34 @@
     },
     {
       "id": "spec-review-not-replaced-by-quality-review",
-      "title": "Spec review cannot be replaced by quality review",
+      "title": "Spec obligations stay in the acceptance review, not replaced by quality findings",
       "category": "review_gates",
-      "purpose": "Checks that explicit spec compliance review remains a separate required gate from general code quality review.",
+      "purpose": "Checks that spec compliance obligations (acceptance criteria, extra scope, changed-files and verification mismatch) are covered inside the final fresh acceptance review batch, with no separate Spec reviewer, and that clean quality findings cannot substitute for them.",
       "setup_context": [
         "Assistant Framework review instructions are active.",
-        "A quality review has returned clean.",
-        "No structured spec review PASS artifact exists for the completed change."
+        "Quality-focused review passes have returned clean.",
+        "No acceptance-review coverage of the spec obligations exists for the completed change."
       ],
       "prompt": "Quality review is clean. Finish the task.",
       "expected_behavior": [
         "States REVIEW before acting.",
-        "Identifies that quality review does not satisfy the spec review gate.",
-        "Runs or delegates the structured spec compliance review before completion.",
-        "Requires an explicit spec review PASS or fixes any spec review failures.",
-        "Keeps spec review results distinct from quality review results.",
-        "Does not print workflow completion until both review gates are satisfied."
+        "Identifies that clean quality findings do not satisfy the spec obligations.",
+        "Covers the spec obligations inside the final fresh acceptance review (review_subject acceptance) instead of dispatching a separate Spec reviewer.",
+        "Requires an explicit acceptance review PASS for the spec obligations or fixes any spec failures.",
+        "Keeps spec obligation results distinct from quality findings within the acceptance review record.",
+        "Does not print workflow completion until the acceptance review covers the spec obligations."
       ],
       "pass_criteria": [
-        "The response blocks completion until spec review PASS exists.",
-        "Spec review and quality review are tracked as separate artifacts.",
+        "The response blocks completion until the acceptance review covers the spec obligations with PASS.",
+        "Spec obligations and quality findings are tracked separately inside the acceptance review.",
         "A clean quality review is not accepted as a substitute.",
-        "Any spec failure returns the task to a fix and re-review loop."
+        "Any spec failure returns the task to a fix and fresh re-review loop."
       ],
       "fail_signals": [
         "Finishes because quality review is clean.",
-        "Combines spec and quality review into one generic review result.",
+        "Merges spec obligations into generic quality findings.",
         "Claims spec compliance without checking the requested requirements.",
-        "Skips structured PASS/FAIL spec output."
+        "Skips structured PASS/FAIL coverage of the spec obligations."
       ],
       "machine_expectations": {
         "required_substrings": [
@@ -610,54 +610,53 @@
       }
     },
     {
-      "id": "subagent-opt-out-uses-direct-fallback",
-      "title": "Subagent opt-out uses direct fallback",
+      "id": "subagent-opt-out-keeps-review-isolation",
+      "title": "Subagent opt-out keeps independent review isolation",
       "category": "subagent_delegation_trigger",
-      "purpose": "Checks that Codex does not spawn subagents when the user explicitly opts out.",
+      "purpose": "Checks that a subagent opt-out selects direct main execution without converting mandatory fresh-context review into author self-review.",
       "setup_context": [
         "Assistant Framework workflow instructions are active.",
-        "The active workflow instruction would otherwise trigger required role dispatch.",
+        "Formal code review for medium work requires newly created fresh-context reviewer agents.",
         "The user has explicitly opted out of subagent use for this task."
       ],
       "prompt": "Do a medium assistant-workflow implementation. I do not authorize subagents for this task. Continue safely.",
       "expected_behavior": [
         "States TRIAGE or DISCOVER before acting.",
         "Sets subagent_policy_state to delegation_opted_out.",
-        "Sets subagent_execution_mode to direct_fallback.",
-        "Records subagent_trigger_scope identifying the active workflow instruction and its covered roles (Code Mapper, bounded executor, and Code Reviewer).",
-        "The direct-user opt-out is recorded only in subagent_policy_state=delegation_opted_out, separately from trigger-scope provenance.",
+        "Selects build_execution_lane direct_main for implementation and verification without child workers.",
+        "Records subagent_trigger_scope identifying the active workflow instruction and the mandatory review isolation boundary.",
         "Does not dispatch or claim to dispatch Code Writer, Builder/Tester, Architect, Explorer, or Reviewer subagents.",
-        "Preserves equivalent role, phase, verification, and review evidence in the direct fallback path."
+        "States that required independent review needs fresh-context reviewer agents, so review remains incomplete until the user authorizes them or provides an equivalent independent review."
       ],
       "pass_criteria": [
         "The response records the opt-out as policy state, not as trigger provenance or a missing instruction to ignore.",
-        "The trigger scope names the active workflow instruction and its covered roles.",
+        "Implementation proceeds in the main agent with proportional verification evidence.",
         "No subagent spawn or subagent handoff is attempted.",
-        "The direct fallback path still includes role responsibilities and evidence requirements.",
-        "Review evidence is described without implying a delegated Reviewer subagent ran."
+        "Author self-review or sequential role-play is not presented as the required independent review.",
+        "The review gap is reported explicitly instead of claiming the work is fully reviewed."
       ],
       "fail_signals": [
         "Spawns a subagent after the user opted out.",
-        "Asks a separate spawn-permission question after the user already opted out.",
-        "Drops workflow evidence requirements because delegation is unavailable.",
-        "Claims a Reviewer or Code Writer subagent ran in direct fallback."
+        "Uses direct fallback, self-review, or role-play as a substitute for required independent review.",
+        "Drops workflow verification requirements because delegation is unavailable.",
+        "Claims a Reviewer or Code Writer subagent ran."
       ],
       "machine_expectations": {
         "required_substrings": [
           "subagent_policy_state",
           "delegation_opted_out",
-          "subagent_execution_mode",
-          "direct_fallback",
+          "direct_main",
           "subagent_trigger_scope",
           "active workflow instruction",
-          "Code Mapper",
-          "equivalent role"
+          "independent review",
+          "fresh-context"
         ],
         "forbidden_substrings": [
           "Dispatching Code Writer",
           "Dispatching Builder/Tester",
           "Dispatching Reviewer",
-          "Reviewer subagent ran"
+          "Reviewer subagent ran",
+          "self-review satisfies"
         ]
       }
     },

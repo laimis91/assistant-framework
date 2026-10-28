@@ -351,16 +351,32 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
       "large" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse]
     }
     valid &&= canonical_perspectives.key?(scope_size)
-    expected_discovery = canonical_perspectives.fetch(scope_size, [])
-    valid &&= topology.is_a?(Hash) && topology["discovery_pass_count"] == expected_discovery.length && integer_in.call(topology["max_required_responses"], 2..6)
+    # Light trivial/small review is one fresh light_contract_and_runtime pass with
+    # no separate closure pass, selected only by the explicit topology.light_review
+    # indicator; absent/false keeps the canonical >=2-pass topology, so historical
+    # two-pass trivial/small batches stay valid and small standard/strict keeps >=2.
+    valid &&= !topology.key?("light_review") || [true, false].include?(topology["light_review"])
+    light = topology["light_review"] == true
+    valid &&= %w[trivial small].include?(scope_size) && topology["discovery_pass_count"] == 1 if light
+    # Plan review (U4) is one fresh plan_coverage_and_feasibility pass at any scope
+    # size with no closure pass, selected by topology.plan_review true. final_batch_plan
+    # carries no review_subject, so the rule binds topology.plan_review alone: true is
+    # accepted only on that one-pass shape; absent/false keeps multi-pass plan review acceptable.
+    valid &&= !topology.key?("plan_review") || [true, false].include?(topology["plan_review"])
+    plan_review = topology["plan_review"] == true
+    valid &&= !light && topology["closure_verification_required"] == false if plan_review
+    min_passes = light || plan_review ? 1 : 2
+    expected_discovery = plan_review ? %w[plan_coverage_and_feasibility] : light ? %w[light_contract_and_runtime] : canonical_perspectives.fetch(scope_size, [])
+    valid &&= topology.is_a?(Hash) && topology["discovery_pass_count"] == expected_discovery.length && integer_in.call(topology["max_required_responses"], min_passes..6)
+    valid &&= topology["closure_verification_required"] == false if light
     valid &&= [true, false].include?(topology["security_specialist_triggered"]) && [true, false].include?(topology["closure_verification_required"])
     canonical_lists = topology.is_a?(Hash) ? topology["canonical_discovery_perspectives"] : nil
     valid &&= canonical_lists.is_a?(Hash) && canonical_lists.keys.sort == %w[large medium trivial_small]
     valid &&= canonical_lists && canonical_lists["trivial_small"] == canonical_perspectives["small"] && canonical_lists["medium"] == canonical_perspectives["medium"] && canonical_lists["large"] == canonical_perspectives["large"]
-    valid &&= expected_passes.length == current_batch["expected_response_count"] && expected_passes.length == topology["max_required_responses"] && expected_passes.length.between?(2, 6)
+    valid &&= expected_passes.length == current_batch["expected_response_count"] && expected_passes.length == topology["max_required_responses"] && expected_passes.length.between?(min_passes, 6)
     valid &&= expected_passes.all? do |pass|
       pass.is_a?(Hash) && nonblank.call(pass["review_pass_id"]) &&
-        %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse risk_selected_specialist closure_verification].include?(pass["perspective"]) &&
+        %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse risk_selected_specialist closure_verification light_contract_and_runtime plan_coverage_and_feasibility].include?(pass["perspective"]) &&
         nonblank_strings.call(pass["assigned_scope"]) && nonblank_strings.call(pass["coverage_obligations"]) &&
         pass["assigned_scope"].uniq.length == pass["assigned_scope"].length &&
         pass["coverage_obligations"].uniq.length == pass["coverage_obligations"].length &&
@@ -371,14 +387,19 @@ if explicit_artifact_name == "final_summary" || (explicit_artifact_name.empty? &
     expected_discovery_passes = expected_passes.select { |pass| expected_discovery.include?(pass["perspective"]) }
     valid &&= expected_discovery_passes.length == expected_discovery.length && expected_discovery_passes.map { |pass| pass["perspective"] }.sort == expected_discovery.sort
     valid &&= expected_passes.none? { |pass| (%w[integration_compatibility_and_consumers architecture_maintainability_and_reuse] - expected_discovery).include?(pass["perspective"]) }
+    valid &&= (plan_review ? expected_passes.all? { |pass| %w[plan_coverage_and_feasibility risk_selected_specialist].include?(pass["perspective"]) } : expected_passes.none? { |pass| pass["perspective"] == "plan_coverage_and_feasibility" })
     specialist_passes = expected_passes.select { |pass| pass["perspective"] == "risk_selected_specialist" }
     closure_passes = expected_passes.select { |pass| pass["perspective"] == "closure_verification" }
     valid &&= (topology["security_specialist_triggered"] ? specialist_passes.length == 1 : specialist_passes.empty?)
     valid &&= (topology["closure_verification_required"] ? closure_passes.length == 1 : closure_passes.empty?)
     valid &&= expected_passes.all? do |pass|
-      pass["perspective"] == "closure_verification" ? pass["prior_finding_visibility"] == "closure_ledger" : pass["prior_finding_visibility"] == "none"
+      case pass["perspective"]
+      when "closure_verification" then pass["prior_finding_visibility"] == "closure_ledger"
+      when "light_contract_and_runtime", "plan_coverage_and_feasibility" then %w[none closure_ledger].include?(pass["prior_finding_visibility"])
+      else pass["prior_finding_visibility"] == "none"
+      end
     end
-    valid &&= nonblank_strings.call(summary["reviewed_scope"])
+    # The canonical helper above validates inspected scope, including zero-inspection failure.
     valid &&= ledger.is_a?(Array) && !ledger.empty?
     valid &&= ledger.all? do |entry|
       entry.is_a?(Hash) && %w[batch_id review_snapshot_id review_pass_id perspective coverage_obligation scope_item_id applicable_concern evidence].all? { |key| nonblank.call(entry[key]) } &&
@@ -887,6 +908,10 @@ RUBY
     } | ruby -rjson -ryaml -rbigdecimal - "$repository_root" "$fixture_file" "$response_path" "$id" "$explicit_artifact_name" "$response_root"
 }
 
+# Grades current Review v10 delegation paths only. Historical v9
+# delegation_opted_out/direct_fallback labels have no branch here and are
+# rejected as current records; they remain readable evidence, never current
+# completion, and this grader does not reinterpret their original verdicts.
 assistant_review_delegation_path_semantics_valid() {
     local response_path="$1"
     local artifact_name="$2"
@@ -900,17 +925,13 @@ assistant_review_delegation_path_semantics_valid() {
         and ($artifact.fresh_context_evidence | nonblank)
         and ($artifact.subagent_trigger_scope | type == "array" and all(.[]; nonblank) and length == (unique | length))
         and (if $artifact.subagent_policy_state == "delegation_triggered" then
-               ($artifact.subagent_trigger_scope | length > 0) and $artifact.subagent_execution_mode == "delegated" and ($artifact | has("policy_blocking_source") | not)
-             elif ($artifact.subagent_policy_state == "delegation_opted_out" or $artifact.subagent_policy_state == "subagents_unavailable") then
-               ($artifact.subagent_trigger_scope | length > 0) and $artifact.subagent_execution_mode == "direct_fallback" and ($artifact | has("policy_blocking_source") | not)
+               $artifact.subagent_execution_mode == "delegated" and ($artifact.subagent_trigger_scope | length > 0) and ($artifact | has("policy_blocking_source") | not)
+             elif $artifact.subagent_policy_state == "subagents_unavailable" then
+               $artifact.subagent_execution_mode == "not_applicable" and ($artifact.subagent_trigger_scope | length > 0) and ($artifact | has("policy_blocking_source") | not)
              elif $artifact.subagent_policy_state == "policy_disallowed" then
-               ($artifact.subagent_trigger_scope | length > 0) and $artifact.subagent_execution_mode == "direct_fallback" and ($artifact.policy_blocking_source | nonblank)
-             elif $artifact.subagent_policy_state == "not_required" then
-               (if $artifact_name == "review_delegation_path" then
-                  $artifact.subagent_execution_mode == "direct_fallback" and ($artifact.subagent_trigger_scope | length == 0)
-                else
-                  $artifact.subagent_execution_mode == "not_applicable" and ($artifact.subagent_trigger_scope | length == 0)
-                end) and ($artifact | has("policy_blocking_source") | not)
+               $artifact.subagent_execution_mode == "not_applicable" and ($artifact.subagent_trigger_scope | length > 0) and ($artifact.policy_blocking_source | nonblank)
+             elif $artifact.subagent_policy_state == "not_required" and $artifact_name == "qa_evaluation_delegation_path" then
+               $artifact.subagent_execution_mode == "not_applicable" and ($artifact.subagent_trigger_scope | length == 0) and ($artifact | has("policy_blocking_source") | not)
              else false end);
       if $response_root == "" then .[$artifact_name] else .[$response_root].artifact end | delegation_valid($artifact_name)
     ' "$response_path" >/dev/null
@@ -1040,7 +1061,7 @@ count_assistant_review_canonical_envelope_failures() {
         def final_summary_valid:
           . as $response
           | (.final_summary | required_fields(["reviewed_scope", "rounds", "final_review_snapshot_id", "final_snapshot_identity", "coverage_complete", "final_batch_plan", "coverage_ledger", "batch_summaries", "aggregation_ledger", "aggregated_findings", "result", "fixed_items", "nits"]))
-          and (.final_summary.reviewed_scope | type == "array" and length > 0)
+          and (.final_summary.reviewed_scope | type == "array")
           and (.final_summary.rounds | type == "number")
           and (.final_summary.final_review_snapshot_id | type == "string")
           and (.final_summary.final_snapshot_identity | required_fields(["basis", "value", "captured_at", "scope_manifest_digest"])
@@ -1048,7 +1069,15 @@ count_assistant_review_canonical_envelope_failures() {
           and (.final_summary.coverage_complete | type == "boolean")
           and (.final_summary.final_batch_plan | required_fields(["batch_id", "review_snapshot_id", "topology", "expected_passes"])
             and (.topology | required_fields(["discovery_pass_count", "canonical_discovery_perspectives", "security_specialist_triggered", "closure_verification_required", "max_required_responses"]))
-            and (.expected_passes | type == "array" and length >= 2 and length <= 6)
+            and ((.topology | has("light_review") | not) or (.topology.light_review | type == "boolean"))
+            and (if .topology.light_review == true then ((.scope_size == "trivial" or .scope_size == "small") and .topology.discovery_pass_count == 1) else true end)
+            and ((.topology | has("plan_review") | not) or (.topology.plan_review | type == "boolean"))
+            and (if .topology.plan_review == true
+              then (.topology.light_review != true and .topology.discovery_pass_count == 1 and .topology.closure_verification_required == false
+                and ([.expected_passes[]? | select(.perspective == "plan_coverage_and_feasibility")] | length == 1)
+                and all(.expected_passes[]?; .perspective == "plan_coverage_and_feasibility" or .perspective == "risk_selected_specialist"))
+              else all(.expected_passes[]?; .perspective != "plan_coverage_and_feasibility") end)
+            and ((.topology.light_review == true or .topology.plan_review == true) as $single | .expected_passes | type == "array" and length >= (if $single then 1 else 2 end) and length <= 6)
             and all(.expected_passes[]; required_fields(["review_pass_id", "perspective", "assigned_scope", "coverage_obligations", "prior_finding_visibility"])))
           and (.final_summary.coverage_ledger | type == "array" and length > 0)
           and all(.final_summary.coverage_ledger[]; required_fields(["batch_id", "review_snapshot_id", "review_pass_id", "perspective", "coverage_obligation", "assigned_scope", "scope_item_id", "applicable_concern", "terminal_state", "coverage_status", "coverage_disposition", "evidence"])

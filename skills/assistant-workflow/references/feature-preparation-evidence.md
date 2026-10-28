@@ -38,8 +38,10 @@ Existing-system work also resolves its evidence ref; not_applicable retains its
 scope, gaps, decisions, implications, readiness, obligations, and next step.
 
 Prepare-only routes from Discover to Preparation Completion. Readiness Plan
-context is optional; Decompose, Design, Build, Review, implementation
-Document, and final-handoff gates are inapplicable.
+context is optional; Decompose, Design, Build, post-Build code/QA review,
+implementation Document, and final-handoff gates are inapplicable. Requested/required
+readiness plans still receive fresh independent review, and selected research
+lenses/peer retain isolation. A review PASS grants no implementation approval.
 
 ## Classification
 

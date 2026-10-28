@@ -54,7 +54,7 @@ Agree on: [convergent points]
 Disagree on: [tensions and why]
 Recommendation: [best path given tradeoffs]
 Risk to watch: [the tension most likely to bite us later]
-Delegation path: [delegated or sequential_fallback + policy state]
+Delegation path: [delegated, or sequential_fallback for discretionary non-independent perspectives only, + policy state]
 Architecture Pack update: [freshness; facts/assumptions or question; type-ledger implication; quality workload/budget/measurement/failure implication]
 ```
 

@@ -1,12 +1,27 @@
 # Applicability: structured review batches, worker handoffs, persisted results,
-# and workflow/QA consumers use the canonical v9 protocol. Human summaries may
-# omit empty/internal sections; frozen snapshots, independent passes, coverage,
-# verification, authorization, and the shared semantic guard apply to every selected review.
+# and workflow/QA consumers use the canonical v10 protocol. Ordinary trivial/small
+# light review (controller_intensity light, no persisted/executable admission,
+# Architecture Pack or expanded impact) records only a compact result: fresh
+# reviewer actor_id, native_invocation_id, lowercase runtime (codex requires
+# fork_turns=none), PASS or findings (each with a stable id such as light-1,
+# file/line and description), evidence refs and reviewed scope, consumed as
+# assistant-workflow/contracts/output.yaml#fresh_review_result. A compact re-review
+# after a fix uses a different newly created reviewer, receives the fixed findings
+# as {aggregate_finding_id, description} rows and records closure_results
+# (verified_closed, regressed or incomplete) for each aggregate_finding_id.
+# Plan review (review_subject plan) records the compact result unless the
+# structured path is required: reviewer identity, PASS or findings rows
+# {aggregate_finding_id, file_line, description}, reviewed scope, request/plan coverage using the
+# request_plan_reconciliation field names, and closure_results after a material
+# plan fix by a new fresh re-reviewer.
+# Human summaries may omit empty/internal sections; frozen snapshots, independent
+# passes, coverage, verification, authorization, and the shared semantic guard
+# apply to every selected review.
 
 # Review Output Contract
 # Defines what a completed review MUST produce before presenting results to the user.
 
-schema_version: "9.0"
+schema_version: "10.0"
 contract: output
 skill: assistant-review
 
@@ -48,24 +63,26 @@ artifacts:
 
   - name: review_delegation_path
     type: object
-    required: conditional
-    condition: "scope_size in [medium, large] or subagent_execution_mode in [delegated, direct_fallback]"
+    required: true
+    condition: "structured review path; an ordinary compact light review records only its compact result"
     description: "How Reviewer responsibility was executed"
-    validation: "States subagent policy state, execution mode, trigger provenance, and whether review used a fresh Reviewer subagent or fresh direct-fallback context. delegation_triggered requires delegated; delegation_opted_out or subagents_unavailable requires direct_fallback; policy_disallowed requires direct_fallback plus nonblank policy_blocking_source; not_required requires direct_fallback with empty trigger scope for an untriggered trivial/small isolated review batch."
-    on_fail: "Record delegated review or direct fallback before presenting results; do not imply Reviewer subagents were used when delegation was not triggered or they were unavailable"
+    validation: "Current completed review requires delegated newly created native actors with fresh context; unavailability stays incomplete. Historical v9 fallback remains under original authority and cannot certify v10."
+    on_fail: "Record actual newly created review actors or incomplete isolation; no author fallback certifies current review."
     object_fields:
       - name: subagent_policy_state
         type: enum
         required: true
-        enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
+        enum_values: [delegation_triggered, subagents_unavailable, policy_disallowed, delegation_opted_out, not_required]
+        validation: "Current v10 uses delegation_triggered, subagents_unavailable or policy_disallowed. delegation_opted_out and not_required are historical v9 reader-only labels, valid only on a record that explicitly declares producer_version 9.0 with its original historical_dispatch_binding; a current v10 producer never emits them and they never certify current review."
       - name: subagent_execution_mode
         type: enum
         required: true
-        enum_values: [delegated, direct_fallback, not_applicable]
+        enum_values: [delegated, not_applicable, direct_fallback]
+        validation: "Current v10 uses delegated or not_applicable. direct_fallback is a historical v9 reader-only label, valid only on a record that explicitly declares producer_version 9.0 with its original historical_dispatch_binding; a current v10 producer never emits it and it never certifies current review."
       - name: subagent_trigger_scope
         type: string[]
         required: true
-        validation: "Non-empty when a delegation trigger or fallback cause applies; empty only when not_required + direct_fallback records an untriggered trivial/small isolated review batch. Values are unique and nonblank."
+        validation: "Non-empty current formal-review provenance; values are unique and nonblank. Historical v9 trigger/fallback rules retain their original authority."
       - name: policy_blocking_source
         type: string
         required: conditional
@@ -74,28 +91,30 @@ artifacts:
       - name: fresh_context_evidence
         type: string
         required: true
-        validation: "Names the fresh Reviewer dispatch, or the direct-fallback context reset used to reduce stale review risk"
+        validation: "References independently retained new native creation/context/handoff/source authority; author self-check is insufficient"
 
   - name: qa_evaluation_delegation_path
     type: object
     required: conditional
     condition: "qa_evaluation_mode == required"
     description: "How QAEvaluator responsibility was executed"
-    validation: "States subagent policy state, execution mode, trigger provenance, and whether QA used a fresh QAEvaluator subagent or fresh direct-fallback context. delegation_triggered requires delegated; delegation_opted_out or subagents_unavailable requires direct_fallback; policy_disallowed requires direct_fallback plus nonblank policy_blocking_source; not_required requires not_applicable with empty trigger scope."
-    on_fail: "Record delegated QA evaluation or direct fallback before presenting results; do not imply QAEvaluator subagents were used when delegation was not triggered or they were unavailable"
+    validation: "Required independent QA acceptance uses a newly created actor with fresh context: delegation_triggered requires delegated; unavailable or policy-disallowed isolation remains incomplete with actual provenance. not_required requires not_applicable and empty trigger scope only when QA is not required. Pure check execution stays discretionary; historical v9 fallback remains historical."
+    on_fail: "Record actual independent QAEvaluator evidence or incomplete required acceptance; never claim author fallback completed current QA."
     object_fields:
       - name: subagent_policy_state
         type: enum
         required: true
-        enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
+        enum_values: [not_required, delegation_triggered, subagents_unavailable, policy_disallowed, delegation_opted_out]
+        validation: "Current v10 uses not_required, delegation_triggered, subagents_unavailable or policy_disallowed. delegation_opted_out is a historical v9 reader-only label, valid only on a record that explicitly declares producer_version 9.0 with its original historical_dispatch_binding; a current v10 producer never emits it and it never certifies current review."
       - name: subagent_execution_mode
         type: enum
         required: true
-        enum_values: [delegated, direct_fallback, not_applicable]
+        enum_values: [delegated, not_applicable, direct_fallback]
+        validation: "Current v10 uses delegated or not_applicable. direct_fallback is a historical v9 reader-only label, valid only on a record that explicitly declares producer_version 9.0 with its original historical_dispatch_binding; a current v10 producer never emits it and it never certifies current review."
       - name: subagent_trigger_scope
         type: string[]
         required: true
-        validation: "Non-empty when a delegation trigger or fallback cause applies; empty only when not_required + not_applicable records that QA evaluation was not required. Values are unique and nonblank."
+        validation: "Non-empty when QA is required, recording the delegation trigger or the actual unavailable/policy-blocked isolation; empty only when not_required + not_applicable records that QA evaluation was not required. Values are unique and nonblank."
       - name: policy_blocking_source
         type: string
         required: conditional
@@ -104,7 +123,7 @@ artifacts:
       - name: fresh_context_evidence
         type: string
         required: true
-        validation: "Names the fresh QAEvaluator dispatch, or the direct-fallback context reset used to reduce stale QA risk"
+        validation: "References newly created independent acceptance-review authority; unavailable isolation is incomplete"
 
   - name: pivot_restart_decision
     type: object
@@ -206,15 +225,16 @@ artifacts:
   - name: final_summary
     type: object
     required: true
-    condition: always
+    condition: "structured review path; an ordinary compact light review records only its compact result"
     description: "The single summary presented to the user after the loop completes"
     validation: "Must include rounds (positive integer), current final snapshot, the exact final_batch_plan, started batch summaries, obligation-level coverage ledger, aggregation ledger, aggregated findings, aggregate result, the evidence-bounded no-finding claim only when coverage is complete, additional-round evidence when rounds >= 2, fixed_items, remaining_items or coverage gaps when applicable, and nits before presenting review results. The current final batch snapshot_identity exactly equals final_snapshot_identity and its review_snapshot_id exactly equals final_review_snapshot_id. final_batch_plan exactly equals the current final review_batch topology and expected_passes, so required integration, architecture, security, and closure passes cannot be omitted before CLEAN. Recompute the result and rubric from the complete aggregated union after the response barrier, never from an early pass result. Historical batches remain accountable but only the current final snapshot requires complete replacement coverage for CLEAN or ISSUES_FIXED."
     object_fields:
       - name: reviewed_scope
         type: string[]
         required: true
-        min_items: 1
-        description: "Files, diffs, task packets, slices, or content boundaries actually inspected across the completed review"
+        min_items: 0
+        description: "Files, diffs, task packets, slices, or content boundaries actually inspected; empty only for zero-inspection incomplete review."
+        validation: "Current v10 empty scope requires HAS_REMAINING_ITEMS, coverage_complete=false and no actual inspection or response. Complete reviews and mixed partial batches retain inspected scope. Explicit historical v9 retains its original non-empty constraint; planned assignments never establish inspection."
       - name: rounds
         type: int
         required: true
@@ -263,7 +283,7 @@ artifacts:
             type: enum
             required: true
             enum_values: [trivial, small, medium, large]
-            validation: "Exact current review_batch scope_size; trivial and small use two discovery perspectives, medium uses three, and large uses four."
+            validation: "Exact current review_batch scope_size; trivial and small light review uses one light_contract_and_runtime pass covering both trivial_small perspectives (historical two-pass trivial/small batches remain valid), medium uses three, and large uses four; plan review (plan_review true) uses one plan_coverage_and_feasibility pass at any scope size."
           - name: topology
             type: object
             required: true
@@ -297,10 +317,18 @@ artifacts:
               - name: max_required_responses
                 type: int
                 required: true
+              - name: light_review
+                type: boolean
+                required: false
+                validation: "Exact review_batch.topology.light_review; true only for the one-pass trivial/small light topology under controller_intensity light."
+              - name: plan_review
+                type: boolean
+                required: false
+                validation: "Exact review_batch.topology.plan_review; true only for the one-pass plan_coverage_and_feasibility topology under review_subject plan."
           - name: expected_passes
             type: object[]
             required: true
-            min_items: 2
+            min_items: 1
             max_items: 6
             validation: "Exact ordered projection of current final review_batch.expected_passes; every review_pass_id is unique and no planned pass may be omitted, substituted, or added."
             object_fields:
@@ -310,7 +338,7 @@ artifacts:
               - name: perspective
                 type: enum
                 required: true
-                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification, light_contract_and_runtime, plan_coverage_and_feasibility]
               - name: assigned_scope
                 type: string[]
                 required: true
@@ -341,7 +369,7 @@ artifacts:
               - name: review_perspective
                 type: enum
                 required: true
-                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification]
+                enum_values: [contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse, risk_selected_specialist, closure_verification, light_contract_and_runtime, plan_coverage_and_feasibility]
               - name: coverage_obligation
                 type: string
                 required: true
@@ -445,7 +473,7 @@ artifacts:
           - name: expected_response_count
             type: int
             required: true
-            validation: "2 to 6"
+            validation: "1 to 6; 1 only for trivial/small light review or plan review (topology.plan_review true)"
           - name: terminal_response_count
             type: int
             required: true
@@ -952,7 +980,7 @@ artifacts:
         type: object[]
         required: true
         description: "Weighted aggregate score and aggregated union finding count per round — used for drift detection and diagnostic only; shared semantic progress governs continuation"
-        validation: "v9.0 score tracking uses aggregated_finding_count. Persisted 6.0/7.0/7.1/7.2/8.0 packets are invalidated and rebuilt before score tracking; legacy finding_count remains historical evidence only."
+        validation: "v10.0 score tracking uses aggregated_finding_count. Persisted 6.0/7.0/7.1/7.2/8.0 packets are invalidated and rebuilt before score tracking; legacy finding_count remains historical evidence only."
         object_fields:
           - name: round
             type: int

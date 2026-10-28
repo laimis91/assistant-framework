@@ -2,31 +2,33 @@
 
 Internal reference for Review routing. Load during Review after Build evidence
 exists. `references/phases.md` keeps the compact Review shell; this file owns
-Spec Review, Code Quality Review, QA Evaluator routing, status gates,
-pivot/shared stagnation handling, and verification-summary inputs for Document.
+the final fresh acceptance review, its spec obligations, QA Evaluator routing,
+status gates, pivot/shared stagnation handling, and verification-summary inputs
+for Document.
 
 ## Review Lane Separation
 
-Review has three distinct lanes:
+Review has two distinct lanes:
 
-1. Spec Review checks approved scope, task packets, slices, acceptance criteria,
-   changed files, and verification evidence.
-2. Code Quality Review loads and follows `assistant-review` SKILL.md and its
-   contracts. Code Reviewer owns code defects, security, architecture, test
-   coverage, maintainability, and structural code risk. `reviewer` remains a
-   compatibility route for existing/legacy handoffs.
-3. QA Evaluator runs only when `qa_evaluation_mode=required` and only after
+1. The final fresh acceptance review (`assistant-review`,
+   `review_subject=acceptance`) is the single owner of request, plan and
+   delivery reconciliation. Code Reviewer owns code defects, security,
+   architecture, test coverage, maintainability, and structural code risk; the
+   same batch carries the spec obligations of
+   `references/prompts/spec-review.md`. `reviewer` remains a compatibility
+   route for existing/legacy handoffs.
+2. QA Evaluator runs only when `qa_evaluation_mode=required` and only after
    build/test evidence plus Code Reviewer or Reviewer compatibility evidence
    exist. QA Evaluator owns acceptance, Done Contract readiness, verification
    evidence, final readiness, and scoped domain quality.
 
-Quality review cannot satisfy Spec Review. QA Evaluation cannot substitute for
-Spec Review or Code Quality Review. Code Reviewer and QA Evaluator
-responsibilities stay separate.
+Quality findings alone cannot satisfy spec obligations: each obligation needs
+its own covered result. QA Evaluation cannot substitute for the acceptance
+review. Code Reviewer and QA Evaluator responsibilities stay separate.
 
 ## Review Authorization Gate
 
-Before Stage 1 Spec Review or source inspection/mutation, resolve
+Before the acceptance review or source inspection/mutation, resolve
 `assistant-review` mode from semantic modification authority. Clear report-only
 intent selects audit. Explicit source-modification authorization, or a carried
 active approved implementation workflow with bounded in-scope repairs, selects
@@ -35,60 +37,72 @@ authorize edits. If audit versus editing remains materially unresolved, ask
 exactly: "Should I only report findings, or also implement and verify fixes?"
 and stop before reviewing or changing source until the user answers.
 
-For `controller_intensity=light`, use the compact lane instead: compare the
-diff with carried Discover scope/criteria and any applicable inline plan, run a
-fresh review pass after validation,
-record PASS plus the reviewed scope/evidence, and in review-fix mode address
-only evidence-backed findings within authorized scope before completion. Light
-work does not load the full rubric/QA loop unless risk or an
-independent trigger promotes it. This is a fresh self-review and does not
-require Code Reviewer, Reviewer, Code Writer, or Builder/Tester dispatch/direct
-fallback evidence. For an Architecture Decision Pack or expanded impact, invoke
-`assistant-review`, resolve its own policy, and persist validated refs to its
-final summary, exact current final-batch `final_snapshot_identity`, and
-`review_delegation_path` in `fresh_review_result`; do not copy light Build policy. Persist
-`assistant-review/contracts/output.yaml#architecture_decision_pack_review` only for a Pack.
+For light work, keep the review scope and evidence compact. A local self-check
+is useful preparation, but formal completion review always uses a newly created
+independent reviewer with fresh context. Trivial/small light work uses one such
+reviewer covering spec obligations and quality, plus one fresh re-review after a
+fix; medium+ code/acceptance review keeps at least two sibling-blind passes, with no
+direct author fallback. Plan review is one fresh `plan_coverage_and_feasibility`
+pass plus a fresh re-review after a material plan fix.
 
-## Stage 1 - Spec Review
+Ordinary light review and plan review record only a compact result: fresh
+reviewer identity (actor id, native invocation id, lowercase `runtime`,
+`fork_turns=none` on Codex), PASS or findings, evidence refs, and reviewed scope.
+Each compact finding carries a stable id (for example `light-1`) plus file/line and
+description; the lead keeps those ids. A fresh re-review after a fix uses a
+reviewer distinct from the authors and first reviewer; it receives the fixed
+findings as `{aggregate_finding_id, description}` rows, and its compact result
+carries those resolved rows in `findings` and records `closure_results`
+(`verified_closed`, `regressed` or `incomplete`) per `aggregate_finding_id` plus
+`prior_reviewer_actor_ids`; closure ids equal the record's own finding ids, and
+PASS requires every row `verified_closed`. Plan review records `plan_review_result`,
+which adds `request_plan_reconciliation` coverage (required, observed and
+unresolved requirement ids plus unresolved finding ids). Neither needs a batch plan,
+ledgers, structured `fresh_dispatch` or review-tools validation. A
+persisted/executable admission (for plan review, only that) or a carried
+Architecture Decision Pack or expanded impact instead uses the structured
+path; a Pack or expanded impact retains its existing canonical
+`assistant-review/contracts/output.yaml#final_summary`, current snapshot and
+`assistant-review/contracts/output.yaml#review_delegation_path` refs. Workflow
+always passes its triage `controller_intensity` to assistant-review; a one-pass
+light topology requires `controller_intensity=light` and
+`topology.light_review=true`, while small standard/strict work keeps at least
+two passes. Unavailable isolation is incomplete.
 
-Print: `>> Stage 1: Spec Review`
+## Stage 1 - Retired Spec Review
 
-Load and follow `references/prompts/spec-review.md`. Compare implementation
-against the approved plan, approved task packets, and approved slices before
-Stage 2. For bugfixes, include the `assistant-debugging`
-reproduction/root-cause evidence in the review material and check that the
-regression test or validation path covers the isolated failure mechanism.
-
-Spec Review must:
-
-1. Walk through each approved plan step, task packet, or slice against `git diff`.
-2. Check missing acceptance criteria.
-3. Check extra scope unless approved as a deviation.
-4. Check changed files mismatch.
-5. Check verification evidence mismatch against the required command, expected
-   success signal, and criteria checked.
-6. Append a `### Spec Review #N` entry to the task journal Review Log with:
-   Result: PASS | FAIL, Missing acceptance criteria, Extra scope, Changed files
-   mismatch, Verification evidence mismatch, and Required fixes.
-7. On Spec review FAIL, in review-fix mode fix only evidence-backed required
-   items within authorized scope, re-test, and re-run Spec Review before Stage
-   2. In audit mode, report the mismatch without source changes.
-8. On Spec review PASS, proceed to Stage 2.
-
-Print: `>> Spec Review: [PASS / FAIL - found N required fixes]`
+Stage 1 is no longer a separate reviewer. Read historical `### Spec Review #N`
+entries and `spec_review_result` records under their original labels; new
+records come from the acceptance review's spec obligations.
 
 ## Stage 2 - Code Quality Review
 
-Print: `>> Stage 2: Code Quality Review - loading assistant-review SKILL.md`
+Print: `>> Stage 2: Acceptance Review - loading assistant-review SKILL.md`
+(historical records may read `Code Quality Review`).
 
-Load and follow `assistant-review` SKILL.md and its contracts. It is the sole
-owner of Reviewer and QAEvaluator worker packet schemas. Add Code Reviewer to
-`Required agents` before Stage 2. Use `Reviewer` only as compatibility routing
-inside assistant-review. Do not implement the review loop inline
-when `subagent_execution_mode=delegated` and a delegated review agent is
-triggered; dispatch Code Reviewer and record `Code Reviewer dispatch` plus
-`Code Reviewer result` evidence, or `Reviewer dispatch` plus `Reviewer result`
-only for compatibility routing.
+Stage 2 applies to standard/strict work: the final fresh acceptance review. Light
+work and plan review use the compact result above as their dispatch/result
+evidence, unless the structured path applies. Load and follow `assistant-review`
+SKILL.md and its contracts with `review_subject=acceptance` and the triage
+`controller_intensity`. It is the sole owner of Reviewer and QAEvaluator worker
+packet schemas. Use `Reviewer` only as compatibility routing inside
+assistant-review. In every lane, including direct_main, never implement the
+review loop inline; dispatch newly created fresh-context Code Reviewers and record
+`Code Reviewer dispatch` plus `Code Reviewer result` evidence, or
+`Reviewer dispatch` plus `Reviewer result` only for compatibility routing.
+
+Assign the spec obligations of `references/prompts/spec-review.md` to a pass of
+that batch, such as contract_and_test_oracle, with the original request,
+requirement IDs, approved plan/task packets/slices and `git diff`. For bugfixes,
+include the `assistant-debugging` reproduction/root-cause evidence and check
+that the regression test or validation path covers the isolated failure
+mechanism. Record the obligation result as `spec_review_result` (journal a
+`### Spec Review #N` entry only when a task journal exists) (Result: PASS | FAIL, Missing acceptance criteria, Extra
+scope, Changed files mismatch, Verification evidence mismatch, Required fixes)
+bound to the same final batch. On a spec FAIL, in review-fix mode fix
+only evidence-backed findings within authorized scope, re-test, and run a fresh
+complete acceptance batch on the changed snapshot.
+In audit mode, report the mismatch without source changes.
 
 When `architecture_design_mode != not_applicable`, pass the current compact
 Architecture Decision Pack projection (reference, freshness basis,
@@ -100,9 +114,10 @@ review-intensive challenge evidence) to assistant-review and set
 canonical Pack review evidence; workflow consumes its validated result rather
 than duplicating the reviewer schema.
 
-In direct fallback, preserve fresh-review evidence and record
-`Code Reviewer direct evidence`; `Reviewer direct evidence` is compatibility
-evidence only.
+When reading a historical v15 direct-fallback record only, retain its original
+`Code Reviewer direct evidence` (`Reviewer direct evidence` is compatibility)
+labels; new records never write them, and current review requires a newly
+created independent agent.
 
 The `assistant-review` loop fixes must-fix and should-fix items, re-reviews
 automatically only when review-fix authority is explicit or carried by the
@@ -110,9 +125,9 @@ active approved workflow, and only for evidence-backed findings within its
 approved scope. Audit mode reports findings without source changes. A finding
 that expands scope, requirements, architecture, files, risk, verification, or
 acceptance criteria returns to planning or approval before any mutation. Light
-small tasks may use a quick spec check plus one clean review round. Small
-strict/required-QA work requires full Stage 1 Spec Review and Stage 2 Code
-Quality Review, as do medium+ tasks.
+small tasks use one compact fresh review covering spec obligations and quality.
+Small strict/required-QA work and medium+ tasks require the full acceptance
+batch with its spec obligations; medium+ also requires its one-pass plan review.
 
 If code review reports shared semantic guard stagnation or a material scope/authority change, pause the loop and create an orchestrator-owned
 `pivot_restart_decision` before another fix/review dispatch. The autonomous
@@ -129,9 +144,11 @@ QA required positive triggers: explicit QA/acceptance evaluation request, accept
 
 QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work.
 
-Load and follow assistant-review's QA loop. assistant-review owns QAEvaluator
-dispatch, direct-fallback policy, input/return validation, and the canonical
-delegation-path/result artifacts; workflow records only validated refs.
+Load and follow assistant-review's QA loop. assistant-review owns newly created
+fresh-context QAEvaluator dispatch, input/return validation, and the canonical
+delegation-path/result artifacts; workflow records only validated refs. QA never
+uses direct fallback: when fresh QAEvaluator isolation is unavailable, QA is
+incomplete and the workflow does not complete.
 
 When a carried feature-preparation QA obligation exists, a successful canonical
 pair (`accepted` or `accepted_with_concerns` with `CLEAN` or `ISSUES_FIXED`) is
@@ -182,8 +199,9 @@ Enforce the review cycle before presenting results:
   `assistant-review/contracts/output.yaml#review_delegation_path`.
   `assistant-review/contracts/output.yaml#architecture_decision_pack_review`
   remains required only for a Pack.
-- Independent Code Reviewer dispatch/result evidence, or allowed fresh
-  direct-fallback evidence, must be created in Review after Build completes.
+- Newly created fresh-context Code Reviewer dispatch/result evidence must be
+  created in Review after Build completes; direct fallback never substitutes,
+  and unavailable reviewer isolation leaves Review incomplete.
 - When `qa_evaluation_mode=required`, workflow must record validated refs to
   assistant-review `qa_evaluation_result` and `qa_evaluation_delegation_path`,
   plus the current producer version and exact carried-obligation result ref when

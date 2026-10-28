@@ -11,7 +11,7 @@ with quoted explicit paths under Node 22+ only for shared, materially
 unresolved, or explicitly carried expanded impact. Do not use the process cwd
 or assume assistant-workflow is installed. A missing checker/runtime blocks that
 expanded deterministic gate; an evidenced local repair remains on its ordinary
-regression-verification and self-review path.
+regression-verification path with a local self-check plus fresh independent review.
 
 Every proposed behavior repair records impact scope, an applicability reason,
 and causal evidence for a local decision. Before any source/test mutation,

@@ -18,8 +18,8 @@ compact applicability evidence. Only shared, materially unresolved, or
 explicitly carried expanded work requires the common pre-build result and its
 completion projection when `execution_intent != prepare_only`; prepare-only
 work retains discovery applicability and artifact identity without implementation
-completion claims. Evidenced local work keeps ordinary relevant verification and
-self-review without a Node gate. Shared fanout alone does not activate an
+completion claims. Evidenced local work keeps ordinary relevant verification, a
+local self-check and fresh independent review without a Node gate. Shared fanout alone does not activate an
 Architecture Decision Pack, strict controller, QA, or a different Build/delegation lane.
 
 ## Progress Updates
@@ -47,8 +47,10 @@ requested, stays inline, and never waits for implementation approval. Preserve
 open decisions and exact existing-system preparation evidence, or typed
 `preparation_basis=not_applicable` without an invented evidence ref. Omit
 Artifact Contracts, executable steps/packets, implementation blueprints, and
-Done/Harness artifacts. Load `references/plans/prepare-only.md` and return to
-Preparation Completion.
+Done/Harness artifacts. Requested/required readiness plans receive fresh independent
+review and fresh review after fixes; a review PASS grants no implementation approval.
+Selected research lenses/peer retain their isolation. Load
+`references/plans/prepare-only.md` and return to Preparation Completion.
 
 ### Execution plan
 
@@ -92,7 +94,15 @@ assistant-tdd (or its available fallback) without changing task-wide `tdd_mode`.
 
 An inline bounded small plan proceeds without waiting. Medium+, risky,
 destructive, public-contract/data/security, material architecture/scope, explicit
-policy, or user approval triggers require `approval_required`; present the
+policy, or user approval triggers require `approval_required`. Before seeking
+approval, a requested/required plan needs a validated fresh independent plan
+review (PASS (compact) or CLEAN/ISSUES_FIXED (structured)) from a newly created reviewer through `assistant-review`
+with `review_subject=plan`, bound to the current plan identity, as one fresh
+`plan_coverage_and_feasibility` pass; a material plan fix gets one newly created
+fresh re-review of the same perspective. Record the compact `plan_review_result`
+(reviewer identity, PASS or finding rows, request/plan coverage, closure results)
+unless persisted/executable admission applies, which keeps the structured plan
+batch and review-tools validation. Then present the
 concrete plan and wait before Build. Reuse existing approval for its unchanged
 scope; a material change returns to Discover/Plan and reapproval as needed.
 A readiness plan authorizes no implementation.

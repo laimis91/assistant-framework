@@ -175,10 +175,10 @@ p0p4_write_assistant_review_batch_response() {
         {
           summary: $summary,
           review_delegation_path: {
-            subagent_policy_state: "not_required",
-            subagent_execution_mode: "direct_fallback",
-            subagent_trigger_scope: [],
-            fresh_context_evidence: "Fresh direct-fallback review context."
+            subagent_policy_state: "delegation_triggered",
+            subagent_execution_mode: "delegated",
+            subagent_trigger_scope: ["formal review batch"],
+            fresh_context_evidence: "Fixture responses came from separate fresh-context review passes."
           },
           final_summary: {
             reviewed_scope: ["src/review.ts"],
@@ -235,6 +235,33 @@ p0p4_write_assistant_review_batch_response() {
     ' >"$response_path"
 }
 
+p0p4_mark_assistant_review_unavailable() {
+    local response_path="$1"
+    jq '
+        .review_delegation_path = {
+          subagent_policy_state:"subagents_unavailable",subagent_execution_mode:"not_applicable",
+          subagent_trigger_scope:["formal review batch"],
+          fresh_context_evidence:"Native reviewer creation unavailable; no actor or isolated context was created."
+        }
+        | .final_summary |= (
+            .reviewed_scope = [] | .result = "HAS_REMAINING_ITEMS" | .coverage_complete = false
+            | .final_batch_plan.scope_size = "trivial"
+            | del(.evidence_bounded_claim)
+            | .remaining_items = [{severity:"must-fix",file:"src/review.ts",description:"Required independent review is unavailable.",reason_unresolved:"No native reviewer actor could be created."}]
+            | .coverage_gaps = ["Both planned purpose-specific reviews lack native actors and responses."]
+            | .batch_summaries[0] |= (.batch_status = "incomplete" | .terminal_response_count = 0 | .aggregate_rubric_recomputed = false)
+            | .coverage_ledger |= map(
+                .terminal_state = "failed" | .coverage_status = "incomplete" | .coverage_disposition = "incomplete"
+                | .coverage_gap_id = ("creation-gap:" + .review_pass_id + ":" + .applicable_concern)
+                | .evidence = ("Native reviewer creation unavailable before inspection: " + .review_pass_id)
+                | del(.finding_ids))
+            | .aggregation_ledger = [.coverage_ledger[] | {
+                source_provenance:[{source_kind:"review_pass",source_id:.review_pass_id}],
+                source_coverage_gap_ids:[.coverage_gap_id],disposition:"coverage_gap",rationale:.evidence}])
+    ' "$response_path" >"${response_path}.unavailable"
+    mv "${response_path}.unavailable" "$response_path"
+}
+
 p0p4_add_assistant_review_audit_report() {
     local response_path="$1"
     local output_path="$2"
@@ -249,7 +276,7 @@ p0p4_add_assistant_review_audit_report() {
             source_finding_ids, source_provenance, confidence_pct, locus,
             invariant, failure_mechanism, evidence, smallest_useful_fix
           }],
-          summary: "All expected responses were aggregated without source mutation."
+          summary: "Actual responses, coverage and findings are retained without source mutation."
         }
     ' "$response_path" >"$output_path"
     mv "$output_path" "$response_path"
@@ -981,10 +1008,8 @@ p0p4_write_skill_eval_responses() {
                         mv "${response_path}.three-pass" "$response_path"
                         ;;
                     trivial-audit-uses-two-isolated-passes)
-                        p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "CLEAN" true complete false
-                        jq '.final_summary.final_batch_plan.scope_size = "trivial"
-                            | .review_delegation_path = {subagent_policy_state: "not_required", subagent_execution_mode: "direct_fallback", subagent_trigger_scope: [], fresh_context_evidence: "fresh isolated direct-fallback context"}' "$response_path" >"${response_path}.trivial"
-                        mv "${response_path}.trivial" "$response_path"
+                        p0p4_write_assistant_review_batch_response "$response_path" "$required_summary" "HAS_REMAINING_ITEMS" false incomplete false
+                        p0p4_mark_assistant_review_unavailable "$response_path"
                         p0p4_add_assistant_review_audit_report "$response_path" "${response_path}.audit"
                         ;;
                     compact-local-review-retains-causal-applicability)
@@ -1022,7 +1047,7 @@ p0p4_write_skill_eval_responses() {
                 continue
             fi
             if [[ "$skill_name" == "assistant-research" ]] \
-                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | .semantic_validator == "assistant-research.five_lens_v4"' "$fixture_file" >/dev/null; then
+                && jq -e --arg id "$id" '.cases[] | select(.id == $id) | .semantic_validator as $validator | ["assistant-research.five_lens_v4", "assistant-research.five_lens_v5"] | index($validator) != null' "$fixture_file" >/dev/null; then
                 case "$skill_name:$id" in
                     assistant-research:five-lens-decision-briefing-uses-storm-style-workflow)
                         p0p4_write_assistant_research_delegated_response "$response_path" "$required_summary"
@@ -1054,7 +1079,7 @@ p0p4_write_skill_eval_responses() {
                         jq -n --arg summary "$required_summary" '{summary:$summary,cycle_log:[{behavior:"Reject duplicate eval case ids",red:{test_name:"reject_duplicate_case_ids",test_file:"tests/eval_runner_test.rb",failure_reason:"The duplicate id was accepted before validation was added.",verified_failing:true,command_results:[{target:"tests/eval_runner_test.rb",test_file:"tests/eval_runner_test.rb",test_name:"reject_duplicate_case_ids",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"failed",freshness:"current"}]},green:{production_file:"lib/eval_runner.rb",test_passes:true,all_tests_pass:true,command_results:[{target:"tests/eval_runner_test.rb",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"passed",freshness:"current"}]},refactor:{changes_made:"none needed",all_tests_pass:true,command_results:[{target:"tests/eval_runner_test.rb",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"passed",freshness:"current"}]}}],coverage_summary:{new_tests:1,total_tests_run:4,all_passing:true}}' >"$response_path"
                         ;;
                     assistant-tdd:green-refactor-runs-selected-regressions)
-                        jq -n --arg summary "$required_summary" '{summary:$summary,cycle_log:[{behavior:"Reject duplicate eval case ids",red:{test_name:"reject_duplicate_case_ids",test_file:"tests/eval_runner_test.rb",failure_reason:"The duplicate id was accepted before validation was added.",verified_failing:true,command_results:[{target:"tests/eval_runner_test.rb",test_file:"tests/eval_runner_test.rb",test_name:"reject_duplicate_case_ids",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"failed",freshness:"current"}]},green:{production_file:"lib/eval_runner.rb",test_passes:true,all_tests_pass:true,command_results:[{target:"tests/eval_runner_test.rb",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"passed",freshness:"current"}]},refactor:{changes_made:"none needed",all_tests_pass:true,command_results:[{target:"tests/eval_runner_test.rb",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"passed",freshness:"current"}]}}],coverage_summary:{new_tests:1,total_tests_run:7,all_passing:true}}' >"$response_path"
+                        jq -n --arg summary "$required_summary" '{summary:$summary,cycle_log:[{behavior:"Reject duplicate eval case ids",red:{test_name:"reject_duplicate_case_ids",test_file:"tests/eval_runner_test.rb",failure_reason:"The duplicate id was accepted before validation was added.",verified_failing:true,command_results:[{target:"tests/eval_runner_test.rb",test_file:"tests/eval_runner_test.rb",test_name:"reject_duplicate_case_ids",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"failed",freshness:"current"}]},green:{production_file:"lib/eval_runner.rb",test_passes:true,all_tests_pass:true,command_results:[{target:"tests/eval_runner_test.rb",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"passed",freshness:"current"}]},refactor:{changes_made:"Extracted the duplicate-id check into a named helper",all_tests_pass:true,command_results:[{target:"tests/eval_runner_test.rb",argv:["ruby","-Itest","tests/eval_runner_test.rb","--name","test_reject_duplicate_case_ids"],cwd:".",result:"passed",freshness:"current"}]}}],coverage_summary:{new_tests:1,total_tests_run:7,all_passing:true}}' >"$response_path"
                         ;;
                     assistant-verification:qrg-content-change-reuses-behavioral-coverage|\
                     assistant-verification:loader-path-change-adds-a-behavioral-oracle|\
@@ -2756,20 +2781,22 @@ round-ordinal-additional-reason|post-fix-review-uses-fresh-snapshot-batch|.final
 round-batch-length|post-fix-review-uses-fresh-snapshot-batch|.final_summary.batch_summaries = [.final_summary.batch_summaries[1]]
 batch-identity-unique|post-fix-review-uses-fresh-snapshot-batch|.final_summary.batch_summaries[0].batch_id = .final_summary.batch_summaries[1].batch_id
 batch-terminal-count|audit-spec-review-fail-continues-complete-batch|.final_summary.batch_summaries[0].terminal_response_count = 1
-batch-rubric-recomputed|trivial-audit-uses-two-isolated-passes|.final_summary.batch_summaries[0].aggregate_rubric_recomputed = false
+batch-rubric-recomputed|compact-cosmetic-review-retains-applicability|.final_summary.batch_summaries[0].aggregate_rubric_recomputed = false
 invalidated-result|in-flight-mutation-invalidates-review-batch|.final_summary.result = "CLEAN" | .final_summary.coverage_complete = true | del(.final_summary.coverage_gaps) | .final_summary.evidence_bounded_claim = "No material findings within the reviewed scope and available evidence"
 incomplete-current-clean|incomplete-review-batch-never-cleans|.final_summary.result = "CLEAN"
 retained-must-fix-clean|audit-batch-waits-for-all-pass-results|.final_summary.result = "CLEAN" | .final_summary.evidence_bounded_claim = "No material findings within the reviewed scope and available evidence"
-clean-with-material-remaining|trivial-audit-uses-two-isolated-passes|.final_summary.remaining_items = [{severity:"must-fix",file:"src/review.ts",description:"Still open.",reason_unresolved:"Not fixed."}]
-clean-with-coverage-gap|trivial-audit-uses-two-isolated-passes|.final_summary.coverage_gaps = ["Still incomplete."]
-issues-fixed-without-fixes|trivial-audit-uses-two-isolated-passes|.final_summary.result = "ISSUES_FIXED"
+clean-with-material-remaining|compact-cosmetic-review-retains-applicability|.final_summary.remaining_items = [{severity:"must-fix",file:"src/review.ts",description:"Still open.",reason_unresolved:"Not fixed."}]
+clean-with-coverage-gap|compact-cosmetic-review-retains-applicability|.final_summary.coverage_gaps = ["Still incomplete."]
+issues-fixed-without-fixes|compact-cosmetic-review-retains-applicability|.final_summary.result = "ISSUES_FIXED"
 issues-fixed-with-material-remaining|post-fix-review-uses-fresh-snapshot-batch|.final_summary.remaining_items = [{severity:"should-fix",file:"src/review.ts",description:"Still open.",reason_unresolved:"Not fixed."}]
 issues-fixed-with-coverage-gap|post-fix-review-uses-fresh-snapshot-batch|.final_summary.coverage_gaps = ["Still incomplete."]
-clean-with-session-fix|trivial-audit-uses-two-isolated-passes|.final_summary.fixed_items = [{aggregate_finding_id:"aggregate-fixed",severity:"must-fix",file:"src/review.ts",description:"Fixed.",fixed_in_round:1}] | .final_summary.closure_results = [{aggregate_finding_id:"aggregate-fixed",status:"verified_closed",evidence:"Closed."}]
-direct-fallback-fabricated-trigger|trivial-audit-uses-two-isolated-passes|.review_delegation_path.subagent_trigger_scope = ["invented trigger"]
-direct-fallback-wrong-mode|trivial-audit-uses-two-isolated-passes|.review_delegation_path.subagent_execution_mode = "not_applicable"
-has-remaining-with-only-nit|trivial-audit-uses-two-isolated-passes|.final_summary.result = "HAS_REMAINING_ITEMS" | del(.final_summary.evidence_bounded_claim) | .final_summary.aggregated_findings = [{aggregate_finding_id:"aggregate-nit",finding_id:"review_pass:pass-contract:nit-1",source_finding_ids:["review_pass:pass-contract:nit-1"],source_provenance:[{source_kind:"review_pass",source_id:"pass-contract"}],locus:"comment",file:"src/review.ts",invariant:"style",failure_mechanism:"cosmetic",severity:"nit",description:"Cosmetic.",evidence:"line 1",smallest_useful_fix:"Optional.",confidence_pct:90}] | .final_summary.aggregation_ledger = [{source_provenance:[{source_kind:"review_pass",source_id:"pass-contract"}],source_finding_ids:["review_pass:pass-contract:nit-1"],aggregate_finding_id:"aggregate-nit",disposition:"retained",rationale:"Nit only."}] | .final_summary.remaining_items = []
+clean-with-session-fix|compact-cosmetic-review-retains-applicability|.final_summary.fixed_items = [{aggregate_finding_id:"aggregate-fixed",severity:"must-fix",file:"src/review.ts",description:"Fixed.",fixed_in_round:1}] | .final_summary.closure_results = [{aggregate_finding_id:"aggregate-fixed",status:"verified_closed",evidence:"Closed."}]
+delegated-empty-trigger|compact-cosmetic-review-retains-applicability|.review_delegation_path.subagent_trigger_scope = []
+current-review-author-fallback|trivial-audit-uses-two-isolated-passes|.review_delegation_path.subagent_execution_mode = "direct_fallback"
+has-remaining-with-only-nit|compact-cosmetic-review-retains-applicability|.final_summary.result = "HAS_REMAINING_ITEMS" | del(.final_summary.evidence_bounded_claim) | .final_summary.aggregated_findings = [{aggregate_finding_id:"aggregate-nit",finding_id:"review_pass:pass-contract:nit-1",source_finding_ids:["review_pass:pass-contract:nit-1"],source_provenance:[{source_kind:"review_pass",source_id:"pass-contract"}],locus:"comment",file:"src/review.ts",invariant:"style",failure_mechanism:"cosmetic",severity:"nit",description:"Cosmetic.",evidence:"line 1",smallest_useful_fix:"Optional.",confidence_pct:90}] | .final_summary.aggregation_ledger = [{source_provenance:[{source_kind:"review_pass",source_id:"pass-contract"}],source_finding_ids:["review_pass:pass-contract:nit-1"],aggregate_finding_id:"aggregate-nit",disposition:"retained",rationale:"Nit only."}] | .final_summary.remaining_items = []
 audit-findings-unclosed|audit-batch-waits-for-all-pass-results|.audit_report.findings = []
+complete-empty-inspected-scope|compact-cosmetic-review-retains-applicability|.final_summary.reviewed_scope = []
+mixed-empty-inspected-scope|incomplete-review-batch-never-cleans|.final_summary.reviewed_scope = []
 coverage-evidence|trivial-audit-uses-two-isolated-passes|.final_summary.coverage_ledger[0].evidence = ""
 coverage-tuple-duplicate|trivial-audit-uses-two-isolated-passes|.final_summary.coverage_ledger += [.final_summary.coverage_ledger[0]]
 coverage-pass-count|trivial-audit-uses-two-isolated-passes|.final_summary.coverage_ledger[2].review_pass_id = "pass-contract"
@@ -2940,6 +2967,42 @@ if [[ "${#assistant_review_qa_delegation_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-review QA not-required delegation contract drifted: ${assistant_review_qa_delegation_failures[*]}"
+fi
+
+test_start "assistant-review QA delegation keeps unavailable isolation incomplete without author fallback"
+assistant_review_qa_unavailable_response="$passing_response_dir/assistant-review/qa-delegation-unavailable.json"
+jq -n '{qa_evaluation_delegation_path:{subagent_policy_state:"subagents_unavailable",subagent_execution_mode:"not_applicable",subagent_trigger_scope:["required QA evaluation"],fresh_context_evidence:"No fresh QAEvaluator could be created; required QA acceptance remains incomplete."}}' >"$assistant_review_qa_unavailable_response"
+assistant_review_qa_unavailable_failures=()
+if ! REPO_ROOT="$FRAMEWORK_DIR" assistant_review_artifact_schema_valid "qa-delegation-unavailable" "$assistant_review_qa_unavailable_response" "qa_evaluation_delegation_path"; then
+    assistant_review_qa_unavailable_failures+=("subagents_unavailable artifact rejected by schema")
+fi
+if ! assistant_review_delegation_path_semantics_valid "$assistant_review_qa_unavailable_response" "qa_evaluation_delegation_path"; then
+    assistant_review_qa_unavailable_failures+=("subagents_unavailable + not_applicable rejected by semantics")
+fi
+jq '.qa_evaluation_delegation_path.subagent_execution_mode = "direct_fallback"' "$assistant_review_qa_unavailable_response" >"$assistant_review_r9_output"
+if assistant_review_delegation_path_semantics_valid "$assistant_review_r9_output" "qa_evaluation_delegation_path"; then
+    assistant_review_qa_unavailable_failures+=("subagents_unavailable accepted direct_fallback author execution")
+fi
+jq '.qa_evaluation_delegation_path.subagent_policy_state = "delegation_opted_out" | .qa_evaluation_delegation_path.subagent_execution_mode = "direct_fallback"' "$assistant_review_qa_unavailable_response" >"$assistant_review_r9_output"
+if assistant_review_delegation_path_semantics_valid "$assistant_review_r9_output" "qa_evaluation_delegation_path"; then
+    assistant_review_qa_unavailable_failures+=("retired delegation_opted_out + direct_fallback accepted")
+fi
+jq '.qa_evaluation_delegation_path.subagent_policy_state = "policy_disallowed"' "$assistant_review_qa_unavailable_response" >"$assistant_review_r9_output"
+if assistant_review_delegation_path_semantics_valid "$assistant_review_r9_output" "qa_evaluation_delegation_path"; then
+    assistant_review_qa_unavailable_failures+=("policy_disallowed accepted without policy_blocking_source")
+fi
+jq '.qa_evaluation_delegation_path.subagent_policy_state = "policy_disallowed" | .qa_evaluation_delegation_path.policy_blocking_source = "Active rule forbids subagents for this task."' "$assistant_review_qa_unavailable_response" >"$assistant_review_r9_output"
+if ! assistant_review_delegation_path_semantics_valid "$assistant_review_r9_output" "qa_evaluation_delegation_path"; then
+    assistant_review_qa_unavailable_failures+=("policy_disallowed + not_applicable with blocking source rejected")
+fi
+jq '.qa_evaluation_delegation_path.subagent_policy_state = "policy_disallowed" | .qa_evaluation_delegation_path.subagent_execution_mode = "direct_fallback" | .qa_evaluation_delegation_path.policy_blocking_source = "Active rule forbids subagents for this task."' "$assistant_review_qa_unavailable_response" >"$assistant_review_r9_output"
+if assistant_review_delegation_path_semantics_valid "$assistant_review_r9_output" "qa_evaluation_delegation_path"; then
+    assistant_review_qa_unavailable_failures+=("policy_disallowed accepted direct_fallback author execution")
+fi
+if [[ "${#assistant_review_qa_unavailable_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-review QA unavailable delegation contract drifted: ${assistant_review_qa_unavailable_failures[*]}"
 fi
 
 test_start "assistant-review QA accepts a canonical non-blocking concern and scoped-domain projection"
@@ -3373,7 +3436,7 @@ assistant_review_final_summary_has_v7_envelope() {
         . as $response
         | (.final_summary | type == "object")
         and ($response.final_summary | required_fields(["reviewed_scope", "rounds", "final_review_snapshot_id", "final_snapshot_identity", "coverage_complete", "coverage_ledger", "batch_summaries", "aggregation_ledger", "aggregated_findings", "result", "fixed_items", "nits"]))
-        and (.final_summary.reviewed_scope | type == "array" and length > 0)
+        and (.final_summary.reviewed_scope | type == "array")
         and (.final_summary.rounds | type == "number")
         and (.final_summary.final_review_snapshot_id | type == "string")
         and (.final_summary.final_snapshot_identity | type == "object"
@@ -3456,7 +3519,7 @@ incomplete-review-batch-never-cleans|incomplete
 post-fix-review-uses-fresh-snapshot-batch|complete
 audit-spec-review-fail-continues-complete-batch|complete
 in-flight-mutation-invalidates-review-batch|invalidated
-trivial-audit-uses-two-isolated-passes|complete
+trivial-audit-uses-two-isolated-passes|incomplete
 EOF_ASSISTANT_REVIEW_FINAL_SUMMARIES
 for assistant_review_case_id in audit-batch-waits-for-all-pass-results audit-spec-review-fail-continues-complete-batch; do
     assistant_review_response="$passing_response_dir/assistant-review/$assistant_review_case_id.txt"
@@ -6033,6 +6096,8 @@ jq '
   .cases += [(.cases[] | select(.id == "trivial-audit-uses-two-isolated-passes")
       | .id = "future-mapped-canonical-review-case"
       | .title = "Future mapped canonical review case"
+      | .setup_context = ["The assistant-review instructions are active.", "Separate fresh-context fixture reviewers supplied the two declared responses."]
+      | .expected_behavior = ["Retains the declared canonical producer envelopes and required audit metadata."]
       | .machine_expectations = {required_substrings: ["future canonical anchor"], forbidden_substrings: ["future canonical forbidden marker"]})]
   | .canonical_review_batch_expectations.case_template_refs["future-mapped-canonical-review-case"] = "small_base"
   | .canonical_review_batch_expectations.case_requirements["future-mapped-canonical-review-case"] = {mode:"review", required_artifacts:["final_summary","review_delegation_path"], required_envelope_alias:"final_summary"}
@@ -6306,9 +6371,8 @@ fi
 # with an audit report and then fail specifically when that report is removed.
 p0p4_write_assistant_review_batch_response \
     "$review_batch_authority_r33_responses/assistant-review/trivial-audit-uses-two-isolated-passes.txt" \
-    "two isolated passes direct fallback coverage all expected responses" CLEAN true complete false
-jq '.final_summary.final_batch_plan.scope_size = "trivial" | .review_delegation_path = {subagent_policy_state:"not_required",subagent_execution_mode:"direct_fallback",subagent_trigger_scope:[],fresh_context_evidence:"fresh isolated direct-fallback context"}' "$review_batch_authority_r33_responses/assistant-review/trivial-audit-uses-two-isolated-passes.txt" >"$review_batch_authority_r33_root/trivial.json"
-mv "$review_batch_authority_r33_root/trivial.json" "$review_batch_authority_r33_responses/assistant-review/trivial-audit-uses-two-isolated-passes.txt"
+    "two planned passes isolation unavailable coverage incomplete" HAS_REMAINING_ITEMS false incomplete false
+p0p4_mark_assistant_review_unavailable "$review_batch_authority_r33_responses/assistant-review/trivial-audit-uses-two-isolated-passes.txt"
 p0p4_add_assistant_review_audit_report "$review_batch_authority_r33_responses/assistant-review/trivial-audit-uses-two-isolated-passes.txt" "$review_batch_authority_r33_root/trivial-audit.json"
 if ! "$skill_eval_runner" --responses "$review_batch_authority_r33_responses" --skill "$review_batch_authority_r33_review_skill" --case trivial-audit-uses-two-isolated-passes >"$review_batch_authority_r33_output" 2>&1; then
     review_batch_authority_r33_failures+=("trivial-audit-baseline")
@@ -6324,6 +6388,8 @@ jq '
   .cases += [(.cases[] | select(.id == "trivial-audit-uses-two-isolated-passes")
     | .id = "future-mapped-audit-requires-report"
     | .title = "Future mapped audit requires report"
+      | .setup_context = ["The assistant-review instructions are active.", "Separate fresh-context fixture reviewers supplied the two declared responses."]
+      | .expected_behavior = ["Retains the declared canonical producer envelopes and required audit metadata."]
     | .machine_expectations = {required_substrings:["future audit anchor"],forbidden_substrings:["future audit forbidden"]})]
   | .canonical_review_batch_expectations.case_template_refs["future-mapped-audit-requires-report"] = "trivial_base"
   | .canonical_review_batch_expectations.case_requirements["future-mapped-audit-requires-report"] = {mode:"audit",required_artifacts:["final_summary","audit_report","review_delegation_path"],required_envelope_alias:"final_summary"}
@@ -6353,11 +6419,16 @@ p0p4_write_assistant_review_batch_response \
     "$review_batch_authority_r33_responses/assistant-review/audit-batch-waits-for-all-pass-results.txt" \
     "all expected responses later pass runtime/lifecycle must-fix single final audit report" HAS_REMAINING_ITEMS true complete true
 p0p4_add_assistant_review_audit_report "$review_batch_authority_r33_responses/assistant-review/audit-batch-waits-for-all-pass-results.txt" "$review_batch_authority_r33_root/small-audit.json"
-jq '.review_delegation_path = {subagent_policy_state:"not_required",subagent_execution_mode:"direct_fallback",subagent_trigger_scope:[],fresh_context_evidence:"Fresh direct-fallback review context."}' "$review_batch_authority_r33_responses/assistant-review/audit-batch-waits-for-all-pass-results.txt" >"$review_batch_authority_r33_root/small-review-delegation.json"
-mv "$review_batch_authority_r33_root/small-review-delegation.json" "$review_batch_authority_r33_responses/assistant-review/audit-batch-waits-for-all-pass-results.txt"
 if ! "$skill_eval_runner" --responses "$review_batch_authority_r33_responses" --skill "$review_batch_authority_r33_review_skill" --case audit-batch-waits-for-all-pass-results >"$review_batch_authority_r33_output" 2>&1; then
     review_batch_authority_r33_failures+=("small-review-delegation-baseline")
 fi
+cp "$review_batch_authority_r33_responses/assistant-review/audit-batch-waits-for-all-pass-results.txt" "$review_batch_authority_r33_root/delegated-original.json"
+jq '.review_delegation_path = {subagent_policy_state:"not_required",subagent_execution_mode:"direct_fallback",subagent_trigger_scope:[],fresh_context_evidence:"Author fallback cannot provide independent review."}' "$review_batch_authority_r33_root/delegated-original.json" >"$review_batch_authority_r33_responses/assistant-review/audit-batch-waits-for-all-pass-results.txt"
+if "$skill_eval_runner" --responses "$review_batch_authority_r33_responses" --skill "$review_batch_authority_r33_review_skill" --case audit-batch-waits-for-all-pass-results >"$review_batch_authority_r33_output" 2>&1 \
+    || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$review_batch_authority_r33_output"; then
+    review_batch_authority_r33_failures+=("current-v10-author-fallback")
+fi
+mv "$review_batch_authority_r33_root/delegated-original.json" "$review_batch_authority_r33_responses/assistant-review/audit-batch-waits-for-all-pass-results.txt"
 jq 'del(.review_delegation_path)' "$review_batch_authority_r33_responses/assistant-review/audit-batch-waits-for-all-pass-results.txt" >"$review_batch_authority_r33_root/small-without-review-delegation.json"
 mv "$review_batch_authority_r33_root/small-without-review-delegation.json" "$review_batch_authority_r33_responses/assistant-review/audit-batch-waits-for-all-pass-results.txt"
 if "$skill_eval_runner" --responses "$review_batch_authority_r33_responses" --skill "$review_batch_authority_r33_review_skill" --case audit-batch-waits-for-all-pass-results >"$review_batch_authority_r33_output" 2>&1 \
@@ -6369,8 +6440,6 @@ p0p4_write_assistant_review_batch_response \
     "$review_batch_authority_r33_responses/assistant-review/incomplete-review-batch-never-cleans.txt" \
     "coverage incomplete HAS_REMAINING_ITEMS terminal failure" HAS_REMAINING_ITEMS false incomplete false
 p0p4_add_assistant_review_audit_report "$review_batch_authority_r33_responses/assistant-review/incomplete-review-batch-never-cleans.txt" "$review_batch_authority_r33_root/incomplete-audit.json"
-jq '.review_delegation_path = {subagent_policy_state:"not_required",subagent_execution_mode:"direct_fallback",subagent_trigger_scope:[],fresh_context_evidence:"Fresh direct-fallback review context."}' "$review_batch_authority_r33_responses/assistant-review/incomplete-review-batch-never-cleans.txt" >"$review_batch_authority_r33_root/incomplete-review-delegation.json"
-mv "$review_batch_authority_r33_root/incomplete-review-delegation.json" "$review_batch_authority_r33_responses/assistant-review/incomplete-review-batch-never-cleans.txt"
 if ! "$skill_eval_runner" --responses "$review_batch_authority_r33_responses" --skill "$review_batch_authority_r33_review_skill" --case incomplete-review-batch-never-cleans >"$review_batch_authority_r33_output" 2>&1; then
     review_batch_authority_r33_failures+=("incomplete-audit-baseline")
 fi
@@ -6400,6 +6469,180 @@ if [[ ${#review_batch_authority_r33_failures[@]} -eq 0 ]]; then
 else
     fail "review-batch authority gaps accepted: ${review_batch_authority_r33_failures[*]}"
 fi
+
+test_start "review-batch fixtures accept one fresh light trivial/small pass and keep two-pass batches valid"
+light_review_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-light-review.XXXXXX")"
+p0p4_register_cleanup "$light_review_root"
+mkdir -p "$light_review_root/assistant-review/evals"
+cp "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md" "$light_review_root/assistant-review/SKILL.md"
+light_review_base='.canonical_review_batch_expectations.templates.small_base |= (.topology.discovery_pass_count = 1 | .topology.max_required_responses = 1 | .topology.light_review = true
+    | .expected_passes = [{review_pass_id:"pass-light",perspective:"light_contract_and_runtime",assigned_scope:["scope-1"],coverage_obligations:["contract","runtime"],prior_finding_visibility:"none"}]
+    | .required_coverage_tuples = ([["contract","contract"],["contract","runtime"],["runtime","contract"],["runtime","runtime"]]
+        | map({review_pass_id:"pass-light",scope_item_id:"scope-1",applicable_concern:.[0],review_perspective:"light_contract_and_runtime",coverage_obligation:.[1]})))'
+light_review_failures=()
+# accept|label|extra mutation (identity keeps the historical two-pass fixture)
+while IFS='|' read -r light_review_expect light_review_label light_review_extra; do
+    if [[ "$light_review_label" == historical-two-pass ]]; then light_review_filter='.'; else light_review_filter="$light_review_base | $light_review_extra"; fi
+    jq "$light_review_filter" "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >"$light_review_root/assistant-review/evals/cases.json"
+    light_review_status=accept
+    "$skill_eval_runner" --validate-fixture --skill "$light_review_root/assistant-review" >"$light_review_root/output" 2>&1 || light_review_status=reject
+    [[ "$light_review_status" == "$light_review_expect" ]] || light_review_failures+=("$light_review_label expected $light_review_expect")
+done <<'EOF_LIGHT_REVIEW_CASES'
+accept|historical-two-pass|.
+accept|light-one-pass|.
+accept|light-post-fix-closure-ledger|.canonical_review_batch_expectations.templates.small_base.expected_passes[0].prior_finding_visibility = "closure_ledger"
+reject|light-separate-closure|.canonical_review_batch_expectations.templates.small_base.topology.closure_verification_required = true
+reject|one-pass-non-light-perspective|.canonical_review_batch_expectations.templates.small_base.expected_passes[0].perspective = "contract_and_test_oracle" | .canonical_review_batch_expectations.templates.small_base.required_coverage_tuples[].review_perspective = "contract_and_test_oracle"
+reject|light-medium-scope|.canonical_review_batch_expectations.templates.small_base.scope_size = "medium"
+reject|light-response-cap|.canonical_review_batch_expectations.templates.small_base.topology.max_required_responses = 2
+reject|one-pass-without-light-review|del(.canonical_review_batch_expectations.templates.small_base.topology.light_review)
+reject|one-pass-light-review-false|.canonical_review_batch_expectations.templates.small_base.topology.light_review = false
+reject|light-review-non-boolean|.canonical_review_batch_expectations.templates.small_base.topology.light_review = "light"
+EOF_LIGHT_REVIEW_CASES
+jq '.canonical_review_batch_expectations.templates.small_base.topology.light_review = true' "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >"$light_review_root/assistant-review/evals/cases.json"
+"$skill_eval_runner" --validate-fixture --skill "$light_review_root/assistant-review" >"$light_review_root/output" 2>&1 && light_review_failures+=("light-review-on-two-pass expected reject")
+if [[ ${#light_review_failures[@]} -eq 0 ]]; then pass; else fail "light review topology fixture admission: ${light_review_failures[*]}"; fi
+
+test_start "review grader accepts one-pass light_review final_summary and rejects one-pass small standard/strict"
+light_grade_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-light-grade.XXXXXX")"
+p0p4_register_cleanup "$light_grade_root"
+light_grade_case="compact-cosmetic-review-retains-applicability"
+light_grade_response="$light_grade_root/responses/assistant-review/$light_grade_case.txt"
+mkdir -p "$light_grade_root/assistant-review/evals" "$light_grade_root/responses/assistant-review"
+cp "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md" "$light_grade_root/assistant-review/SKILL.md"
+jq "$light_review_base" "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >"$light_grade_root/assistant-review/evals/cases.json"
+p0p4_write_assistant_review_batch_response "$light_grade_response" "change_impact_applicability not_applicable cosmetic" CLEAN true complete false
+# Project the two-pass helper response onto the frozen one-pass light template.
+jq --slurpfile fixture "$light_grade_root/assistant-review/evals/cases.json" '
+    ($fixture[0].canonical_review_batch_expectations.templates.small_base) as $plan
+    | .change_impact_applicability = {impact_scope:"not_applicable",applicability_reason:"The navigation label correction is cosmetic.",expanded_artifact_carried:false}
+    | .final_summary.final_batch_plan = $plan
+    | .final_summary.coverage_ledger = [$plan.required_coverage_tuples[] | {batch_id:"batch-1",review_snapshot_id:"snapshot-1",review_pass_id,perspective:.review_perspective,coverage_obligation,assigned_scope:["scope-1"],scope_item_id,applicable_concern,terminal_state:"completed",coverage_status:"complete",coverage_disposition:"inspected_no_risk",evidence:("light evidence " + .applicable_concern + "/" + .coverage_obligation)}]
+    | .final_summary.batch_summaries[0] |= (.expected_response_count = 1 | .terminal_response_count = 1)
+' "$light_grade_response" >"$light_grade_root/light.json"
+light_grade_failures=()
+cp "$light_grade_root/light.json" "$light_grade_response"
+"$skill_eval_runner" --responses "$light_grade_root/responses" --skill "$light_grade_root/assistant-review" --case "$light_grade_case" >"$light_grade_root/output" 2>&1 \
+    || light_grade_failures+=("light-one-pass expected zero structured failures: $(grep -Eo 'structured_json_assertion_failures=[0-9]+' "$light_grade_root/output")")
+# Negatives apply the same mutation to the response and its frozen template, then
+# call the grader directly: the fixture validator already rejects such templates,
+# so this isolates the grader's own K4 rule from the frozen-plan equality check.
+while IFS='|' read -r light_grade_label light_grade_mutation; do
+    jq "$light_grade_mutation" "$light_grade_root/light.json" >"$light_grade_root/negative.json"
+    jq --slurpfile response "$light_grade_root/negative.json" '.canonical_review_batch_expectations.templates.small_base = $response[0].final_summary.final_batch_plan' "$light_grade_root/assistant-review/evals/cases.json" >"$light_grade_root/negative-cases.json"
+    [[ "$(count_assistant_review_canonical_envelope_failures assistant-review "$light_grade_case" "$light_grade_root/negative.json" "$light_grade_root/negative-cases.json" 2>/dev/null)" == 1 ]] \
+        || light_grade_failures+=("$light_grade_label expected one structured failure")
+    ! assistant_review_lifecycle_semantics_valid "$light_grade_case" "$light_grade_root/negative.json" "" "" "$light_grade_root/negative-cases.json" 2>/dev/null \
+        || light_grade_failures+=("$light_grade_label accepted by the Ruby lifecycle grader")
+done <<'EOF_LIGHT_GRADE_CASES'
+small-standard-one-pass|del(.final_summary.final_batch_plan.topology.light_review)
+small-strict-one-pass|.final_summary.final_batch_plan.topology.light_review = false
+medium-one-pass-light-review|.final_summary.final_batch_plan.scope_size = "medium"
+EOF_LIGHT_GRADE_CASES
+if [[ ${#light_grade_failures[@]} -eq 0 ]]; then pass; else fail "light review final_summary grading: ${light_grade_failures[*]}"; fi
+
+# U4 plan review: one fresh plan_coverage_and_feasibility pass with topology.plan_review
+# true and no closure pass. final_batch_plan and templates carry no review_subject, so the
+# fixture validator and both graders bind the rule to topology.plan_review alone.
+plan_review_base='.canonical_review_batch_expectations.templates.small_base |= (.topology.discovery_pass_count = 1 | .topology.max_required_responses = 1 | .topology.plan_review = true
+    | .expected_passes = [{review_pass_id:"pass-plan",perspective:"plan_coverage_and_feasibility",assigned_scope:["scope-1"],coverage_obligations:["coverage","feasibility"],prior_finding_visibility:"none"}]
+    | .required_coverage_tuples = ([["contract","coverage"],["contract","feasibility"],["runtime","coverage"],["runtime","feasibility"]]
+        | map({review_pass_id:"pass-plan",scope_item_id:"scope-1",applicable_concern:.[0],review_perspective:"plan_coverage_and_feasibility",coverage_obligation:.[1]})))'
+plan_review_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-plan-review.XXXXXX")"
+p0p4_register_cleanup "$plan_review_root"
+plan_review_case="compact-cosmetic-review-retains-applicability"
+plan_review_response="$plan_review_root/responses/assistant-review/$plan_review_case.txt"
+mkdir -p "$plan_review_root/assistant-review/evals" "$plan_review_root/responses/assistant-review"
+cp "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md" "$plan_review_root/assistant-review/SKILL.md"
+plan_review_fixture_status() {
+    jq "${1//\$plan_review_base/$plan_review_base}" "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >"$plan_review_root/assistant-review/evals/cases.json"
+    if "$skill_eval_runner" --validate-fixture --skill "$plan_review_root/assistant-review" >"$plan_review_root/fixture.output" 2>&1; then printf 'accept\n'; else printf 'reject\n'; fi
+}
+# Grades one final_summary against a template frozen to its own final_batch_plan:
+# prints "<jq envelope failures> <ruby accept|reject>". The envelope count stubs the
+# Ruby lifecycle grader in a subshell so each grader's plan-review rule is isolated.
+plan_review_grade() {
+    jq --slurpfile response "$1" '.canonical_review_batch_expectations.templates.small_base = $response[0].final_summary.final_batch_plan' \
+        "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >"$plan_review_root/grade-cases.json"
+    local envelope ruby=accept
+    envelope="$(assistant_review_lifecycle_semantics_valid() { return 0; }; count_assistant_review_canonical_envelope_failures assistant-review "$plan_review_case" "$1" "$plan_review_root/grade-cases.json" 2>/dev/null)"
+    assistant_review_lifecycle_semantics_valid "$plan_review_case" "$1" "" "" "$plan_review_root/grade-cases.json" 2>/dev/null || ruby=reject
+    printf '%s %s\n' "$envelope" "$ruby"
+}
+jq "$plan_review_base" "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >"$plan_review_root/assistant-review/evals/cases.json"
+p0p4_write_assistant_review_batch_response "$plan_review_response" "change_impact_applicability not_applicable cosmetic" CLEAN true complete false
+jq --slurpfile fixture "$plan_review_root/assistant-review/evals/cases.json" '
+    ($fixture[0].canonical_review_batch_expectations.templates.small_base) as $plan
+    | .change_impact_applicability = {impact_scope:"not_applicable",applicability_reason:"The navigation label correction is cosmetic.",expanded_artifact_carried:false}
+    | .final_summary.final_batch_plan = $plan
+    | .final_summary.coverage_ledger = [$plan.required_coverage_tuples[] | {batch_id:"batch-1",review_snapshot_id:"snapshot-1",review_pass_id,perspective:.review_perspective,coverage_obligation,assigned_scope:["scope-1"],scope_item_id,applicable_concern,terminal_state:"completed",coverage_status:"complete",coverage_disposition:"inspected_no_risk",evidence:("plan evidence " + .applicable_concern + "/" + .coverage_obligation)}]
+    | .final_summary.batch_summaries[0] |= (.expected_response_count = 1 | .terminal_response_count = 1)
+' "$plan_review_response" >"$plan_review_root/plan.json"
+
+test_start "review fixtures and graders accept the one-pass plan review and keep multi-pass plan review acceptable"
+plan_review_failures=()
+while IFS='|' read -r plan_review_label plan_review_filter; do
+    [[ "$(plan_review_fixture_status "$plan_review_filter")" == accept ]] || plan_review_failures+=("fixture $plan_review_label expected accept")
+done <<'EOF_PLAN_REVIEW_ACCEPT'
+historical-multi-pass|.
+plan-one-pass|$plan_review_base
+plan-post-fix-closure-ledger|$plan_review_base | .canonical_review_batch_expectations.templates.small_base.expected_passes[0].prior_finding_visibility = "closure_ledger"
+plan-medium-scope|$plan_review_base | .canonical_review_batch_expectations.templates.small_base.scope_size = "medium"
+plan-review-false-multi-pass|.canonical_review_batch_expectations.templates.small_base.topology.plan_review = false
+EOF_PLAN_REVIEW_ACCEPT
+jq "$plan_review_base" "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >"$plan_review_root/assistant-review/evals/cases.json"
+cp "$plan_review_root/plan.json" "$plan_review_response"
+"$skill_eval_runner" --responses "$plan_review_root/responses" --skill "$plan_review_root/assistant-review" --case "$plan_review_case" >"$plan_review_root/runner.output" 2>&1 \
+    || plan_review_failures+=("runner plan-one-pass: $(grep -Eo 'structured_json_assertion_failures=[0-9]+' "$plan_review_root/runner.output" || printf 'no grading result')")
+[[ "$(plan_review_grade "$plan_review_root/plan.json")" == "0 accept" ]] || plan_review_failures+=("graders plan-one-pass expected 0 accept")
+p0p4_write_assistant_review_batch_response "$plan_review_root/historical.json" "change_impact_applicability not_applicable cosmetic" CLEAN true complete false
+jq '.change_impact_applicability = {impact_scope:"not_applicable",applicability_reason:"The navigation label correction is cosmetic.",expanded_artifact_carried:false}' "$plan_review_root/historical.json" >"$plan_review_root/historical-plan.json"
+[[ "$(plan_review_grade "$plan_review_root/historical-plan.json")" == "0 accept" ]] || plan_review_failures+=("graders historical-multi-pass expected 0 accept")
+if [[ ${#plan_review_failures[@]} -eq 0 ]]; then pass; else fail "plan review acceptance: ${plan_review_failures[*]}"; fi
+
+test_start "review fixtures and graders reject plan_review on non-plan batches and plan-review closure passes"
+plan_review_failures=()
+while IFS='|' read -r plan_review_label plan_review_filter; do
+    [[ "$(plan_review_fixture_status "$plan_review_filter")" == reject ]] || plan_review_failures+=("fixture $plan_review_label expected reject")
+done <<'EOF_PLAN_REVIEW_REJECT'
+plan-review-on-two-pass|.canonical_review_batch_expectations.templates.small_base.topology.plan_review = true
+plan-perspective-without-plan-review|$plan_review_base | del(.canonical_review_batch_expectations.templates.small_base.topology.plan_review)
+plan-review-with-light-review|$plan_review_base | .canonical_review_batch_expectations.templates.small_base.topology.light_review = true
+plan-review-closure-pass|$plan_review_base | .canonical_review_batch_expectations.templates.small_base.topology.closure_verification_required = true
+plan-review-non-boolean|$plan_review_base | .canonical_review_batch_expectations.templates.small_base.topology.plan_review = "plan"
+EOF_PLAN_REVIEW_REJECT
+while IFS='|' read -r plan_review_label plan_review_mutation; do
+    jq "$plan_review_mutation" "$plan_review_root/plan.json" >"$plan_review_root/negative.json"
+    [[ "$(plan_review_grade "$plan_review_root/negative.json")" == "1 reject" ]] || plan_review_failures+=("graders $plan_review_label expected 1 reject")
+done <<'EOF_PLAN_REVIEW_GRADE_REJECT'
+plan-perspective-without-plan-review|del(.final_summary.final_batch_plan.topology.plan_review)
+plan-review-with-light-review|.final_summary.final_batch_plan.topology.light_review = true
+plan-review-closure-required|.final_summary.final_batch_plan.topology.closure_verification_required = true
+EOF_PLAN_REVIEW_GRADE_REJECT
+p0p4_write_assistant_review_batch_response "$plan_review_root/two-pass.json" "change_impact_applicability not_applicable cosmetic" CLEAN true complete false
+jq '.change_impact_applicability = {impact_scope:"not_applicable",applicability_reason:"The navigation label correction is cosmetic.",expanded_artifact_carried:false} | .final_summary.final_batch_plan.topology.plan_review = true' "$plan_review_root/two-pass.json" >"$plan_review_root/two-pass-plan.json"
+[[ "$(plan_review_grade "$plan_review_root/two-pass-plan.json")" == "1 reject" ]] || plan_review_failures+=("graders plan-review-on-two-pass expected 1 reject")
+# The canonical two-pass batch with an extra plan_coverage_and_feasibility pass and no
+# plan_review isolates the envelope clause that forbids that perspective off plan review.
+jq '.change_impact_applicability = {impact_scope:"not_applicable",applicability_reason:"The navigation label correction is cosmetic.",expanded_artifact_carried:false}
+    | .final_summary.final_batch_plan.expected_passes += [{review_pass_id:"pass-plan",perspective:"plan_coverage_and_feasibility",assigned_scope:["scope-1"],coverage_obligations:["coverage"],prior_finding_visibility:"none"}]' \
+    "$plan_review_root/two-pass.json" >"$plan_review_root/two-pass-extra-plan.json"
+[[ "$(plan_review_grade "$plan_review_root/two-pass-extra-plan.json")" == "1 "* ]] || plan_review_failures+=("envelope two-pass-extra-plan-pass expected 1 failure")
+if [[ ${#plan_review_failures[@]} -eq 0 ]]; then pass; else fail "plan review rejection: ${plan_review_failures[*]}"; fi
+
+test_start "review fixture validator rejects plan_review closure, non-boolean and truthy values with their exact diagnostics"
+plan_review_failures=()
+while IFS='|' read -r plan_review_label plan_review_diagnostic plan_review_filter; do
+    if [[ "$(plan_review_fixture_status "$plan_review_filter")" != reject ]] \
+        || ! grep -Fxq "Error: assistant-review canonical_review_batch_expectations: templates.small_base.$plan_review_diagnostic" "$plan_review_root/fixture.output"; then
+        plan_review_failures+=("fixture $plan_review_label expected '$plan_review_diagnostic', got: $(tr '\n' ' ' <"$plan_review_root/fixture.output")")
+    fi
+done <<'EOF_PLAN_REVIEW_DIAGNOSTICS'
+plan-review-closure-not-false|topology.closure_verification_required must be false for plan review|$plan_review_base | .canonical_review_batch_expectations.templates.small_base.topology.closure_verification_required = true
+plan-review-string-boolean|topology.plan_review must be boolean when present|$plan_review_base | .canonical_review_batch_expectations.templates.small_base.topology.plan_review = "true"
+plan-review-truthy-number|topology.plan_review must be boolean when present|$plan_review_base | .canonical_review_batch_expectations.templates.small_base.topology.plan_review = 1
+EOF_PLAN_REVIEW_DIAGNOSTICS
+if [[ ${#plan_review_failures[@]} -eq 0 ]]; then pass; else fail "plan review fixture diagnostics: ${plan_review_failures[*]}"; fi
 
 test_start "assistant-review prompt packets expose every frozen snapshot and closure authority used by grading"
 review_authority_prompt_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-review-authority-prompts.XXXXXX")"
@@ -6564,9 +6807,8 @@ mkdir -p "$review_optional_distillation_dir/assistant-review"
 review_optional_distillation_failures=()
 
 audit_optional_response="$review_optional_distillation_dir/assistant-review/trivial-audit-uses-two-isolated-passes.txt"
-p0p4_write_assistant_review_batch_response "$audit_optional_response" "two isolated passes direct fallback coverage all expected responses" CLEAN true complete false
-jq '.final_summary.final_batch_plan.scope_size = "trivial"' "$audit_optional_response" >"$review_optional_distillation_dir/trivial-audit.json"
-mv "$review_optional_distillation_dir/trivial-audit.json" "$audit_optional_response"
+p0p4_write_assistant_review_batch_response "$audit_optional_response" "two planned passes isolation unavailable coverage incomplete" HAS_REMAINING_ITEMS false incomplete false
+p0p4_mark_assistant_review_unavailable "$audit_optional_response"
 p0p4_add_assistant_review_audit_report "$audit_optional_response" "$review_optional_distillation_dir/trivial-audit-report.json"
 jq '.review_finding_rule_distillation = [{finding:"aggregate-malformed"}]' "$audit_optional_response" >"$review_optional_distillation_dir/audit-malformed.json"
 mv "$review_optional_distillation_dir/audit-malformed.json" "$audit_optional_response"

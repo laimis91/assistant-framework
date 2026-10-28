@@ -72,19 +72,17 @@ file centralizes decision boundaries that cut across phase details while
 
 - `light`: small, low-risk, localized work with no public behavior, data, security,
   harness, or QA acceptance risk. It may run inline/direct with relevant
-  automated validation and a fresh self-review. Use
+  automated validation and a fresh independent review. Use
   `workflow_state_mode=inline`, `subagent_policy_state=not_required`, and
-  `subagent_execution_mode=not_applicable`; do not require Code Writer,
-  Builder/Tester, or independent Reviewer dispatch evidence. It does not require
+  `subagent_execution_mode=not_applicable`; do not require implementation worker dispatch records; formal review retains fresh independent Reviewer evidence. It does not require
   a journal, metrics, or manual verification unless separately
   triggered. Shared fanout alone keeps this Build policy; Review records canonical
   `assistant-review` final-summary and delegation-path refs.
 - `standard`: ordinary medium+ source-changing work defaults to
   `controller_intensity=standard`, `harness_capable=false`, and
   `qa_evaluation_mode=not_required`. It uses
-  `build_execution_lane=bounded_executor`: one edit/test owner during Build.
-  Review then independently dispatches Code Reviewer or records the allowed
-  fresh direct-fallback result. It requires an approved plan, Build
+  `build_execution_lane=direct_main` unless optional execution delegation has a concrete benefit.
+  Review independently dispatches newly created reviewers with fresh context. It requires an approved plan, Build
   verification, and independent review, but no harness, split-worker, or QA
   ceremony by size.
 - `strict`: for `execution_intent != prepare_only`, select for high/critical risk,
@@ -200,17 +198,15 @@ gates.
 ## Subagent, Review, and QA Separation
 
 - For ordinary medium standard work, use Code Mapper only when current files
-  or boundaries cannot be resolved directly. One bounded executor owns selected
+  or boundaries cannot be resolved directly. The actual main agent or optionally delegated execution owner handles selected
   implementation and verification work in Build. TDD
   adds RED/GREEN/REFACTOR only when the canonical decision activates it. After Build, Review
   owns independent Code Reviewer dispatch/result evidence. Code Reviewer
   reviews code quality, defects, security, architecture, and test coverage.
-- Use separated Code Writer and Builder/Tester only for high/critical risk,
-  broad/noisy/environment-heavy verification, explicit independent TDD
-  evidence, or explicit separation.
+- Choose separated Code Writer and Builder/Tester when the execution benefit warrants it;
+  risk and size do not mandate separate workers.
 - Light work implements directly, runs the selected checks and any binding project checks, and
-  performs a fresh self-review without worker or independent-review dispatch
-  evidence. Any security, high-risk, harness, or QA trigger promotes the work out
+  performs a local self-check and fresh independent completion review without implementation-worker records. Any security, high-risk, harness, or QA trigger promotes the work out
   of this lane.
 - Code Reviewer and QA Evaluator responsibilities stay separate.
 - QA Evaluator runs only when `qa_evaluation_mode=required` for `execution_intent != prepare_only`, after build/test

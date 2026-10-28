@@ -13,7 +13,8 @@ document, extra approval wait or Architect role.
    folder-only, feature-only, setup-only and contract-only splits unless a
    verified deliverable justifies the boundary.
 3. **Step/cost budget** — bound steps, rounds, time and cost where relevant;
-   direct fallback states its equivalent responsibility and evidence.
+   direct_main needs no fallback reason, and direct fallback never replaces
+   independent review.
 4. **Dependency order** — canonical packet_ids resolve exactly once; all
    prerequisites precede dependents and must become evidence-bound VERIFIED.
    Shared/unknown source writers serialize; overlap needs current runtime isolation.

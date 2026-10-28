@@ -290,7 +290,9 @@ if ruby -ryaml -e '
     preparation_fields.fetch("feature_preparation_evidence_ref")["condition"] == "feature_preparation_scope == existing_system" &&
     %w[evidence_gaps open_decisions implementation_implications recommended_next_step].all? { |name| preparation_fields.fetch(name)["required"] == true } &&
     output_text.include?("returns feature_preparation_result plus every applicable preparation artifact") &&
-    output_text.include?("excludes Build, changed-file, test, review, and final-handoff claims")
+    output_text.include?("excludes Build, changed-file, test, post-Build review, and final-handoff claims") &&
+    artifacts.fetch("triage_result").fetch("object_fields").find { |field| field["name"] == "required_agents" }.fetch("validation").include?("requested/required fresh plan review and selected research lenses/peer") &&
+    artifacts.fetch("triage_result").fetch("object_fields").find { |field| field["name"] == "required_agents" }.fetch("validation").include?("exclude post-Build code/QA acceptance and implementation roles")
   exit(valid ? 0 : 1)
 ' "$workflow_dir/contracts/input.yaml" "$workflow_dir/contracts/output.yaml" "$workflow_dir/contracts/phase-gates.yaml" "$workflow_dir/contracts/index.yaml" "$workflow_dir/contracts/handoffs.yaml" "$workflow_dir/SKILL.md"; then
     pass
@@ -457,14 +459,17 @@ test_start "medium Plan carries four triage routing values as separate fields"
 if ruby -e '
   template = File.read(ARGV.fetch(0)); phases = File.read(ARGV.fetch(1))
   triage = template[/^## Triage result$.*?(?=^## )/m]
+  packet = template[/^### Task \[ID\]:.*?(?=^## |\z)/m]
   plan_step = phases[/4\. Carry resolved routing fields.*?(?=5\.)/m]
   fields = [
     "- QA evaluation mode: [not_required | optional | required]",
     "- Harness capable: [true | false]",
-    "- Build execution lane: [inline_direct | bounded_executor | separated_workers]",
+    "- Build execution lane: [direct_main | bounded_executor | separated_workers]",
     "- Workflow state mode: [inline | journal]"
   ]
-  valid = triage && fields.all? { |field| triage.include?(field) } &&
+  packet_fields = fields.map { |field| field.sub(": [", ": [carry triage value: ") }
+  valid = packet && packet_fields.all? { |field| packet.include?(field) } &&
+    triage && fields.all? { |field| triage.include?(field) } &&
     plan_step && plan_step.gsub(/\s+/, " ").include?("QA/harness, Build lane, state")
   exit(valid ? 0 : 1)
 ' "$workflow_dir/references/plan-template.md" "$workflow_dir/references/phases.md"; then
@@ -696,7 +701,7 @@ if ruby -ryaml -e '
     plan.include?("It omits Artifact Contracts, executable task packets, slice manifests, and implementation tests.") &&
     journal.include?("Read-only display derived from implementation_steps[].execution") &&
     journal.include?("prepare_only has no executable packets.") &&
-    journal.include?("**Preparation Completion** (`execution_intent=prepare_only`) records readiness only, then proceeds directly to Done without Build, Review, or developer handoff.") &&
+    journal.include?("**Preparation Completion** (`execution_intent=prepare_only`) records readiness after any requested/required fresh plan review and selected research isolation, then proceeds to Done without Build, post-Build code/QA Review, or developer handoff.") &&
     roles.include?("## Dispatch rules by task size (`execution_intent != prepare_only`)") &&
     roles.include?("For `prepare_only`, dispatch only concretely triggered Discover or preparation roles") &&
     patterns.include?("**Skip review:** For implementation/execution work") &&
@@ -859,7 +864,7 @@ fi
 
 test_start "task journal slice and plan labels branch refs by execution intent"
 if ruby -e '
- s=File.read(ARGV[0]); labels=["Per-slice Build ref: N/A for prepare_only; typed execution ref otherwise","Per-slice Review ref: N/A for prepare_only; typed execution ref otherwise","Plan/task packet/review refs: absent for prepare_only; typed execution refs otherwise"]; exit(labels.all?{|x|s.include?(x)} ? 0 : 1)
+ s=File.read(ARGV[0]); labels=["Per-slice Build ref: N/A for prepare_only; typed execution ref otherwise","Per-slice Review ref: N/A for prepare_only; typed execution ref otherwise","Implementation plan/task packet/post-Build review refs: absent for prepare_only; typed execution refs otherwise"]; exit(labels.all?{|x|s.include?(x)} ? 0 : 1)
 ' "$workflow_dir/references/task-journal-template.md"; then pass; else fail "task-journal labeled slice and plan refs do not explicitly branch prepare-only N/A from execution typed refs"; fi
 
 test_start "both graders independently reject every plan-none mode and plan-document mutation"
@@ -871,7 +876,7 @@ if [[ -f "$helper" ]] && grep -Fq 'duplicate case id' "$helper" && grep -Fq 'omi
 
 test_start "task journal labels make prepare-only fields N/A and execution refs typed"
 if ruby -e '
- s=File.read(ARGV[0]); ok=s.include?("Plan approval: prepare_only optional readiness never waits") && s.include?("Files: N/A for prepare_only") && s.include?("Tasks: N/A for prepare_only") && s.include?("Plan/task/review refs: absent for prepare_only") && s.include?("execution_intent != prepare_only"); exit(ok ? 0 : 1)
+ s=File.read(ARGV[0]); ok=s.include?("Plan approval: prepare_only optional readiness never waits") && s.include?("Files: N/A for prepare_only") && s.include?("Tasks: N/A for prepare_only") && s.include?("Implementation plan/task/post-Build review refs: absent for prepare_only") && s.include?("execution_intent != prepare_only"); exit(ok ? 0 : 1)
 ' "$workflow_dir/references/task-journal-template.md"; then pass; else fail "task journal detailed labels do not discriminate prepare-only N/A fields from typed execution refs"; fi
 
 test_start "plan-none preparation evals assert triage and completion values and reject wrong plan modes"

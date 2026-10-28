@@ -2,7 +2,7 @@
 # The Red-Green-Refactor cycle has strict gates at each transition.
 # These are the core enforcement mechanism — violating a gate means TDD was not followed.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: phase-gates
 skill: assistant-tdd
 
@@ -67,8 +67,8 @@ gates:
     exit_assertions:
 
       - id: REF1
-        check: "The selected target, relevant regression checks, and binding project suites still pass after refactoring"
-        on_fail: "The refactoring broke a selected or binding check. Repair the regression or keep the refactor out."
+        check: "After any refactor edit, the selected target, relevant regression checks, and binding project suites pass in actual executed REFACTOR runs; with changes_made == none needed, either those executed runs pass or a validated v3 reuse_green references the original passing GREEN runs with zero new invocations, no edit after GREEN, and a current snapshot digest equal to green.reuse_digest"
+        on_fail: "The refactoring broke a selected or binding check, or reuse was not validated. Repair the regression or keep the refactor out; when GREEN failed or the current digest is unknown or differs from green.reuse_digest, run the affected checks."
 
       - id: REF2
         check: "No new behavior was added during refactoring"
@@ -88,14 +88,14 @@ invariants:
     on_fail: "Preserve existing code and report the ordering violation; never delete work to manufacture TDD evidence."
 
   - id: INV2
-    check: "The selected target runs at each phase transition (RED: right-reason failure, GREEN and REFACTOR: pass); relevant regressions and binding suites run when selected or required"
+    check: "The selected target runs at each phase transition (RED: right-reason failure, GREEN: pass; REFACTOR: current executed pass or explicit validated unchanged GREEN reuse); relevant regressions and binding suites run when selected or required"
     scope: all_cycles
     on_fail: "Run the selected target and any due regression or binding checks; record skipped or unavailable checks as gaps."
 
   - id: INV3
     check: "Each cycle follows RED → GREEN → REFACTOR order — no skipping, no reordering; only start REFACTOR after current GREEN passes, and do not close a partial delegated log as complete"
     scope: all_cycles
-    on_fail: "Return to the correct phase. Preserve actual partial phase evidence; refactor only after current GREEN passes, and require an actual matching authorizing RED plus passing GREEN and REFACTOR invocations before completion."
+    on_fail: "Return to the correct phase. Preserve actual partial phase evidence; refactor only after current GREEN passes, and require an actual matching authorizing RED plus passing GREEN plus executed REFACTOR or validated reuse_green before completion."
 
   - id: INV4
     check: "If a test passes unexpectedly in RED, the cycle stops for investigation — not silently continued"

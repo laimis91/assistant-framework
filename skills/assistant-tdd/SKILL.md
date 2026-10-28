@@ -28,8 +28,13 @@ independent; inactive TDD never needs a fabricated RED.
    production changes. Keep carried reduced-testing scope and one shared semantic progress
    guard across tests, checks, workers and sessions.
 3. **REFACTOR.** After current GREEN, improve names or remove duplication only
-   when useful; `none needed` is valid. Record actual changes and run a distinct
-   REFACTOR verification, even when no refactor was needed.
+   when useful; `none needed` is valid. Record actual changes. After edits, run affected checks. No edits after
+   GREEN and nothing changed since means no rerun: record v3 `reuse_green`
+   with `green.reuse_digest` (`contracts/output.yaml` recipe) from that passing
+   GREEN run. Reuse creates zero new invocation, result or test count.
+   Failed GREEN, an unknown digest, or a changed one reruns. Only persisted
+   packets opting into `reuse_identity_mode: detailed` add the seven-category
+   identity. Historical v2 cycle entries stay readable, without `invocation_ref` or reuse.
 
 Keep actual test identity, commands/argv, cwd, observed outcomes, and why RED
 failed for the right reason. Partial cycles remain partial; an exception needs

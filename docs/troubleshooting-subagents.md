@@ -119,10 +119,13 @@ During the one-release migration window, the installer removes only retired
 Assistant Framework lifecycle registrations, preserves unrelated custom
 configuration, and neutralizes detected stale framework entrypoints.
 
-Direct fallback is valid only after the user opts out of delegation, policy
-forbids it, or a real spawn attempt fails. Record that reason plus equivalent
-implementation, verification, and review evidence instead of treating missing
-framework runtime output as proof that subagents are unavailable.
+Direct main execution needs no fallback reason. Direct fallback is an
+execution-only label; never for review, QA or lens isolation (formal plan,
+code, finding-closure or acceptance review, QA evaluation, or selected
+research-lens isolation). When the user opts out,
+policy forbids it, or a real spawn attempt fails, record that reason and report
+required independent review as incomplete instead of substituting self-review.
+Missing framework runtime output does not prove subagents are unavailable.
 
 ## Codex writer migration
 

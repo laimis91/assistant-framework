@@ -60,11 +60,73 @@ tuples=passes.map{|p|{'review_pass_id'=>p['review_pass_id'],'scope_item_id'=>'sc
 contexts=passes.to_h do |p|
  [p['review_pass_id'], {'round'=>1,'batch_id'=>'batch','review_snapshot_id'=>'snapshot','snapshot_identity'=>snapshot,'review_pass_id'=>p['review_pass_id'],'review_attempt_id'=>p['review_pass_id']+':retry-7','review_perspective'=>p['perspective'],'assigned_scope'=>p['assigned_scope'],'scope_size'=>'small','rubric_required'=>false,'quality_principles_required'=>false}]
 end
-return_authorities=contexts.to_h{|id,context|[id,{'context'=>context,'required_coverage_tuples'=>tuples.select{|t|t['review_pass_id']==id}}]}
+return_authorities=contexts.to_h{|id,context|[id,{'producer_version'=>'9.0','historical_dispatch_binding'=>binding.merge(context.slice('batch_id','review_snapshot_id','review_pass_id','review_attempt_id')).merge('native_invocation_id'=>'native-'+id),'context'=>context,'required_coverage_tuples'=>tuples.select{|t|t['review_pass_id']==id}}]}
 replies=contexts.to_h do |id,context|
  [id, context.slice('round','batch_id','review_snapshot_id','snapshot_identity','review_pass_id','review_attempt_id','review_perspective').merge('status'=>'DONE','pass_completion_state'=>'completed','reviewed_scope'=>['scope'],'findings'=>[],'coverage_entries'=>[tuples.find{|t|t['review_pass_id']==id}.reject{|k,v|k=='review_pass_id'}.merge('status'=>'inspected_no_risk','evidence'=>'inspected source invariant')],'summary'=>'No material findings within the reviewed scope and available evidence','evidence'=>[{'source'=>'source','detail'=>'traced producer and consumer'}],'reuse_search'=>{'applicability'=>'not_applicable','applicability_reason'=>'fixture has no new capability'},'verdict'=>'clean')]
 end
+# Current v10 authority is separate from the candidate return and original v9 reader.
+current=copy(return_authorities['p1']);current['producer_version']='10.0';current.delete('historical_dispatch_binding')
+current['context'].merge!('reviewer_actor_id'=>'fresh-reviewer','native_invocation_id'=>'native:fresh-review','handoff_digest'=>'sha256:frozen-handoff','review_subject'=>'implementation')
+current['fresh_dispatch']={'actor_id'=>'fresh-reviewer','root_actor_id'=>'root','author_actor_ids'=>['author'],'prior_reviewer_actor_ids'=>['prior-reviewer'],'native_invocation_id'=>'native:fresh-review','creation_evidence_ref'=>'native:create-fresh','runtime_evidence_ref'=>'native:observed','runtime'=>'codex','fork_turns'=>'none','context_isolation'=>'fresh_self_contained','handoff_digest'=>'sha256:frozen-handoff','source_digest'=>snapshot['value'],'review_subject'=>'implementation'}
+check.call('validate_return',current,replies['p1'],true,'v10 fresh independent native review')
+{'missing_version'=>'review_version_unsupported','missing_fresh'=>'fresh_review_authority_invalid','self_review'=>'review_actor_not_fresh','old_reviewer'=>'review_actor_not_fresh','inherited_context'=>'review_context_inherited','wrong_handoff'=>'fresh_review_binding_mismatch','relabel_v9'=>'historical_review_authority_missing',
+ 'context_actor'=>'fresh_review_binding_mismatch','context_native'=>'fresh_review_binding_mismatch','fact_source'=>'fresh_review_binding_mismatch','context_subject'=>'fresh_review_binding_mismatch',
+ 'empty_authors'=>'fresh_review_authority_invalid','unknown_fact_key'=>'fresh_review_authority_invalid','codex_without_fork'=>'fresh_review_authority_invalid','fork_without_codex'=>'fresh_review_authority_invalid','blank_creation'=>'fresh_review_authority_invalid','duplicate_authors'=>'fresh_review_authority_invalid',
+ 'root_reviewer'=>'review_actor_not_fresh','isolation_not_fresh'=>'fresh_review_authority_invalid','unknown_subject'=>'fresh_review_authority_invalid'}.each do |mutation,code|
+ a=copy(current)
+ case mutation
+ when 'missing_version' then a.delete('producer_version')
+ when 'missing_fresh' then a.delete('fresh_dispatch')
+ when 'self_review' then a['fresh_dispatch']['actor_id']='author';a['context']['reviewer_actor_id']='author'
+ when 'old_reviewer' then a['fresh_dispatch']['actor_id']='prior-reviewer';a['context']['reviewer_actor_id']='prior-reviewer'
+ when 'inherited_context' then a['fresh_dispatch']['fork_turns']='all'
+ when 'wrong_handoff' then a['fresh_dispatch']['handoff_digest']='changed'
+ when 'relabel_v9' then a['producer_version']='9.0'
+ when 'context_actor' then a['context']['reviewer_actor_id']='other-reviewer'
+ when 'context_native' then a['context']['native_invocation_id']='native:other'
+ when 'fact_source' then a['fresh_dispatch']['source_digest']='sha256:other-source'
+ when 'context_subject' then a['context']['review_subject']='plan'
+ when 'empty_authors' then a['fresh_dispatch']['author_actor_ids']=[]
+ when 'unknown_fact_key' then a['fresh_dispatch']['payload_claim']='self-attested'
+ when 'codex_without_fork' then a['fresh_dispatch'].delete('fork_turns')
+ when 'fork_without_codex' then a['fresh_dispatch']['runtime']='claude'
+ when 'blank_creation' then a['fresh_dispatch']['creation_evidence_ref']=' '
+ when 'duplicate_authors' then a['fresh_dispatch']['author_actor_ids']=['author','author']
+ # The orchestrating root is never its own fresh reviewer.
+ when 'root_reviewer' then a['fresh_dispatch']['actor_id']='root';a['context']['reviewer_actor_id']='root'
+ # context_isolation and review_subject are declared enums in contracts/input.yaml.
+ when 'isolation_not_fresh' then a['fresh_dispatch']['context_isolation']='inherited'
+ when 'unknown_subject' then a['fresh_dispatch']['review_subject']='other';a['context']['review_subject']='other'
+ end
+ result=check.call('validate_return',a,replies['p1'],false,'v10 rejects '+mutation)
+ assert(result['diagnostics']==[code],mutation+' failed for wrong reason: '+result['diagnostics'].inspect)
+end
+# L2/Y1: a Codex context with any fork_turns other than none is inherited; runtime must equal its stripped
+# lowercase form, so padded or cased codex is rejected with or without fork_turns.
+[['inherited fork_turns','review_context_inherited',->(f){f['fork_turns']='None'}],
+ ['capitalized Codex runtime with fork_turns','fresh_review_authority_invalid',->(f){f['runtime']='Codex'}],
+ ['capitalized Codex runtime without fork_turns','fresh_review_authority_invalid',->(f){f['runtime']='Codex';f.delete('fork_turns')}],
+ ['uppercase CODEX runtime without fork_turns','fresh_review_authority_invalid',->(f){f['runtime']='CODEX';f.delete('fork_turns')}],
+ ['leading-space codex runtime with fork_turns','fresh_review_authority_invalid',->(f){f['runtime']=' codex'}],
+ ['trailing-space codex runtime without fork_turns','fresh_review_authority_invalid',->(f){f['runtime']='codex ';f.delete('fork_turns')}],
+ ['newline-padded codex runtime with fork_turns','fresh_review_authority_invalid',->(f){f['runtime']="codex\n"}],
+ ['newline-padded codex runtime without fork_turns','fresh_review_authority_invalid',->(f){f['runtime']="codex\n";f.delete('fork_turns')}],
+ # Non-codex runtimes are held to the same stripped lowercase form.
+ ['leading-space claude runtime without fork_turns','fresh_review_authority_invalid',->(f){f['runtime']=' claude';f.delete('fork_turns')}],
+ ['capitalized Claude runtime without fork_turns','fresh_review_authority_invalid',->(f){f['runtime']='Claude';f.delete('fork_turns')}],
+ ['trailing-space claude runtime without fork_turns','fresh_review_authority_invalid',->(f){f['runtime']='claude ';f.delete('fork_turns')}]
+].each do |label,code,mutate|
+ a=copy(current);mutate.call(a['fresh_dispatch'])
+ result=check.call('validate_return',a,replies['p1'],false,'v10 rejects '+label)
+ assert(result['diagnostics']==[code],label+' failed for wrong reason: '+result['diagnostics'].inspect)
+end
+a=copy(current);a['fresh_dispatch']['runtime']='claude';a['fresh_dispatch'].delete('fork_turns')
+check.call('validate_return',a,replies['p1'],true,'a non-codex runtime without fork_turns stays valid')
 check.call('validate_return',return_authorities['p1'],replies['p1'],true,'current valid clean return')
+# Historical v9 reading binds the original native source_digest to the frozen snapshot.
+v9_source=copy(return_authorities['p1']);v9_source['historical_dispatch_binding']['source_digest']='sha256:other-source'
+result=check.call('validate_return',v9_source,replies['p1'],false,'v9 binding with a foreign source_digest')
+assert(result['diagnostics']==['historical_review_authority_missing'],'v9 source_digest failed for wrong reason: '+result['diagnostics'].inspect)
 locator_reply=copy(replies['p1']);locator_reply['reviewed_scope']=['source.rb']
 check.call('validate_return',return_authorities['p1'],locator_reply,true,'actual inspected path differs from assigned scope ID')
 [
@@ -139,7 +201,7 @@ responses=passes.to_h do |p|
  id=p['review_pass_id'];b=copy(binding);b.merge!('native_invocation_id'=>'native-'+id,'review_pass_id'=>id,'review_attempt_id'=>contexts[id]['review_attempt_id']);d={'binding'=>b,'complete'=>true,'payload'=>JSON.generate(replies[id]),'payload_ref'=>'raw:'+id,'event_id'=>'event:'+id}
  ['event:'+id,{'identity_authority'=>{'dispatch_binding'=>b,'history_known'=>true,'records'=>[],'archives'=>{}},'delivery'=>d}]
 end
-batch_authority={'plan'=>plan,'active_attempts'=>contexts.transform_values{|c|c['review_attempt_id']},'responses'=>responses,'return_authorities'=>return_authorities,'unresolved_conflicts'=>[],'source_current'=>true,'producer_current'=>true,'source_findings'=>[],'previously_fixed'=>[],'snapshot_identity'=>snapshot,'terminal_barrier'=>barrier,'canonical_response_events'=>{'p1'=>'event:p1','p2'=>'event:p2'}}
+batch_authority={'producer_version'=>'9.0','plan'=>plan,'active_attempts'=>contexts.transform_values{|c|c['review_attempt_id']},'responses'=>responses,'return_authorities'=>return_authorities,'unresolved_conflicts'=>[],'source_current'=>true,'producer_current'=>true,'source_findings'=>[],'previously_fixed'=>[],'snapshot_identity'=>snapshot,'terminal_barrier'=>barrier,'canonical_response_events'=>{'p1'=>'event:p1','p2'=>'event:p2'}}
 check.call('validate_terminal_barrier',batch_authority,barrier,true,'complete independent terminal barrier')
 trial=copy(batch_authority);trial['plan']['expected_passes'][0]['prior_finding_visibility']='closure_ledger'
 result=check.call('validate_terminal_barrier',trial,barrier,false,'discovery cannot receive prior closure findings')
@@ -203,6 +265,89 @@ trial=copy(batch_authority);trial['producer_current']=false
 check.call('validate_terminal_barrier',trial,barrier,false,'changed producer blocks closure')
 summary={'reviewed_scope'=>['source.rb'],'rounds'=>1,'final_review_snapshot_id'=>'snapshot','final_snapshot_identity'=>snapshot,'coverage_complete'=>true,'final_batch_plan'=>plan,'coverage_ledger'=>tuples.map{|t|t.reject{|k,v|k=='review_perspective'}.merge('perspective'=>t['review_perspective'],'batch_id'=>'batch','review_snapshot_id'=>'snapshot','assigned_scope'=>['scope'],'terminal_state'=>'completed','coverage_status'=>'complete','coverage_disposition'=>'inspected_no_risk','evidence'=>'source inspected')},'batch_summaries'=>[{'started_batch_ordinal'=>1,'batch_id'=>'batch','review_snapshot_id'=>'snapshot','snapshot_identity'=>snapshot,'batch_status'=>'complete','expected_response_count'=>2,'terminal_response_count'=>2,'aggregate_rubric_recomputed'=>true}],'aggregation_ledger'=>[],'aggregated_findings'=>[],'result'=>'CLEAN','fixed_items'=>[],'nits'=>[],'evidence_bounded_claim'=>'No material findings within the reviewed scope and available evidence'}
 check.call('validate_aggregate_accounting',batch_authority,summary,true,'lossless complete clean aggregate')
+# Existing historical-failure controls do not cover current native creation
+# failure before an actor exists. Keep the real failure and frozen assignment;
+# neither the barrier nor aggregate may invent coverage or a clean result.
+creation_failure=copy(batch_authority);creation_failure.merge!('producer_version'=>'10.0','review_subject'=>'implementation','responses'=>{})
+creation_failure['return_authorities'].each_value{|a|a['producer_version']='10.0';a.delete('historical_dispatch_binding');a.delete('fresh_dispatch')}
+creation_failure['canonical_response_events'].transform_values!{|_|nil}
+creation_summary=copy(summary);creation_summary.delete('evidence_bounded_claim');creation_summary.merge!('reviewed_scope'=>[],'coverage_complete'=>false,'result'=>'HAS_REMAINING_ITEMS','coverage_gaps'=>['Native reviewer creation unavailable'])
+creation_summary['batch_summaries'][0].merge!('batch_status'=>'incomplete','terminal_response_count'=>0,'aggregate_rubric_recomputed'=>false)
+creation_failure['terminal_barrier']['pass_attempt_ledger'].each do |entry|
+ id=entry['review_pass_id'];failure='native creation unavailable:'+id
+ entry['attempts'][0].merge!('terminal_state'=>'failed','failure_kind'=>'transport','failure_evidence'=>failure,'response_events'=>[])
+ row=creation_summary['coverage_ledger'].find{|r|r['review_pass_id']==id}
+ row.merge!('terminal_state'=>'failed','coverage_status'=>'incomplete','coverage_disposition'=>'incomplete','coverage_gap_id'=>'creation-gap:'+id,'evidence'=>failure)
+ creation_summary['aggregation_ledger']<<{'source_provenance'=>[{'source_kind'=>'review_pass','source_id'=>id}],'disposition'=>'coverage_gap','source_coverage_gap_ids'=>['creation-gap:'+id],'rationale'=>failure}
+end
+result=check.call('validate_terminal_barrier',creation_failure,creation_failure['terminal_barrier'],true,'v10 typed creation failure needs no fabricated actor')
+assert(result['result']['coverage_complete']==false,'native creation failure became complete coverage')
+check.call('validate_aggregate_accounting',creation_failure,creation_summary,true,'v10 creation failure retains truthful incomplete aggregate')
+historical_failure=copy(creation_failure);historical_failure['producer_version']='9.0'
+# Every return authority carries the top-level label; mixing 9.0 with 10.0 returns is relabelling.
+historical_failure['return_authorities'].each_value{|a|a['producer_version']='9.0'}
+historical_summary=copy(creation_summary);historical_summary['reviewed_scope']=copy(summary['reviewed_scope'])
+check.call('validate_aggregate_accounting',historical_failure,historical_summary,true,'historical v9 failure retains original nonempty scope verdict')
+check.call('validate_aggregate_accounting',historical_failure,creation_summary,false,'historical v9 does not acquire current zero-inspection allowance')
+bad=copy(creation_summary);bad['reviewed_scope']=['never-inspected.rb']
+check.call('validate_aggregate_accounting',creation_failure,bad,false,'v10 no-response failure cannot invent inspected scope')
+bad=copy(summary);bad['reviewed_scope']=[]
+check.call('validate_aggregate_accounting',batch_authority,bad,false,'complete review cannot erase inspected scope')
+assert(!ReviewTools.summary_projection_valid?({'plan'=>plan,'review_snapshot_id'=>'snapshot','snapshot_identity'=>snapshot,'producer_version'=>'10.0'},bad),'current v10 complete projection accepted empty inspected scope')
+# Retain the real first response while only the other actor creation fails.
+# This is distinct from the all-failed/no-response case above.
+mixed_failure=copy(batch_authority);mixed_failure.merge!('producer_version'=>'10.0','review_subject'=>'implementation')
+mixed_failure['return_authorities']['p1']=copy(current)
+mixed_failure['return_authorities']['p2']=copy(creation_failure['return_authorities']['p2'])
+retained= mixed_failure['responses']['event:p1']
+native=copy(retained['identity_authority']['dispatch_binding']);native.merge!('producer_version'=>'10.0','native_invocation_id'=>current['fresh_dispatch']['native_invocation_id'])
+retained['identity_authority']['dispatch_binding']=copy(native);retained['delivery']['binding']=copy(native)
+mixed_failure['responses'].delete(mixed_failure['canonical_response_events']['p2'])
+mixed_failure['canonical_response_events']['p2']=nil
+mixed_failure['terminal_barrier']['pass_attempt_ledger'][1]=copy(creation_failure['terminal_barrier']['pass_attempt_ledger'][1])
+mixed_summary=copy(creation_summary);mixed_summary['reviewed_scope']=copy(replies['p1']['reviewed_scope'])
+mixed_summary['batch_summaries'][0]['terminal_response_count']=1
+mixed_summary['coverage_ledger'][0]=copy(summary['coverage_ledger'][0])
+mixed_summary['aggregation_ledger'].reject!{|row|row['source_provenance'][0]['source_id']=='p1'}
+check.call('validate_aggregate_accounting',mixed_failure,mixed_summary,true,'mixed partial review retains known inspection')
+bad=copy(mixed_summary);bad['reviewed_scope']=[]
+check.call('validate_aggregate_accounting',mixed_failure,bad,false,'mixed partial review cannot erase inspected scope')
+# A validated inactive same-snapshot return remains inspection evidence even
+# when its active retry and the other pass both fail before any response.
+# Original fresh actor authority remains independent of the failed active retry.
+retained_failure=copy(creation_failure)
+prior=copy(mixed_failure['responses']['event:p1']);prior['return_authority']=copy(current)
+retained_failure['responses']['event:p1']=prior
+next_attempt='p1:creation-failed-retry'
+retained_failure['active_attempts']['p1']=next_attempt
+retained_failure['return_authorities']['p1']['context']['review_attempt_id']=next_attempt
+retained_failure['return_authorities']['p1']['context']['review_subject']='implementation'
+prior_attempt=copy(barrier['pass_attempt_ledger'][0]['attempts'][0])
+prior_attempt['response_events'][0]['disposition']='stale'
+failed_attempt=copy(creation_failure['terminal_barrier']['pass_attempt_ledger'][0]['attempts'][0])
+failed_attempt.merge!('review_attempt_id'=>next_attempt,'attempt_count'=>2)
+retained_failure['terminal_barrier']['pass_attempt_ledger'][0].merge!('active_terminal_attempt_id'=>next_attempt,'attempts'=>[prior_attempt,failed_attempt])
+retained_summary=copy(creation_summary);retained_summary['reviewed_scope']=copy(replies['p1']['reviewed_scope'])
+check.call('validate_aggregate_accounting',retained_failure,retained_summary,true,'inactive validated inspection survives active creation failure')
+assert(retained_summary['coverage_complete']==false && retained_summary['batch_summaries'][0]['terminal_response_count']==0,'retained scope changed active coverage or counts')
+assert(ReviewTools.summary_projection_valid?({'plan'=>plan,'review_snapshot_id'=>'snapshot','snapshot_identity'=>snapshot},retained_summary),'offline incomplete projection assumed absent inactive inspection history')
+bad=copy(retained_summary);bad['reviewed_scope']=[]
+check.call('validate_aggregate_accounting',retained_failure,bad,false,'active zero-response count cannot erase retained inspection')
+bad=copy(retained_summary);bad['reviewed_scope']=['unrelated-boundary']
+check.call('validate_aggregate_accounting',retained_failure,bad,false,'nonempty substitute cannot erase known retained scope')
+bad=copy(retained_failure);bad['responses']['event:p1'].delete('return_authority')
+check.call('validate_aggregate_accounting',bad,retained_summary,false,'inactive current actor needs its independently retained original authority')
+bad=copy(retained_failure);original=bad['responses']['event:p1']['return_authority']
+original['context']['native_invocation_id']='other-native';original['fresh_dispatch']['native_invocation_id']='other-native'
+check.call('validate_aggregate_accounting',bad,retained_summary,false,'retained original fresh authority must match original native invocation')
+bad=copy(creation_summary);bad.merge!('coverage_complete'=>true,'result'=>'CLEAN','evidence_bounded_claim'=>'No material findings within the reviewed scope and available evidence')
+check.call('validate_aggregate_accounting',creation_failure,bad,false,'v10 no-actor failure cannot certify CLEAN')
+bad=copy(creation_failure['terminal_barrier']);bad['pass_attempt_ledger'][0]['attempts'][0].delete('failure_evidence')
+check.call('validate_terminal_barrier',creation_failure,bad,false,'v10 creation failure retains real failure evidence')
+bad=copy(creation_failure['terminal_barrier']);bad['pass_attempt_ledger'][0]['attempts'][0]['terminal_state']='completed'
+check.call('validate_terminal_barrier',creation_failure,bad,false,'v10 response-free judgment cannot become completed')
+bad=copy(creation_failure);bad['return_authorities']['p1'].delete('required_coverage_tuples')
+check.call('validate_terminal_barrier',bad,bad['terminal_barrier'],false,'v10 no-actor failure still needs frozen coverage authority')
 trial=copy(summary);trial['coverage_gaps']=['Original assigned consumer has not been inspected']
 result=check.call('validate_aggregate_accounting',batch_authority,trial,false,'explicit coverage gap cannot certify complete CLEAN')
 assert(result['diagnostics']==['aggregate_explicit_coverage_gaps'],'explicit gap contradiction failed for wrong reason')
@@ -238,7 +383,7 @@ ct={'review_pass_id'=>'pc','scope_item_id'=>'scope','applicable_concern'=>'contr
 closure_authority['plan']['expected_passes']<<cp;closure_authority['plan']['required_coverage_tuples']<<ct
 closure_authority['plan']['topology'].merge!('closure_verification_required'=>true,'max_required_responses'=>3)
 cc=copy(contexts['p2']);cc.merge!('review_pass_id'=>'pc','review_attempt_id'=>'pc:attempt','review_perspective'=>'closure_verification','previously_fixed'=>[original])
-closure_authority['return_authorities']['pc']={'context'=>cc,'required_coverage_tuples'=>[ct]}
+closure_authority['return_authorities']['pc']={'producer_version'=>'9.0','historical_dispatch_binding'=>binding.merge(cc.slice('batch_id','review_snapshot_id','review_pass_id','review_attempt_id')).merge('native_invocation_id'=>'native-pc'),'context'=>cc,'required_coverage_tuples'=>[ct]}
 closure_authority['active_attempts']['pc']='pc:attempt';closure_authority['canonical_response_events']['pc']='event:pc'
 cr=copy(replies['p2']);cr.merge!('review_pass_id'=>'pc','review_attempt_id'=>'pc:attempt','review_perspective'=>'closure_verification','closure_results'=>[{'aggregate_finding_id'=>'aggregate:old','status'=>'verified_closed','evidence'=>'fresh closure observed'}]);cr['coverage_entries']=[ct.reject{|k,v|k=='review_pass_id'}.merge('status'=>'inspected_no_risk','evidence'=>'fresh closure observed')]
 cb=copy(binding);cb.merge!('native_invocation_id'=>'native-pc','review_pass_id'=>'pc','review_attempt_id'=>'pc:attempt')
@@ -333,6 +478,7 @@ repaired['active_attempts']['p1']=new_attempt;repaired['return_authorities']['p1
 new_reply=copy(replies['p1']);new_reply['review_attempt_id']=new_attempt
 new_response=copy(responses['event:p1']);new_response['identity_authority']['dispatch_binding'].merge!('native_invocation_id'=>'native-p1-repair','review_attempt_id'=>new_attempt);new_response['delivery'].merge!('binding'=>copy(new_response['identity_authority']['dispatch_binding']),'event_id'=>new_event,'payload_ref'=>'raw:p1:repair','payload'=>JSON.generate(new_reply))
 repaired['responses'][new_event]=new_response
+repaired['return_authorities']['p1']['historical_dispatch_binding']=copy(new_response['identity_authority']['dispatch_binding'])
 attempts=repaired['terminal_barrier']['pass_attempt_ledger'][0]['attempts'];attempts[0]['response_events'][0]['disposition']='stale'
 next_attempt=copy(attempts[0]);next_attempt.merge!('attempt_count'=>2,'review_attempt_id'=>new_attempt,'repair_disposition'=>'repaired');next_attempt['response_events']=[{'response_event_id'=>new_event,'dispatch_attempt_id'=>new_attempt,'disposition'=>'active_terminal'}];attempts<<next_attempt
 repaired['terminal_barrier']['pass_attempt_ledger'][0]['active_terminal_attempt_id']=new_attempt
@@ -367,6 +513,295 @@ assert(ReviewTools.summary_projection_valid?(projection,long_summary),'positive 
 long_summary['rounds']=10
 assert(!ReviewTools.summary_projection_valid?(projection,long_summary),'batch count mismatch accepted')
 
+# Complete two-pass v10 barrier: every pass is a newly created actor under one root.
+v10_fact=->(id,actor,subject){{'actor_id'=>actor,'root_actor_id'=>'root','author_actor_ids'=>['author'],'prior_reviewer_actor_ids'=>[],'native_invocation_id'=>'native:'+actor,'creation_evidence_ref'=>'native:create-'+actor,'runtime_evidence_ref'=>'native:observed-'+actor,'runtime'=>'codex','fork_turns'=>'none','context_isolation'=>'fresh_self_contained','handoff_digest'=>'sha256:handoff-'+id,'source_digest'=>snapshot['value'],'review_subject'=>subject}}
+set_fact=->(a,id,fact){ra=a['return_authorities'][id];ra['fresh_dispatch']=fact;ra['context'].merge!('reviewer_actor_id'=>fact['actor_id'],'native_invocation_id'=>fact['native_invocation_id'],'handoff_digest'=>fact['handoff_digest'],'review_subject'=>fact['review_subject'])}
+set_native=->(response,changes){nb=response['identity_authority']['dispatch_binding'];nb.merge!(changes);response['delivery']['binding']=copy(nb)}
+build_v10=lambda do |subject|
+ a=copy(batch_authority);a.merge!('producer_version'=>'10.0','review_subject'=>subject)
+ {'p1'=>'reviewer-1','p2'=>'reviewer-2'}.each do |id,actor|
+  a['return_authorities'][id]['producer_version']='10.0';a['return_authorities'][id].delete('historical_dispatch_binding')
+  fact=v10_fact.(id,actor,subject);set_fact.(a,id,fact)
+  set_native.(a['responses']['event:'+id],'producer_version'=>'10.0','native_invocation_id'=>fact['native_invocation_id'])
+ end
+ a
+end
+v10=build_v10.('implementation')
+v10_summary=copy(summary);v10_summary['reviewed_scope']=['scope']
+result=check.call('validate_terminal_barrier',v10,v10['terminal_barrier'],true,'complete two-pass v10 barrier')
+assert(result['result']=={'terminal_pass_count'=>2,'coverage_complete'=>true},'complete v10 barrier result changed')
+result=check.call('validate_aggregate_accounting',v10,v10_summary,true,'complete two-pass v10 aggregate')
+assert(result.dig('result','result')=='CLEAN' && !result['result'].key?('request_plan_reconciliation'),'implementation review acquired reconciliation')
+assert(result['result']=={'producer_version'=>'10.0','coverage_complete'=>true,'result'=>'CLEAN','source_finding_count'=>0},'aggregate result does not echo producer_version: '+result['result'].inspect)
+lost_scope=copy(v10_summary);lost_scope['reviewed_scope']=['unrelated-scope']
+result=check.call('validate_aggregate_accounting',v10,lost_scope,false,'v10 aggregate cannot drop retained inspected scope')
+assert(result['diagnostics']==['aggregate_scope_lost'],'lost scope failed for wrong reason: '+result['diagnostics'].inspect)
+[
+ ['two passes share one actor','review_actor_reused',->(a){set_fact.(a,'p2',v10_fact.('p2','reviewer-1','implementation'))}],
+ ['passes under different roots','review_root_mismatch',->(a){f=v10_fact.('p2','reviewer-2','implementation');f['root_actor_id']='other-root';set_fact.(a,'p2',f)}],
+ ['pass bound to another review subject','review_subject_mismatch',->(a){set_fact.(a,'p2',v10_fact.('p2','reviewer-2','plan'))}],
+ ['current authority relabelled with fabricated v9 binding','review_version_relabelled',->(a){ra=a['return_authorities']['p1'];ra.delete('fresh_dispatch');ra['producer_version']='9.0';ra['historical_dispatch_binding']=a['responses']['event:p1']['identity_authority']['dispatch_binding'].merge('producer_version'=>'9.0')}],
+ ['top-level 9.0 label over current v10 returns','review_version_relabelled',->(a){a['producer_version']='9.0'}],
+ ['top-level 9.0 label over one current v10 return','review_version_relabelled',->(a){a['producer_version']='9.0';ra=a['return_authorities']['p2'];ra.delete('fresh_dispatch');ra['producer_version']='9.0';ra['historical_dispatch_binding']=a['responses']['event:p2']['identity_authority']['dispatch_binding'].merge('producer_version'=>'9.0')}]
+].each do |label,code,mutate|
+ a=copy(v10);mutate.call(a)
+ result=check.call('validate_terminal_barrier',a,a['terminal_barrier'],false,'v10 barrier rejects '+label)
+ assert(result['diagnostics']==[code],label+' failed for wrong reason: '+result['diagnostics'].inspect)
+end
+# A v9 reader cannot accept a fabricated v9 binding for a native v10 invocation.
+[['9.0','v9 label'],['10.0','copied v10 label']].each do |label_version,label|
+ a=copy(batch_authority);native=a['responses']['event:p1']
+ set_native.(native,'producer_version'=>'10.0')
+ a['return_authorities']['p1']['historical_dispatch_binding']=native['identity_authority']['dispatch_binding'].merge('producer_version'=>label_version)
+ result=check.call('validate_terminal_barrier',a,a['terminal_barrier'],false,'fabricated historical binding with '+label+' over native v10')
+ assert(result['diagnostics']==['historical_review_authority_missing'],'fabricated v9 binding failed for wrong reason: '+result['diagnostics'].inspect)
+end
+# A retry is a new actor; the retained stale attempt actor stays in the comparison.
+stale=copy(v10);retry_attempt='p1:retry-8';retry_event='event:p1:retry-8'
+stale['responses']['event:p1']['return_authority']=copy(v10['return_authorities']['p1'])
+retry_fact=v10_fact.('p1','reviewer-3','implementation');retry_fact['prior_reviewer_actor_ids']=['reviewer-1']
+set_fact.(stale,'p1',retry_fact);stale['return_authorities']['p1']['context']['review_attempt_id']=retry_attempt
+stale['active_attempts']['p1']=retry_attempt;stale['canonical_response_events']['p1']=retry_event
+retry_reply=copy(replies['p1']);retry_reply['review_attempt_id']=retry_attempt
+retry_response=copy(stale['responses']['event:p1']);retry_response.delete('return_authority')
+set_native.(retry_response,'review_attempt_id'=>retry_attempt,'native_invocation_id'=>retry_fact['native_invocation_id'])
+retry_response['delivery'].merge!('event_id'=>retry_event,'payload_ref'=>'raw:p1:retry-8','payload'=>JSON.generate(retry_reply))
+stale['responses'][retry_event]=retry_response
+stale_ledger=stale['terminal_barrier']['pass_attempt_ledger'][0];stale_ledger['attempts'][0]['response_events'][0]['disposition']='stale'
+retry_entry=copy(stale_ledger['attempts'][0]);retry_entry.merge!('attempt_count'=>2,'review_attempt_id'=>retry_attempt)
+retry_entry['response_events']=[{'response_event_id'=>retry_event,'dispatch_attempt_id'=>retry_attempt,'disposition'=>'active_terminal'}]
+stale_ledger['attempts']<<retry_entry;stale_ledger['active_terminal_attempt_id']=retry_attempt
+check.call('validate_aggregate_accounting',stale,v10_summary,true,'v10 retry by a new actor retains stale attempt evidence')
+[
+ ['retry reuses stale attempt actor','review_actor_reused',->(a){f=v10_fact.('p1','reviewer-1','implementation');set_fact.(a,'p1',f);a['responses']['event:p1:retry-8']['identity_authority']['dispatch_binding']['native_invocation_id']=f['native_invocation_id'];set_native.(a['responses']['event:p1:retry-8'],{})}],
+ ['other pass reuses stale attempt actor','review_actor_reused',->(a){f=v10_fact.('p2','reviewer-1','implementation');set_fact.(a,'p2',f);set_native.(a['responses']['event:p2'],'native_invocation_id'=>f['native_invocation_id'])}],
+ ['retry omits earlier attempt actor from prior reviewers','review_prior_actor_missing',->(a){a['return_authorities']['p1']['fresh_dispatch']['prior_reviewer_actor_ids']=[]}],
+ ['stale attempt under another root','review_root_mismatch',->(a){a['responses']['event:p1']['return_authority']['fresh_dispatch']['root_actor_id']='other-root'}],
+ ['stale v10 attempt without its retained return authority','retained_review_authority_missing',->(a){a['responses']['event:p1'].delete('return_authority')}],
+ ['retained inactive authority relabelled 9.0 under a 10.0 aggregate','review_version_relabelled',->(a){a['responses']['event:p1']['return_authority']['producer_version']='9.0'}],
+ ['retained authority binds another actor to the active attempt','review_actor_mismatch',->(a){ra=copy(a['return_authorities']['p1']);ra['fresh_dispatch']['actor_id']='reviewer-9';ra['context']['reviewer_actor_id']='reviewer-9';a['responses']['event:p1:retry-8']['return_authority']=ra}]
+].each do |label,code,mutate|
+ a=copy(stale);mutate.call(a)
+ result=check.call('validate_aggregate_accounting',a,v10_summary,false,'v10 aggregate rejects '+label)
+ assert(result['diagnostics']==[code],label+' failed for wrong reason: '+result['diagnostics'].inspect)
+end
+# Plan and final acceptance reconcile the original request and approved plan.
+remaining_summary=copy(v10_summary);remaining_summary.delete('evidence_bounded_claim');remaining_summary['result']='HAS_REMAINING_ITEMS'
+full={'original_request_ref'=>'request:original','approved_plan_ref'=>'plan:approved','required_requirement_ids'=>%w[R1 R2],'observed_requirement_ids'=>%w[R1 R2],'unresolved_requirement_ids'=>[],'unfinished_task_wide_work'=>[],'unresolved_finding_ids'=>[]}
+%w[plan acceptance].each do |subject|
+ a=build_v10.(subject);a['request_plan_reconciliation']=copy(full)
+ result=check.call('validate_aggregate_accounting',a,v10_summary,true,subject+' review with full request/plan coverage is CLEAN')
+ assert(result.dig('result','result')=='CLEAN' && result.dig('result','request_plan_reconciliation')==full,subject+' reconciliation not echoed unchanged')
+ check.call('validate_aggregate_accounting',a,remaining_summary,false,subject+' full coverage cannot report remaining items')
+ [
+  ['missing requirement','request_coverage_missing',->(r){r['observed_requirement_ids']=['R1']}],
+  ['absent observed list','request_coverage_missing',->(r){r.delete('observed_requirement_ids')}],
+  ['unresolved requirement','request_plan_incomplete',->(r){r['unresolved_requirement_ids']=['R2']}],
+  ['unresolved finding','request_plan_incomplete',->(r){r['unresolved_finding_ids']=['aggregate:open']}],
+  ['unknown unresolved requirement list','request_plan_incomplete',->(r){r.delete('unresolved_requirement_ids')}],
+  ['unknown unresolved finding list','request_plan_incomplete',->(r){r.delete('unresolved_finding_ids')}]
+ ].concat(subject=='acceptance' ? [
+  ['unfinished task-wide work','request_plan_incomplete',->(r){r['unfinished_task_wide_work']=['documentation update']}],
+  ['unknown unfinished work list','request_plan_incomplete',->(r){r.delete('unfinished_task_wide_work')}]
+ ] : []).each do |label,code,mutate|
+  b=copy(a);mutate.call(b['request_plan_reconciliation'])
+  result=check.call('validate_aggregate_accounting',b,v10_summary,false,subject+' '+label+' cannot be CLEAN')
+  assert(result['diagnostics']==[code],label+' failed for wrong reason: '+result['diagnostics'].inspect)
+  result=check.call('validate_aggregate_accounting',b,remaining_summary,true,subject+' '+label+' remains HAS_REMAINING_ITEMS')
+  assert(result.dig('result','request_plan_reconciliation')==b['request_plan_reconciliation'],label+' reconciliation not echoed')
+ end
+ [
+  ['foreign observed requirement','request_coverage_foreign',->(r){r['observed_requirement_ids']=%w[R1 R2 R9]}],
+  ['foreign unresolved requirement','request_coverage_foreign',->(r){r['unresolved_requirement_ids']=['R9']}],
+  ['duplicate observed requirement','request_coverage_duplicate',->(r){r['observed_requirement_ids']=%w[R1 R1 R2]}],
+  ['duplicate required requirement','request_coverage_duplicate',->(r){r['required_requirement_ids']=%w[R1 R1 R2]}],
+  ['empty required requirements','request_coverage_unknown',->(r){r['required_requirement_ids']=[]}],
+  ['blank unfinished work','request_coverage_unknown',->(r){r['unfinished_task_wide_work']=['']}],
+  ['undeclared field','request_coverage_unknown',->(r){r['checked_boxes']=['R1']}],
+  ['missing approved plan','request_plan_binding_missing',->(r){r.delete('approved_plan_ref')}]
+ ].each do |label,code,mutate|
+  b=copy(a);mutate.call(b['request_plan_reconciliation'])
+  [v10_summary,remaining_summary].each do |s|
+   result=check.call('validate_aggregate_accounting',b,s,false,subject+' rejects '+label)
+   assert(result['diagnostics']==[code],label+' failed for wrong reason: '+result['diagnostics'].inspect)
+  end
+ end
+ # Plan review observes allocation: planned unfinished task-wide work is not gated.
+ if subject=='plan'
+  [['planned unfinished work',->(r){r['unfinished_task_wide_work']=['documentation update']}],['absent unfinished work',->(r){r.delete('unfinished_task_wide_work')}]].each do |label,mutate|
+   b=copy(a);mutate.call(b['request_plan_reconciliation'])
+   result=check.call('validate_aggregate_accounting',b,v10_summary,true,'plan review with '+label+' is CLEAN')
+   assert(result.dig('result','result')=='CLEAN' && result.dig('result','request_plan_reconciliation')==b['request_plan_reconciliation'],'plan '+label+' not CLEAN/echoed')
+   check.call('validate_aggregate_accounting',b,remaining_summary,false,'plan review with '+label+' cannot report remaining items')
+  end
+ end
+ b=copy(a);b.delete('request_plan_reconciliation')
+ result=check.call('validate_aggregate_accounting',b,remaining_summary,false,subject+' review needs request/plan reconciliation')
+ assert(result['diagnostics']==['request_plan_binding_missing'],'missing reconciliation failed for wrong reason')
+ b=copy(a);set_fact.(b,'p2',v10_fact.('p2','reviewer-2','implementation'))
+ result=check.call('validate_aggregate_accounting',b,v10_summary,false,subject+' aggregate rejects implementation-bound pass')
+ assert(result['diagnostics']==['review_subject_mismatch'],'subject mismatch failed for wrong reason')
+end
+
+# D2: trivial/small light review is one newly created fresh pass covering both
+# trivial_small concerns; its post-fix re-review folds closure into one new pass.
+light_p='light_contract_and_runtime'
+light_of=lambda do |base,base_summary|
+ a=copy(base);s=copy(base_summary)
+ lp={'review_pass_id'=>'p1','perspective'=>light_p,'assigned_scope'=>['scope'],'coverage_obligations'=>['contract','runtime'],'prior_finding_visibility'=>'none'}
+ lt=lp['coverage_obligations'].map{|o|{'review_pass_id'=>'p1','scope_item_id'=>'scope','applicable_concern'=>'contract','review_perspective'=>light_p,'coverage_obligation'=>o}}
+ a['plan']['expected_passes']=[lp];a['plan']['required_coverage_tuples']=lt
+ a['plan']['topology'].merge!('discovery_pass_count'=>1,'max_required_responses'=>1,'light_review'=>true);a['controller_intensity']='light'
+ %w[active_attempts return_authorities canonical_response_events].each{|k|a[k].delete('p2')}
+ a['responses'].delete('event:p2');a['terminal_barrier']['pass_attempt_ledger'].reject!{|e|e['review_pass_id']=='p2'}
+ ra=a['return_authorities']['p1'];ra['context']['review_perspective']=light_p;ra['required_coverage_tuples']=lt
+ reply=JSON.parse(a['responses']['event:p1']['delivery']['payload'])
+ reply['review_perspective']=light_p;reply['coverage_entries']=lt.map{|t|t.reject{|k,_|k=='review_pass_id'}.merge('status'=>'inspected_no_risk','evidence'=>'inspected both concerns')}
+ a['responses']['event:p1']['delivery']['payload']=JSON.generate(reply)
+ s['final_batch_plan']=copy(a['plan'])
+ s['coverage_ledger']=lt.map{|t|t.reject{|k,_|k=='review_perspective'}.merge('perspective'=>light_p,'batch_id'=>'batch','review_snapshot_id'=>'snapshot','assigned_scope'=>['scope'],'terminal_state'=>'completed','coverage_status'=>'complete','coverage_disposition'=>'inspected_no_risk','evidence'=>'source inspected')}
+ s['batch_summaries'][0].merge!('expected_response_count'=>1,'terminal_response_count'=>1)
+ [a,s]
+end
+light_reply=->(a){JSON.parse(a['responses']['event:p1']['delivery']['payload'])}
+set_light_reply=->(a,r){a['responses']['event:p1']['delivery']['payload']=JSON.generate(r)}
+light,light_summary=light_of.(batch_authority,summary)
+result=check.call('validate_terminal_barrier',light,light['terminal_barrier'],true,'historical-label one-pass light trivial/small barrier')
+assert(result['result']=={'terminal_pass_count'=>1,'coverage_complete'=>true},'light barrier result changed')
+result=check.call('validate_aggregate_accounting',light,light_summary,true,'one-pass light trivial/small aggregate')
+assert(result['result']=={'producer_version'=>'9.0','coverage_complete'=>true,'result'=>'CLEAN','source_finding_count'=>0},'light aggregate result did not echo producer_version: '+result['result'].inspect)
+v10_light,v10_light_summary=light_of.(v10,v10_summary)
+result=check.call('validate_aggregate_accounting',v10_light,v10_light_summary,true,'current v10 one-pass light aggregate')
+assert(result.dig('result','producer_version')=='10.0' && result.dig('result','result')=='CLEAN','v10 light aggregate result did not echo producer_version')
+trivial=copy(v10_light);trivial['plan']['scope_size']='trivial';trivial_summary=copy(v10_light_summary);trivial_summary['final_batch_plan']=copy(trivial['plan'])
+check.call('validate_aggregate_accounting',trivial,trivial_summary,true,'trivial scope also uses one light pass')
+# Historical two-pass small batches stay valid (batch_authority above); light topology is exact.
+[
+ ['light review with separate closure pass','topology_light_closure_invalid',->(a){a['plan']['topology']['closure_verification_required']=true}],
+ ['light pass at medium scope','topology_pass_mismatch',->(a){a['plan']['scope_size']='medium'}],
+ ['one-pass trivial/small with a narrow perspective','topology_pass_mismatch',->(a){a['plan']['expected_passes'][0]['perspective']='contract_and_test_oracle'}],
+ ['two-pass count with one light pass','topology_pass_mismatch',->(a){a['plan']['topology']['discovery_pass_count']=2}],
+ ['light count mismatch','topology_count_mismatch',->(a){a['plan']['topology']['max_required_responses']=2}],
+ ['first light review cannot receive prior findings','plan_visibility_mismatch',->(a){a['plan']['expected_passes'][0]['prior_finding_visibility']='closure_ledger'}]
+].each do |label,code,mutate|
+ a=copy(v10_light);mutate.call(a)
+ result=check.call('validate_terminal_barrier',a,a['terminal_barrier'],false,'light topology rejects '+label)
+ assert(result['diagnostics']==[code],label+' failed for wrong reason: '+result['diagnostics'].inspect)
+end
+# K4: the one-pass light topology requires the explicit indicator and the caller's light intensity.
+[
+ ['one pass without light_review','topology_light_review_missing',->(a){a['plan']['topology'].delete('light_review')}],
+ ['one pass with light_review false','topology_light_review_missing',->(a){a['plan']['topology']['light_review']=false}],
+ ['light_review under standard intensity','topology_light_intensity_mismatch',->(a){a['controller_intensity']='standard'}],
+ ['light_review under strict intensity','topology_light_intensity_mismatch',->(a){a['controller_intensity']='strict'}],
+ ['light_review without caller intensity','topology_light_intensity_mismatch',->(a){a.delete('controller_intensity')}],
+ ['unknown controller intensity','controller_intensity_invalid',->(a){a['controller_intensity']='heavy'}],
+ ['non-boolean light_review','plan_schema_invalid',->(a){a['plan']['topology']['light_review']='light'}]
+].each do |label,code,mutate|
+ a=copy(v10_light);mutate.call(a)
+ result=check.call('validate_terminal_barrier',a,a['terminal_barrier'],false,'light indicator rejects '+label)
+ assert(result['diagnostics']==[code],label+' failed for wrong reason: '+result['diagnostics'].inspect)
+end
+%w[standard strict].each do |intensity|
+ a=copy(batch_authority);a['controller_intensity']=intensity
+ check.call('validate_terminal_barrier',a,a['terminal_barrier'],true,'small '+intensity+' keeps the two-pass topology')
+ a['plan']['topology']['light_review']=true
+ result=check.call('validate_terminal_barrier',a,a['terminal_barrier'],false,'light_review on a two-pass small '+intensity+' batch')
+ assert(result['diagnostics']==['topology_light_review_invalid'],'two-pass light_review failed for wrong reason: '+result['diagnostics'].inspect)
+end
+two_light=copy(batch_authority);two_light['plan']['expected_passes'][1]['perspective']=light_p
+result=check.call('validate_terminal_barrier',two_light,barrier,false,'two-pass small batch cannot substitute the light pass')
+assert(result['diagnostics']==['topology_pass_mismatch'],'two-pass light substitution failed for wrong reason: '+result['diagnostics'].inspect)
+# Post-fix light re-review: one new fresh pass also verifies closure.
+fixed_light,fixed_light_summary=light_of.(batch_authority,summary)
+fixed_light['plan']['expected_passes'][0]['prior_finding_visibility']='closure_ledger'
+fixed_light['return_authorities']['p1']['context']['previously_fixed']=[original]
+fixed_light.merge!('previously_fixed'=>[original],'historical_fixed_findings'=>[old_source],'source_findings'=>[old_source])
+r=light_reply.(fixed_light);r['closure_results']=[{'aggregate_finding_id'=>'aggregate:old','status'=>'verified_closed','evidence'=>'fresh light re-review observed closure'}];set_light_reply.(fixed_light,r)
+fixed_light_summary['final_batch_plan']=copy(fixed_light['plan'])
+fixed_light_summary.merge!('aggregation_ledger'=>[fixed_row],'fixed_items'=>[{'aggregate_finding_id'=>'aggregate:old','severity'=>'must-fix','file'=>'source.rb','description'=>'prior finding fixed','fixed_in_round'=>1}],'closure_results'=>r['closure_results'],'result'=>'ISSUES_FIXED')
+result=check.call('validate_aggregate_accounting',fixed_light,fixed_light_summary,true,'single fresh light re-review verifies closure')
+assert(result.dig('result','result')=='ISSUES_FIXED','light re-review result changed')
+check.call('validate_return',fixed_light['return_authorities']['p1'],r,true,'light re-review return carries closure results')
+no_closure=copy(r);no_closure.delete('closure_results')
+result=check.call('validate_return',fixed_light['return_authorities']['p1'],no_closure,false,'light re-review must return closure results')
+assert(result['diagnostics']==['return_schema_invalid'],'missing light closure failed for wrong reason: '+result['diagnostics'].inspect)
+foreign=copy(r);foreign['closure_results'][0]['aggregate_finding_id']='aggregate:other'
+result=check.call('validate_return',fixed_light['return_authorities']['p1'],foreign,false,'light re-review closure IDs are exact')
+assert(result['diagnostics']==['closure_identity_mismatch'],'light closure identity failed for wrong reason: '+result['diagnostics'].inspect)
+regressed=copy(r);regressed['closure_results'][0]['status']='regressed'
+result=check.call('validate_return',fixed_light['return_authorities']['p1'],regressed,false,'light regressed closure needs a fresh finding')
+assert(result['diagnostics']==['closure_finding_missing'],'light regression failed for wrong reason: '+result['diagnostics'].inspect)
+a=copy(fixed_light);a['plan']['expected_passes'][0]['prior_finding_visibility']='none'
+result=check.call('validate_terminal_barrier',a,a['terminal_barrier'],false,'post-fix light re-review must receive the closure ledger')
+assert(result['diagnostics']==['plan_visibility_mismatch'],'light re-review visibility failed for wrong reason: '+result['diagnostics'].inspect)
+s=copy(fixed_light_summary);s['closure_results'][0]['evidence']='closure claimed without the light re-review'
+result=check.call('validate_aggregate_accounting',fixed_light,s,false,'aggregate closure binds the light re-review return')
+assert(result['diagnostics']==['closure_response_mismatch'],'aggregate light closure failed for wrong reason: '+result['diagnostics'].inspect)
+
+# U4: plan review is one fresh plan_coverage_and_feasibility pass (topology.plan_review
+# true, review_subject plan) at any scope size; its post-fix re-review folds closure.
+plan_p='plan_coverage_and_feasibility'
+plan_of=lambda do |base,base_summary|
+ a,s=light_of.(base,base_summary)
+ a=JSON.parse(JSON.generate(a).gsub(light_p,plan_p));s=JSON.parse(JSON.generate(s).gsub(light_p,plan_p))
+ a['plan']['topology'].delete('light_review');a['plan']['topology']['plan_review']=true;a['controller_intensity']='standard'
+ a['request_plan_reconciliation']=copy(full);s['final_batch_plan']=copy(a['plan'])
+ [a,s]
+end
+plan_one,plan_one_summary=plan_of.(build_v10.('plan'),v10_summary)
+result=check.call('validate_terminal_barrier',plan_one,plan_one['terminal_barrier'],true,'one-pass plan review barrier')
+assert(result['result']=={'terminal_pass_count'=>1,'coverage_complete'=>true},'plan barrier result changed')
+result=check.call('validate_aggregate_accounting',plan_one,plan_one_summary,true,'one-pass plan review aggregate')
+assert(result.dig('result','result')=='CLEAN' && result.dig('result','request_plan_reconciliation')==full,'plan aggregate not CLEAN/echoed')
+medium_plan=copy(plan_one);medium_plan['plan']['scope_size']='medium';medium_summary=copy(plan_one_summary);medium_summary['final_batch_plan']=copy(medium_plan['plan'])
+check.call('validate_aggregate_accounting',medium_plan,medium_summary,true,'medium plan review also uses one plan pass')
+multi_pass_plan=build_v10.('plan');multi_pass_plan['request_plan_reconciliation']=copy(full)
+check.call('validate_aggregate_accounting',multi_pass_plan,v10_summary,true,'v10 multi-pass plan batch accepted; one-pass is prose-enforced')
+[
+ ['plan_review under implementation subject','topology_plan_review_invalid',->(a){a['review_subject']='implementation'}],
+ ['plan_review under acceptance subject','topology_plan_review_invalid',->(a){a['review_subject']='acceptance'}],
+ ['plan_review without review subject','topology_plan_review_invalid',->(a){a.delete('review_subject')}],
+ ['plan pass without plan_review','topology_plan_review_missing',->(a){a['plan']['topology'].delete('plan_review')}],
+ ['plan pass with plan_review false','topology_plan_review_missing',->(a){a['plan']['topology']['plan_review']=false}],
+ ['non-boolean plan_review','plan_schema_invalid',->(a){a['plan']['topology']['plan_review']='plan'}],
+ ['plan review with separate closure pass','topology_plan_closure_invalid',->(a){a['plan']['topology']['closure_verification_required']=true}],
+ ['plan review with a narrow perspective','topology_pass_mismatch',->(a){a['plan']['expected_passes'][0]['perspective']='contract_and_test_oracle'}],
+ ['plan review discovery count 2','topology_count_mismatch',->(a){a['plan']['topology']['discovery_pass_count']=2}],
+ ['plan review also flagged light','topology_light_review_invalid',->(a){a['plan']['topology']['light_review']=true;a['controller_intensity']='light'}],
+ ['first plan review cannot receive prior findings','plan_visibility_mismatch',->(a){a['plan']['expected_passes'][0]['prior_finding_visibility']='closure_ledger'}]
+].each do |label,code,mutate|
+ a=copy(plan_one);mutate.call(a)
+ result=check.call('validate_terminal_barrier',a,a['terminal_barrier'],false,'plan topology rejects '+label)
+ assert(result['diagnostics']==[code],label+' failed for wrong reason: '+result['diagnostics'].inspect)
+end
+two_plan=build_v10.('plan');two_plan['plan']['topology']['plan_review']=true
+result=check.call('validate_terminal_barrier',two_plan,two_plan['terminal_barrier'],false,'plan_review on a two-pass batch')
+assert(result['diagnostics']==['topology_pass_mismatch'],'two-pass plan_review failed for wrong reason: '+result['diagnostics'].inspect)
+# Post-fix plan re-review: one new fresh pass carries the closure ledger and closure_results.
+fixed_plan,fixed_plan_summary=plan_of.(build_v10.('plan'),v10_summary)
+fixed_plan['plan']['expected_passes'][0]['prior_finding_visibility']='closure_ledger'
+fixed_plan['return_authorities']['p1']['context']['previously_fixed']=[original]
+fixed_plan.merge!('previously_fixed'=>[original],'historical_fixed_findings'=>[old_source],'source_findings'=>[old_source])
+r=light_reply.(fixed_plan);r['closure_results']=[{'aggregate_finding_id'=>'aggregate:old','status'=>'verified_closed','evidence'=>'fresh plan re-review observed closure'}];set_light_reply.(fixed_plan,r)
+fixed_plan_summary['final_batch_plan']=copy(fixed_plan['plan'])
+fixed_plan_summary.merge!('aggregation_ledger'=>[fixed_row],'fixed_items'=>[{'aggregate_finding_id'=>'aggregate:old','severity'=>'must-fix','file'=>'source.rb','description'=>'prior finding fixed','fixed_in_round'=>1}],'closure_results'=>r['closure_results'],'result'=>'ISSUES_FIXED')
+result=check.call('validate_aggregate_accounting',fixed_plan,fixed_plan_summary,true,'single fresh plan re-review verifies closure')
+assert(result.dig('result','result')=='ISSUES_FIXED','plan re-review result changed')
+check.call('validate_return',fixed_plan['return_authorities']['p1'],r,true,'plan re-review return carries closure results')
+no_closure=copy(r);no_closure.delete('closure_results')
+result=check.call('validate_return',fixed_plan['return_authorities']['p1'],no_closure,false,'plan re-review must return closure results')
+assert(result['diagnostics']==['return_schema_invalid'],'missing plan closure failed for wrong reason: '+result['diagnostics'].inspect)
+foreign=copy(r);foreign['closure_results'][0]['aggregate_finding_id']='aggregate:other'
+result=check.call('validate_return',fixed_plan['return_authorities']['p1'],foreign,false,'plan re-review closure IDs are exact')
+assert(result['diagnostics']==['closure_identity_mismatch'],'plan closure identity failed for wrong reason: '+result['diagnostics'].inspect)
+a=copy(fixed_plan);a['plan']['expected_passes'][0]['prior_finding_visibility']='none'
+result=check.call('validate_terminal_barrier',a,a['terminal_barrier'],false,'post-fix plan re-review must receive the closure ledger')
+assert(result['diagnostics']==['plan_visibility_mismatch'],'plan re-review visibility failed for wrong reason: '+result['diagnostics'].inspect)
+s=copy(fixed_plan_summary);s['closure_results'][0]['evidence']='closure claimed without the plan re-review'
+result=check.call('validate_aggregate_accounting',fixed_plan,s,false,'aggregate closure binds the plan re-review return')
+assert(result['diagnostics']==['closure_response_mismatch'],'aggregate plan closure failed for wrong reason: '+result['diagnostics'].inspect)
+
 # Independent expectations must kill a validator that simply declares all valid.
 ReviewTools.define_singleton_method(:call) { |_request| {'valid'=>true} }
 assert(requests.any? { |request,expected| ReviewTools.call(request)['valid'] != expected },'always-valid mutant escaped independent oracle')
@@ -394,6 +829,36 @@ with tempfile.TemporaryDirectory() as directory:
     bad=subprocess.run(command,capture_output=True,timeout=5)
     assert bad.returncode==1 and json.loads(bad.stdout)['diagnostics']==['bundled_parser_unavailable'],'unlisted module did not fail closed'
     assert not marker.exists(),'unlisted optional bridge executed before refusal'
+    (skill/'contracts/input.yaml').unlink(); (scripts/'_vendor/pyyaml/yaml/cyaml.py').unlink()
+    missing=subprocess.run(command,capture_output=True,timeout=5)
+    assert missing.returncode==1 and json.loads(missing.stdout)['diagnostics']==['runtime_or_contract_unavailable'],'probe ignored a missing input contract: '+missing.stdout.decode()
+
+# Authority objects are typed in the contracts the helper loads; no second schema.
+fields={x['name']:x for x in m.load_contract('input')['fields']}
+fresh=fields['fresh_dispatch']; historical=fields['historical_dispatch_binding']
+fresh_names=[x['name'] for x in fresh['object_fields']]
+assert fresh_names==['actor_id','root_actor_id','author_actor_ids','prior_reviewer_actor_ids','native_invocation_id','creation_evidence_ref','runtime_evidence_ref','runtime','fork_turns','context_isolation','handoff_digest','source_digest','review_subject'],fresh_names
+assert [x['name'] for x in historical['object_fields']]==m.BINDING_KEYS
+for parent in (fresh,historical):
+    assert parent['on_missing']=='fail' and parent.get('on_fail'),parent['name']+' lacks on_missing fail/on_fail'
+    assert all(x['on_missing']=='fail' for x in parent['object_fields']),parent['name']+' child lacks on_missing fail'
+authors=next(x for x in fresh['object_fields'] if x['name']=='author_actor_ids')
+fork=next(x for x in fresh['object_fields'] if x['name']=='fork_turns')
+assert authors['min_items']==1 and fork['required']=='conditional' and fork['condition']=='runtime == codex'
+assert fork['type']=='enum' and fork['enum_values']==['none'] and 'absent when runtime is not codex' in fork['validation'] and 'The Codex rule compares runtime.strip().lower() == codex; padded or other-case codex is invalid' in fork['validation'],fork
+runtime_field=next(x for x in fresh['object_fields'] if x['name']=='runtime')
+assert runtime_field['validation']=="Equals its stripped lowercase form; ' codex', 'codex ' or 'Codex' is invalid.",runtime_field
+enums={x['name']:(x['type'],x.get('enum_values')) for x in fresh['object_fields'] if x['name'] in ('context_isolation','review_subject')}
+assert enums=={'context_isolation':('enum',['fresh_self_contained']),'review_subject':('enum',['plan','implementation','closure','acceptance'])},enums
+intensity=fields['controller_intensity']
+assert intensity['type']=='enum' and intensity['enum_values']==['light','standard','strict'] and intensity['on_missing']=='infer',intensity
+reviewer=next(x for x in m.load_contract('handoffs')['handoffs'] if x['name']=='orchestrator_to_reviewer')
+context={x['name']:x for x in reviewer['context_fields']}
+bundle=next(x for x in m.load_contract('handoffs')['dispatch_context_bundles'] if x['name']=='fresh_reviewer_context')
+for key in ('reviewer_actor_id','native_invocation_id','handoff_digest'):
+    field=context[key]
+    assert field['required']=='conditional' and field['on_missing']=='fail' and field.get('on_fail') and 'never dispatched to the Reviewer' in field['description'],key
+    assert key not in bundle['context_fields_from_dispatch'],key+' leaked into the reviewer bundle'
 
 assert m.shape_valid(1,{'type':'int'}) and not m.shape_valid(True,{'type':'int'})
 assert not m.shape_valid(False,{'type':'float'}) and not m.shape_valid(1,{'type':'boolean'})

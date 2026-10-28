@@ -3257,7 +3257,7 @@ verify_workspace() {
               type == "object"
               and (. | keys | sort) == ["implementation_owner_scope", "independent_reviewer", "lane", "schema_version", "separated_workers_triggered"]
               and .schema_version == "1.0"'
-            workspace_json_check "$artifact" "workspace-003" '.lane == "bounded_executor"'
+            workspace_json_check "$artifact" "workspace-003" '.lane == "direct_main" or .lane == "bounded_executor"'
             workspace_json_check "$artifact" "workspace-004" '
               (.implementation_owner_scope | type == "array" and length == 3)
               and (.implementation_owner_scope | sort) == (["RED", "GREEN", "focused_verification"] | sort)'

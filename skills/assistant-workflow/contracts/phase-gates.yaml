@@ -21,7 +21,7 @@
 # work, but they do not by themselves block progress unless project policy opts
 # into stricter enforcement.
 
-schema_version: "15.0"
+schema_version: "16.0"
 contract: phase-gates
 skill: assistant-workflow
 
@@ -85,12 +85,12 @@ gates:
         on_fail: "Load references/triage-rubric.md and add the execution gate packs for the task type before continuing"
 
       - id: T7
-        check: "build_execution_lane and required_agents/fallback roles are populated from risk and verification shape: inline_direct for light localized work; bounded_executor plus independent Code Reviewer for ordinary medium standard-risk work; separated_workers with Code Writer, Builder/Tester, and Code Reviewer only for high/critical risk, broad/noisy/environment-heavy verification, independent TDD evidence, or explicit separation"
+        check: "build_execution_lane is recorded as direct_main, bounded_executor, or separated_workers (build_execution_lane permits direct_main at every size/risk); a delegated lane is recorded only with a named concrete execution benefit or an explicit delegation request; required_agents lists only actual execution owners plus the required newly created independent reviewer; no worker record exists for a role that was not dispatched."
         condition: "execution_intent != prepare_only"
-        on_fail: "Select the smallest safe build_execution_lane and matching roles; do not require separated workers from size alone."
+        on_fail: "Select actual direct or optional delegated execution, retaining all approval, verification and required review gates without fake worker records."
 
       - id: T_PREPARATION_ADMISSIBILITY
-        check: "required_gates contains only feature-preparation evidence: no execution or task-category gate; qa_evaluation_mode=not_required, harness_capable=false, and build_execution_lane=none. QA/harness requests remain typed future obligations and activate neither. required_agents contains only Discover/preparation roles; excludes Build, Review, QA Evaluator, Code Writer, Builder/Tester, and Code Reviewer. workflow_state_mode is inline for future obligations alone; journal requires progressive uncertainty, risk-selected strict preparation, delegation, continuation, or an explicit persisted-state request."
+        check: "required_gates contains only feature-preparation evidence: no execution or task-category gate; qa_evaluation_mode=not_required, harness_capable=false, and build_execution_lane=none. QA/harness requests remain typed future obligations and activate neither. required_agents contains only Discover/preparation roles, including requested/required fresh plan review and selected research lenses/peer; excludes post-Build code/QA acceptance and implementation roles. workflow_state_mode is inline for future obligations alone; journal requires progressive uncertainty, risk-selected strict preparation, delegation, continuation, or an explicit persisted-state request."
         condition: "execution_intent == prepare_only"
         on_fail: "Remove execution gates/roles, force QA/harness inactive, retain preparation evidence/roles, and record explicit future work in typed feature_preparation_result obligations."
 
@@ -100,8 +100,8 @@ gates:
         on_fail: "Add QA Evaluator as a Review-phase role, or record qa_evaluation_mode=not_required with a concrete reason when QA is not applicable. QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
 
       - id: T9
-        check: "subagent_policy_state, subagent_execution_mode, and subagent_trigger_scope are initialized before any phase that may spawn subagents; conditional policy_blocking_source is also initialized when policy_disallowed. Required roles covered by a direct user, applicable AGENTS.md, or active skill instruction use delegation_triggered and dispatch without a separate permission question. policy_disallowed requires a non-empty exact active blocking rule that confirms no applicable trigger exception."
-        on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required roles. Otherwise preserve and complete the evidenced fallback state; do not overwrite explicit opt-out."
+        check: "subagent_policy_state, subagent_execution_mode, and subagent_trigger_scope are initialized before any phase that may spawn subagents; conditional policy_blocking_source is also initialized when policy_disallowed. Build/execution delegation is optional: build_execution_lane=direct_main without another selected execution role records subagent_policy_state=not_required and subagent_execution_mode=not_applicable with no worker dispatch records, while every due formal plan, code, finding-closure or QA/acceptance review still records its newly created fresh-context reviewer evidence. A selected or explicitly required delegation uses delegation_triggered and dispatches without a separate permission question. policy_disallowed requires a non-empty exact active blocking rule that confirms no applicable trigger exception."
+        on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required roles. Otherwise preserve and complete the evidenced fallback state for Build/execution roles only; do not overwrite explicit opt-out. Formal plan, code, finding-closure, and QA/acceptance review roles and research lens isolation never fall back: dispatch newly created fresh-context agents, or record that work as incomplete when isolation is unavailable."
 
       - id: T10
         check: "candidate_scope_scan is populated from a quick read-only scan before finalizing Triage, with likely touched paths, symbols/search terms checked, adjacent surfaces, confidence, and unknowns"
@@ -220,8 +220,9 @@ gates:
         on_fail: "Initialize constraints as empty list and note 'no constraints identified'"
 
       - id: D_SUBAGENT_TRIGGER
-        check: "Required roles covered by a direct user, applicable AGENTS.md, or active skill instruction use subagent_policy_state=delegation_triggered, inferred subagent_trigger_scope, and delegated dispatch without a separate permission question. Explicit opt-out selects direct_fallback with delegation_opted_out evidence. policy_disallowed requires policy_blocking_source."
-        on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required roles. Otherwise preserve and complete the evidenced fallback state; do not overwrite explicit opt-out."
+        check: "The actual execution lane and actor are recorded; a direct_main record contains no child worker fields and no fallback exemption; an explicit user delegation request is reflected in the selected lane; each optional agent record names its actual actor and source; every formal review and selected sibling-blind research lens is assigned to a newly created isolated agent, or the affected completion is recorded incomplete."
+        on_fail: "Resolve the actual execution lane and actor; never fabricate a child or overwrite user constraints. Required isolation unavailable leaves completion incomplete; policy blocks retain policy_blocking_source."
+
 
       - id: D8
         check: "When a context map is required: it was produced by Code Mapper only when delegated mapping is selected, or produced directly with equivalent local evidence"
@@ -359,15 +360,20 @@ gates:
         on_fail: "Run assistant-verification before finalizing Plan; resolve binding conflicts, keep scope/technique/TDD independent, and carry the canonical decision unchanged."
 
       - id: P1
-        check: "Executable plans declare plan_schema_version=15.0 and one implementation_steps collection with exact packet identities, accepted criteria and create/modify/test paths. Decompose, when needed, refines that same collection. prepare_only emits no executable work."
+        check: "Executable plans declare plan_schema_version=16.0 and one implementation_steps collection with exact packet identities, accepted criteria and create/modify/test paths. Decompose, when needed, refines that same collection. prepare_only emits no executable work."
         on_fail: "For prepare_only repair readiness only. Otherwise repair canonical Plan scope; preserve direct/light routing without a second manifest."
 
       - id: P2
         check: "Each end-to-end/implement-only implementation step or task packet has behavior/acceptance criteria and associated test criteria describing what to verify. A prepare_only readiness plan records only evidence-backed implications, open decisions, and the next implementation state."
         on_fail: "For prepare_only, repair only the readiness evidence, evidence-backed implications, open decisions, and next implementation state; do not create executable steps or task packets. For execution_intent != prepare_only, add behavior/acceptance criteria and test criteria to steps or task packets missing them."
 
+      - id: P_FRESH_PLAN_REVIEW
+        check: "Before approval is sought for a requested or required plan (for prepare_only, before the readiness plan is returned), a validated fresh independent plan review (assistant-review with review_subject=plan) by a newly created fresh-context reviewer is bound to the current plan identity and is either a compact plan_review_result with result PASS or, when persisted/executable admission applies, a validated structured plan review with result CLEAN or ISSUES_FIXED, using exactly one fresh pass with perspective plan_coverage_and_feasibility; when a material fix changed the plan, the bound review is one newly created fresh re-review of the same perspective with the closure ledger. Historical multi-pass plan reviews stay readable; new plan reviews use exactly one pass. No plan exists solely to trigger this review."
+        condition: "a plan is requested or required (plan_mode=approval_required, or an explicitly requested plan)"
+        on_fail: "Dispatch a newly created fresh-context plan reviewer with a self-contained handoff of the original request and current plan; fix material findings and dispatch one newly created fresh re-review of the same perspective; do not seek approval or start Build until the review is PASS (compact) or CLEAN or ISSUES_FIXED (structured) for the current plan identity. Unavailable isolation leaves Plan incomplete."
+
       - id: P4
-        check: "When execution_intent=prepare_only, readiness evidence and any optional plan do not wait for implementation approval; record the approval/delegation needed to implement next in feature_preparation_result.open_decisions and/or recommended_next_step. Otherwise, when plan_mode=approval_required, the user explicitly approved the canonical Plan definition and packet scope when applicable. When plan_mode=inline, the compact plan was recorded and no-wait eligibility was recorded. plan_mode=none does not enter this phase."
+        check: "When execution_intent=prepare_only, readiness evidence and any optional plan do not wait for implementation approval; record the approval/delegation needed to implement next in feature_preparation_result.open_decisions and/or recommended_next_step. Otherwise, when plan_mode=approval_required, P_FRESH_PLAN_REVIEW passed for the current plan identity before the user explicitly approved the canonical Plan definition and packet scope when applicable. When plan_mode=inline, the compact plan was recorded and no-wait eligibility was recorded. plan_mode=none does not enter this phase."
         on_fail: "For prepare_only, return the evidence-backed readiness result and name the required next implementation approval. Otherwise wait for approval when plan_mode=approval_required. For inline mode, record why the compact plan can proceed without waiting. If none was selected incorrectly, return to Triage and promote plan_mode."
 
       - id: P5
@@ -381,7 +387,7 @@ gates:
         on_fail: "Fill Security and Operability sections per plan-template.md"
 
       - id: P7
-        check: "An Architect blueprint is produced only when concrete architecture uncertainty requires that role, with delegated or equivalent documented fallback evidence."
+        check: "An Architect blueprint is produced only when concrete architecture uncertainty requires that role, with actual role evidence from either a delegated Architect or the main agent under the ordinary direct execution policy; Architect is an optional execution/design role, not a formal review, and needs no fallback exemption."
         condition: "execution_intent != prepare_only and architecture_design_mode in [required, review_intensive]"
         on_fail: "Resolve the material design uncertainty and role evidence; task size alone does not force Architect."
 
@@ -500,7 +506,7 @@ gates:
         on_fail: "Stop before edits or mutation dispatch; load references/change-impact.md and record valid applicability before selecting the local or expanded path."
 
       - id: B_CHANGE_IMPACT_PREBUILD
-        check: "Before any source/test mutation or mutation dispatch, shared/unresolved/expanded work runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs. Local uses ordinary verification/self-review; no Node gate."
+        check: "Before any source/test mutation or mutation dispatch, shared/unresolved/expanded work runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs. Local uses ordinary verification plus local self-check and fresh independent review; no Node gate."
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         on_fail: "Stop before behavior edits, regression-test writes, or mutation dispatch; load references/change-impact.md, resolve the active installed checker, and repair the assessment or report the explicit blocker."
     exit_assertions:
@@ -575,9 +581,9 @@ gates:
         on_fail: "Use packet verification admission; retain partial, failed, unavailable or stale evidence as gaps and do not proceed to Review."
 
       - id: B_SUBAGENT_EVIDENCE
-        check: "For source-changing standard/strict Build tasks: subagent_execution_mode is not not_applicable; build_execution_lane == bounded_executor records one executor's implementation, selected-check results, and changed-file evidence, with RED/GREEN evidence only for packets whose tdd_applies=true; build_execution_lane == separated_workers with active TDD records CodeWriter worker_stage=test_authoring (tests only, no incoming RED) only when selected tests need creation or repair; existing selected tests may proceed directly to BuilderTester pre_production_red with current meaningful typed RED; then SAME CodeWriter worker_stage=production, BuilderTester final_verification GREEN, then (only after GREEN passes) CodeWriter refactor and a second final_verification REFACTOR; inactive TDD uses one final verification. Stage-only DONE never satisfies final Build evidence."
+        check: "For source-changing standard/strict Build tasks: direct_main uses actual main actor evidence with no worker records; delegated lanes retain actual worker evidence; build_execution_lane == bounded_executor records one executor's implementation, selected-check results, and changed-file evidence, with RED/GREEN evidence only for packets whose tdd_applies=true; build_execution_lane == separated_workers with active TDD records CodeWriter worker_stage=test_authoring (tests only, no incoming RED) only when selected tests need creation or repair; existing selected tests may proceed directly to BuilderTester pre_production_red with current meaningful typed RED; then SAME CodeWriter worker_stage=production, BuilderTester final_verification GREEN, then (only after GREEN passes) CodeWriter refactor and a second final_verification REFACTOR for actual refactor edits, or, for a no-change REFACTOR, validated unchanged GREEN reuse (verification_disposition=reuse_green, zero new invocations) recorded without another Builder/Tester dispatch; inactive TDD uses one final verification. Stage-only DONE never satisfies final Build evidence."
         condition: "controller_intensity in [standard, strict]"
-        on_fail: "Update the selected-lane evidence before leaving Build; keep the same canonical cycle_log reference through actual RED, production_file, GREEN, changes_made, and separate REFACTOR invocation records. A GREEN-only stage is partial; do not enter Review until active TDD has a complete current cycle. Light work may instead record inline/direct validation."
+        on_fail: "Update the selected-lane evidence before leaving Build; keep the same canonical cycle_log reference through actual RED, production_file, GREEN, changes_made, and actual REFACTOR invocation records or validated unchanged GREEN reuse. A GREEN-only stage is partial; do not enter Review until active TDD has a complete current cycle. Light work may instead record inline/direct validation."
 
       - id: B_SUBAGENT_SLICE_EVIDENCE
         check: "Per-packet evidence matches build_execution_lane before coordinator VERIFIED; Builder/Tester is required only when build_execution_lane == separated_workers."
@@ -603,15 +609,15 @@ gates:
 
       - id: B9
         severity: blocker
-        check: "Implementation was performed by the selected bounded executor or separated Code Writer when subagent_execution_mode=delegated, or directly in fallback mode with the same plan/deviation/verification evidence"
+        check: "Implementation records the actual direct_main actor or selected optional bounded executor/separated Code Writer with the same approved plan, deviation, and verification evidence; direct_main requires no fallback exemption or child worker records."
         condition: "controller_intensity in [standard, strict]"
-        on_fail: "Record Code Writer dispatch/result evidence or Code Writer direct fallback evidence before Review"
+        on_fail: "Retain the actual implementation owner and selected-lane evidence before Review; never invent a child actor or fallback exemption."
 
       - id: B10
         severity: blocker
-        check: "When build_execution_lane == separated_workers, build/test/validation was performed by Builder/Tester subagent when delegated or directly in fallback mode with equivalent command/result evidence; active TDD requires BuilderTester GREEN final_verification after production, CodeWriter refactor only after GREEN passes, and a second BuilderTester final_verification for REFACTOR; neither RED nor GREEN stage-only results enter Review"
+        check: "When build_execution_lane == separated_workers, build/test/validation was performed by Builder/Tester subagent when delegated or directly in fallback mode with equivalent command/result evidence; active TDD requires BuilderTester GREEN final_verification after production, CodeWriter refactor only after GREEN passes, and either a second BuilderTester final_verification of the affected checks for actual REFACTOR edits or validated unchanged GREEN reuse (verification_disposition=reuse_green, zero new invocations, no extra dispatch) for a no-change REFACTOR; neither RED nor GREEN stage-only results enter Review"
         condition: "controller_intensity in [standard, strict] and build_execution_lane == separated_workers"
-        on_fail: "Record both Builder/Tester phase results and the full same-reference cycle before Review: GREEN is partial while REFACTOR is pending, then final_verification follows the post-GREEN CodeWriter refactor; bounded_executor instead records its own actual R/G/R evidence in B_SUBAGENT_EVIDENCE"
+        on_fail: "Record both Builder/Tester phase results and the full same-reference cycle before Review: GREEN is partial while REFACTOR is pending, then final_verification follows actual post-GREEN CodeWriter refactor edits, or validated reuse_green is recorded for a no-change REFACTOR; bounded_executor instead records its own actual R/G/R evidence in B_SUBAGENT_EVIDENCE"
 
       - id: B11
         severity: blocker
@@ -629,17 +635,17 @@ gates:
     exit_assertions:
 
       - id: R1
-        check: "Structured Spec Review completed by loading and following references/prompts/spec-review.md; latest Spec Review entry has Result: PASS and records missing acceptance criteria, extra scope, changed files mismatch, verification evidence mismatch, and required fixes"
+        check: "The final fresh acceptance review (assistant-review with review_subject=acceptance) is the single owner of request, plan and delivery reconciliation: a newly created fresh-context reviewer of that batch (not the author or a Build actor) covered the spec obligations of references/prompts/spec-review.md, reconciling the original request, requirement IDs, and approved plan against delivered results; the latest spec_review_result has Result: PASS bound to the same final batch by final_review_snapshot_id, references that review's request_plan_reconciliation for unfinished or omitted items without restating them, and records missing acceptance criteria, extra scope, changed files mismatch, verification evidence mismatch, and required fixes; a PASS after a FAIL fix comes from a fresh complete batch on the changed snapshot. No separate Stage 1 Spec reviewer is dispatched; historical Stage 1 records stay readable under their original labels."
         condition: "controller_intensity in [standard, strict] or qa_evaluation_mode == required"
-        on_fail: "Run Stage 1 Spec Review using references/prompts/spec-review.md, record the structured spec compliance result, fix any FAIL items, and re-run until Result: PASS before quality review."
+        on_fail: "Assign the references/prompts/spec-review.md obligations to a pass of the final acceptance batch with a self-contained handoff (original request, requirement IDs, approved plan, delivery evidence); fix any FAIL items and run a fresh complete batch until Result: PASS. Unavailable isolation leaves Review incomplete."
 
       - id: R1A
-        check: "Quality Review entries do not substitute for Spec Review; Stage 1 spec compliance result is present before Stage 2 quality review starts"
+        check: "Quality findings do not substitute for spec obligations: spec_review_result records its own covered obligation results from the same acceptance batch as review_result, and Workflow passed its triage controller_intensity to assistant-review"
         condition: "controller_intensity in [standard, strict] or qa_evaluation_mode == required"
-        on_fail: "Run the distinct Spec Review first. Do not count assistant-review, Quality Review, or legacy Review entries as spec compliance."
+        on_fail: "Cover each spec obligation explicitly in the acceptance batch and pass controller_intensity. Do not count quality findings or legacy Review entries as spec coverage."
 
       - id: R2
-        check: "Quality Review completed by loading and following assistant-review SKILL.md; review_result binds current producer_schema_version, canonical final_summary, exact final_review_snapshot_id, final_snapshot_identity_ref/object, review_delegation_path, and applicable Pack review."
+        check: "Quality Review completed by loading and following assistant-review SKILL.md as the final acceptance review (review_subject=acceptance); review_result binds current producer_schema_version, canonical final_summary, exact final_review_snapshot_id, final_snapshot_identity_ref/object, review_delegation_path, and applicable Pack review."
         condition: "controller_intensity in [standard, strict] or qa_evaluation_mode == required"
         on_fail: "Run assistant-review, then bind its current producer version, exact canonical batch identity and alias, delegation path, and applicable Pack review."
 
@@ -648,12 +654,12 @@ gates:
         on_fail: "Clear mismatched refs, record task_state_reconciliation.assistant_review_packet_compatibility=invalidated, and rerun review, QA, or both under the current assistant-review contract."
 
       - id: R_LIGHT_FRESH_REVIEW
-        check: "Light work has a fresh post-validation review result with PASS, reviewed scope, resolved findings, and evidence; when a Pack or expanded impact applies, fresh_review_result records validated canonical assistant-review final_summary, exact current final-batch final_snapshot_identity ref/object, and review_delegation_path; Pack refs remain Pack-only"
+        check: "Light work has a compact post-validation review result from a newly created fresh-context independent reviewer (not the author; a local self-check is preparation only) covering spec obligations and quality, with reviewer actor id, native invocation id, fork_turns=none on Codex, PASS, reviewed scope, resolved findings, and evidence refs; ordinary light review needs no batch plan, ledgers, structured fresh_dispatch, or review-tools validation; persisted/executable admission instead uses the structured review its admission consumes; every structured light review receives controller_intensity=light and a one-pass topology carries topology.light_review=true; when a Pack or expanded impact applies, fresh_review_result records validated canonical assistant-review final_summary, exact current final-batch final_snapshot_identity ref/object, and review_delegation_path; Pack refs remain Pack-only"
         condition: "controller_intensity == light"
-        on_fail: "Run the compact fresh-review lane, fix findings, rerun validation, and record PASS evidence. For a Pack or expanded impact, validate and record canonical final_summary, exact current final-batch final_snapshot_identity, and review_delegation_path; retain Pack refs when applicable."
+        on_fail: "Dispatch a newly created independent reviewer with a self-contained compact handoff, fix findings, rerun validation, and record PASS evidence; unavailable isolation leaves Review incomplete. For a Pack or expanded impact, validate and record canonical final_summary, exact current final-batch final_snapshot_identity, and review_delegation_path; retain Pack refs when applicable."
 
       - id: R2A_CODE_REVIEWER_DISTINCT
-        check: "After Build completes, Review owns and records independent Code Reviewer dispatch/result evidence, or fresh direct-fallback review evidence, in subagent_evidence plus validated canonical assistant-review result and final_snapshot_identity refs in review_result. Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence."
+        check: "After Build completes, Review owns and records newly created independent Code Reviewer dispatch/result evidence with fresh self-contained context in subagent_evidence plus validated canonical assistant-review result and final_snapshot_identity refs in review_result. Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence. Unavailable isolation remains incomplete."
         condition: "execution_intent != prepare_only and (controller_intensity in [standard, strict] or qa_evaluation_mode == required)"
         on_fail: "Run the Review-owned assistant-review lane after Build, validate its canonical outputs and exact current final-batch final_snapshot_identity, then populate review_result refs plus subagent_evidence.code_reviewer_evidence. Keep QA Evaluator entries separate."
 
@@ -822,9 +828,9 @@ invariants:
     on_fail: "Print '>> SCOPE CHANGE DETECTED' and re-run Triage with updated understanding"
 
   - id: INV_SUBAGENT_TRIGGER_STATE
-    check: "When required roles are covered by a direct user, applicable AGENTS.md, or active skill instruction, subagent_policy_state=delegation_triggered and delegated dispatch proceeds without a separate permission question. direct_fallback only after delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source."
+    check: "In every phase: the recorded execution actor equals the actual native actor; worker-only records exist only for dispatched workers; recorded explicit user/project authority, sandbox, selected checks, meaningful RED, dependency/isolation and shared-guard constraints are unchanged by the lane choice; every formal review or lens result comes from a newly created isolated agent (Formal review/lens independence has no author fallback)."
     scope: all_phases
-    on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required roles. Otherwise preserve and complete the evidenced fallback state; do not overwrite explicit opt-out."
+    on_fail: "Reconcile actual execution and independently retained authority; required isolation unavailable remains incomplete. Preserve explicit user constraints and historical provenance."
 
   - id: INV_PIVOT_RESTART_REAPPROVAL
     check: "Any pivot_restart_decision that changes approved scope, files, behavior, risk, verification, or acceptance criteria has reapproval_required=true and records approval before Build or Review continues"
@@ -885,7 +891,7 @@ invariants:
     on_fail: "Record the precise result/gap in existing test_results or validation_results, then reassess before Review or completion."
 
   - id: INV_TDD_PROJECTION
-    check: "Task-wide tdd_mode equals verification_decision.tdd_choice.mode; required_tdd=false forces mode=false, basis=not_selected, and empty applicable_check_ids despite RED availability; conflicting true/false mandates block selection. Each applicable_check_ids member needs an executable packet owner; completion-only allocation is invalid. Repetition across packets and completion remains allowed. Each packet's tdd_applies is true only when its due selected_check_ids intersects tdd_choice.applicable_check_ids. Every active workflow packet must contain exactly one intersecting ID; split a packet with multiple IDs before dispatch. Before production, active packets require one red_check_id resolving once to that ID in the due selected/applicable sets; red_command, red_cwd, and expected_red_failure exactly equal CheckSpec argv/cwd and meaningful_failure. Before production, active inline or bounded TDD requires tdd_cycle_log_ref to the actual authorizing RED in the canonical assistant-tdd cycle_log; planned identity/pass rows alone do not qualify. In separated_workers, BuilderTester returns verification_stage=pre_production_red with typed failed red_evidence matching check_id/command/cwd/test_file/test_name/right_reason and oracle; retain that RED in the canonical cycle_log, forward it unchanged to CodeWriter, then dispatch the SAME CodeWriter worker_stage=production and BuilderTester final_verification for GREEN; only after current GREEN passes, redispatch the SAME CodeWriter worker_stage=refactor for REFACTOR and BuilderTester final_verification for separate REFACTOR evidence. Matching RED may yield stage-only DONE with aggregate partial and pending GREEN rows; retain failed counts. Other failures keep FAILED_VERIFICATION precedence, and pre_production_red never closes Build or permits Review. Before Review and workflow completion, that ref resolves to the full canonical completed cycle_log with valid current GREEN/REFACTOR and selected-check evidence. Other due checks still run without fabricated RED; inactive, unstarted, and prepare_only work omits tdd_cycle_log_ref. Inactive bounded_executor: CodeWriter owns selected verification; separated_workers dispatches BuilderTester final_verification."
+    check: "Task-wide tdd_mode equals verification_decision.tdd_choice.mode; required_tdd=false forces mode=false, basis=not_selected, and empty applicable_check_ids despite RED availability; conflicting true/false mandates block selection. Each applicable_check_ids member needs an executable packet owner; completion-only allocation is invalid. Repetition across packets and completion remains allowed. Each packet's tdd_applies is true only when its due selected_check_ids intersects tdd_choice.applicable_check_ids. Every active workflow packet must contain exactly one intersecting ID; split a packet with multiple IDs before dispatch. Before production, active packets require one red_check_id resolving once to that ID in the due selected/applicable sets; red_command, red_cwd, and expected_red_failure exactly equal CheckSpec argv/cwd and meaningful_failure. Before production, active inline or bounded TDD requires tdd_cycle_log_ref to the actual authorizing RED in the canonical assistant-tdd cycle_log; planned identity/pass rows alone do not qualify. In separated_workers, BuilderTester returns verification_stage=pre_production_red with typed failed red_evidence matching check_id/command/cwd/test_file/test_name/right_reason and oracle; retain that RED in the canonical cycle_log, forward it unchanged to CodeWriter, then dispatch the SAME CodeWriter worker_stage=production and BuilderTester final_verification for GREEN; only after current GREEN passes, redispatch the SAME CodeWriter worker_stage=refactor for REFACTOR and BuilderTester final_verification for executed REFACTOR evidence; a no-change REFACTOR with no edits after GREEN may record validated unchanged GREEN reuse (default digest mode: green.reuse_digest equals the caller-resolved current_input_identities reuse_digest; detailed mode only by opt-in) without another BuilderTester final_verification dispatch. Matching RED may yield stage-only DONE with aggregate partial and pending GREEN rows; retain failed counts. Other failures keep FAILED_VERIFICATION precedence, and pre_production_red never closes Build or permits Review. Before Review and workflow completion, that ref resolves to the full canonical completed cycle_log with valid current GREEN/REFACTOR and selected-check evidence. Other due checks still run without fabricated RED; inactive, unstarted, and prepare_only work omits tdd_cycle_log_ref. Inactive bounded_executor: CodeWriter owns selected verification; separated_workers dispatches BuilderTester final_verification."
     condition: "execution_intent != prepare_only and verification_decision is present"
     scope: all_phases
     on_fail: "Block production for missing, stale, unbound, or wrong-reason RED; keep Review/completion incomplete until current full cycle validates. Repair projection; retain selected evidence."

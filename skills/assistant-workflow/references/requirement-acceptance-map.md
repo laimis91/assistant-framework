@@ -56,8 +56,8 @@ Requirement Acceptance Map:
   tasks keep this check inline in compact acceptance criteria or the carried
   task state; no additional report is required.
 - Every slice and task packet references the requirement ids it advances.
-- Spec Review checks that all accepted requirement ids have criteria and that
-  no extra scope was introduced.
+- The final acceptance review's spec obligations check that all accepted
+  requirement ids have criteria and that no extra scope was introduced.
 - Preparation-only completion keeps accepted but unimplemented entries
   `pending`, with their evidence/readiness reference and next implementation
   state. End-to-end and implementation-only completion require passed evidence

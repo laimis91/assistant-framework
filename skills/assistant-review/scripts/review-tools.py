@@ -14,6 +14,9 @@ from pathlib import Path
 MAX_BYTES = 8 * 1024 * 1024
 BINDING_KEYS = 'task_id native_invocation_id batch_id review_snapshot_id review_pass_id review_attempt_id producer_id producer_version source_digest'.split()
 TUPLE_KEYS = 'review_pass_id scope_item_id applicable_concern review_perspective coverage_obligation'.split()
+LIGHT_PERSPECTIVE = 'light_contract_and_runtime'
+PLAN_PERSPECTIVE = 'plan_coverage_and_feasibility'
+SINGLE_PASS_PERSPECTIVES = (LIGHT_PERSPECTIVE, PLAN_PERSPECTIVE)
 OPERATIONS = ('identify_return', 'validate_return', 'validate_terminal_barrier', 'validate_aggregate_accounting')
 
 class Invalid(ValueError):
@@ -159,15 +162,19 @@ def passive_yaml(raw):
     except yaml.YAMLError:
         raise Invalid('passive_yaml_required') from None
 
-@lru_cache(maxsize=2)
+@lru_cache(maxsize=3)
 def load_contract(name):
-    require_fact(name in ('handoffs', 'output'), 'contract_name_invalid')
+    require_fact(name in ('handoffs', 'output', 'input'), 'contract_name_invalid')
     try:
         return passive_yaml((Path(__file__).resolve().parent.parent / 'contracts' / (name + '.yaml')).read_bytes())
     except OSError:
         raise Invalid('runtime_or_contract_unavailable') from None
 
 def condition(text, context):
+    # "A, or (B and C)" spells out the precedence the ' or ' split applies.
+    text = text.rstrip(',')
+    if text.startswith('(') and text.endswith(')'):
+        text = text[1:-1]
     if ' or ' in text and not text.startswith('the shared'):
         return any(condition(part, context) for part in text.split(' or '))
     if ' and ' in text:
@@ -299,7 +306,54 @@ def validate_rubric(scores, authority):
     require_fact(Decimal(str(scores['weighted_score'])) == total.quantize(Decimal('.01'), rounding=ROUND_HALF_UP), 'rubric_arithmetic_invalid')
     require_fact(scores['action'] == ('PASS' if total >= 4 else 'REFINE' if total >= 3 else 'PIVOT'), 'rubric_action_invalid')
 
+class FreshReviewDispatchAuthority:
+    """Convert retained native dispatch facts; payloads and receipts cannot supply them."""
+    @classmethod
+    def validate(cls, authority, context):
+        version = authority.get('producer_version')
+        require_fact(version in ('9.0', '10.0'), 'review_version_unsupported')
+        if version == '9.0':
+            original = authority.get('historical_dispatch_binding')
+            require_fact(type(original) is dict, 'historical_review_authority_missing')
+            binding(original)
+            require_fact(original['producer_version'] in ('9.0', 'v9')
+                         and all(original[key] == context[key] for key in
+                                 ('batch_id', 'review_snapshot_id', 'review_pass_id', 'review_attempt_id'))
+                         and original['source_digest'] == context['snapshot_identity']['value'],
+                         'historical_review_authority_missing')
+            return None
+
+        fact = authority.get('fresh_dispatch')
+        # Shape (keys, nonblank strings, non-empty authors, the context_isolation
+        # and review_subject enums) comes from the fresh_dispatch declaration in
+        # contracts/input.yaml; no second schema.
+        declared = next(x for x in load_contract('input')['fields'] if x['name'] == 'fresh_dispatch')
+        # runtime must equal its stripped lowercase form, so padded or cased
+        # spellings of codex are rejected; the Codex rule compares
+        # runtime.strip().lower() == 'codex'. An inherited Codex context keeps
+        # its specific diagnostic before the fork_turns enum.
+        require_fact(type(fact) is not dict or fact.get('runtime') != 'codex' or fact.get('fork_turns', 'none') == 'none', 'review_context_inherited')
+        require_fact(type(fact) is dict and shape_valid(fact, declared, {})
+                     and fact['runtime'] == fact['runtime'].strip().lower()
+                     and ('fork_turns' in fact) == (fact['runtime'].strip().lower() == 'codex'), 'fresh_review_authority_invalid')
+        for key in ('author_actor_ids', 'prior_reviewer_actor_ids'):
+            unique(fact[key], 'fresh_review_authority_invalid')
+        require_fact(fact['actor_id'] not in [fact['root_actor_id']] + fact['author_actor_ids'] + fact['prior_reviewer_actor_ids'],
+                     'review_actor_not_fresh')
+        require_fact(context.get('reviewer_actor_id') == fact['actor_id']
+                     and context.get('native_invocation_id') == fact['native_invocation_id']
+                     and context.get('handoff_digest') == fact['handoff_digest']
+                     and context['snapshot_identity']['value'] == fact['source_digest']
+                     and context.get('review_subject') == fact['review_subject'], 'fresh_review_binding_mismatch')
+        return fact
+
+
 def validate_return(authority, reply):
+    return validated_return(authority, reply, FreshReviewDispatchAuthority.validate(authority, object(authority['context'])))
+
+def validated_return(authority, reply, fact):
+    """Validate a return against the fresh fact the caller already validated (None for v9)."""
+    require_fact((fact is None) == (authority.get('producer_version') == '9.0'), 'fresh_review_authority_invalid')
     handoff = next(entry for entry in load_contract('handoffs')['handoffs'] if entry['name'] == 'orchestrator_to_reviewer')
     context = return_context(authority, handoff)
     require_fact(shape_valid(reply, {'type': 'object', 'object_fields': handoff['return_fields']}, context), 'return_schema_invalid')
@@ -329,7 +383,7 @@ def validate_return(authority, reply):
     completed = reply['pass_completion_state'] == 'completed'
     require_fact(all(entry['status'] in ('inspected_no_risk', 'finding') if completed else entry['status'] == 'blocked' for entry in reply['coverage_entries']), 'coverage_state_invalid')
     require_fact('open_questions' not in reply if completed else bool(reply['open_questions']), 'questions_truth_table')
-    if context['review_perspective'] == 'closure_verification':
+    if closure_context(context):
         fixed_ids = [x['aggregate_finding_id'] for x in context['previously_fixed']]
         same_set([x['aggregate_finding_id'] for x in reply['closure_results']], fixed_ids, 'closure_identity_mismatch')
         require_fact(all((row['status'] == 'verified_closed' or bool(findings)) if completed else row['status'] == 'incomplete' for row in reply['closure_results']), 'closure_finding_missing')
@@ -338,7 +392,11 @@ def validate_return(authority, reply):
         validate_rubric(reply['rubric_scores'], authority)
     return {'pass_completion_state': reply['pass_completion_state'], 'finding_count': len(findings)}
 
-def validate_plan(plan):
+def closure_context(context):
+    """Closure is a separate pass, or the single light or plan re-review after a fix."""
+    return context['review_perspective'] == 'closure_verification' or (context['review_perspective'] in SINGLE_PASS_PERSPECTIVES and bool(context.get('previously_fixed')))
+
+def validate_plan(plan, controller_intensity=None, review_subject=None):
     fields = next(x for x in load_contract('output')['artifacts'] if x['name'] == 'final_summary')['object_fields']
     schema = next(x for x in fields if x['name'] == 'final_batch_plan')
     require_fact(shape_valid(plan, schema), 'plan_schema_invalid')
@@ -346,28 +404,87 @@ def validate_plan(plan):
     declared = {x['name']: x['enum_values'] for x in next(x for x in topology_fields if x['name'] == 'canonical_discovery_perspectives')['object_fields']}
     require_fact(equal(topology['canonical_discovery_perspectives'], declared), 'topology_canonical_mismatch')
     size = 'trivial_small' if plan['scope_size'] in ('trivial', 'small') else plan['scope_size']; discoveries = declared[size]
+    # Light trivial/small review is one fresh pass covering both trivial_small
+    # concerns, and its post-fix re-review folds closure into that one pass.
+    # Historical two-pass trivial/small batches remain valid and readable.
+    # Plan review (review_subject plan, topology.plan_review true) is one fresh
+    # plan_coverage_and_feasibility pass at any scope size; its post-fix re-review
+    # folds closure into one new pass. Historical multi-pass plan reviews stay
+    # readable; new plan reviews use exactly one pass.
+    plan_review = topology.get('plan_review') is True
+    require_fact(plan_review or PLAN_PERSPECTIVE not in [x['perspective'] for x in plan['expected_passes']], 'topology_plan_review_missing')
+    require_fact(not plan_review or review_subject == 'plan', 'topology_plan_review_invalid')
+    light = not plan_review and size == 'trivial_small' and topology['discovery_pass_count'] == 1
+    if plan_review:
+        discoveries = [PLAN_PERSPECTIVE]
+        require_fact(not topology['closure_verification_required'], 'topology_plan_closure_invalid')
+    if light:
+        discoveries = [LIGHT_PERSPECTIVE]
+        require_fact(not topology['closure_verification_required'], 'topology_light_closure_invalid')
     expected = discoveries + (['risk_selected_specialist'] if topology['security_specialist_triggered'] else []) + (['closure_verification'] if topology['closure_verification_required'] else [])
     same_set([x['perspective'] for x in plan['expected_passes']], expected, 'topology_pass_mismatch')
     require_fact(topology['discovery_pass_count'] == len(discoveries) and topology['max_required_responses'] == len(expected), 'topology_count_mismatch')
+    # The one-pass light topology needs the explicit light_review indicator and the
+    # caller's light controller_intensity; absent/false keeps the canonical >=2 passes.
+    intensity = next(x for x in load_contract('input')['fields'] if x['name'] == 'controller_intensity')
+    require_fact(controller_intensity is None or shape_valid(controller_intensity, intensity), 'controller_intensity_invalid')
+    flagged = topology.get('light_review') is True
+    require_fact(flagged or not light, 'topology_light_review_missing')
+    require_fact(light or not flagged, 'topology_light_review_invalid')
+    require_fact(not flagged or controller_intensity == 'light', 'topology_light_intensity_mismatch')
     unique([x['review_pass_id'] for x in plan['expected_passes']], 'plan_pass_duplicate')
     for item in plan['expected_passes']:
-        visibility = 'closure_ledger' if item['perspective'] == 'closure_verification' else 'none'
-        require_fact(item['prior_finding_visibility'] == visibility, 'plan_visibility_mismatch')
+        visibility = ('closure_ledger',) if item['perspective'] == 'closure_verification' else ('none', 'closure_ledger') if item['perspective'] in SINGLE_PASS_PERSPECTIVES else ('none',)
+        require_fact(item['prior_finding_visibility'] in visibility, 'plan_visibility_mismatch')
         unique(item['assigned_scope'], 'assignment_duplicate'); unique(item['coverage_obligations'], 'obligation_duplicate')
     unique([tuple_key(row) for row in plan['required_coverage_tuples']], 'plan_tuple_duplicate')
     for row in plan['required_coverage_tuples']:
         item = next((x for x in plan['expected_passes'] if x['review_pass_id'] == row['review_pass_id']), None)
         require_fact(item is not None and row['scope_item_id'] in item['assigned_scope'] and item['perspective'] == row['review_perspective'] and row['coverage_obligation'] in item['coverage_obligations'], 'plan_tuple_assignment_mismatch')
 
+def validate_native_review_binding(authority, native, fact):
+    """Bind native identity to authority whose fact FreshReviewDispatchAuthority already validated."""
+    if authority['producer_version'] == '9.0':
+        require_fact(fact is None and equal(authority.get('historical_dispatch_binding'), native), 'historical_review_authority_missing')
+    else:
+        require_fact(fact is not None and native['producer_version'] in ('10.0', 'v10')
+                     and native['native_invocation_id'] == fact['native_invocation_id']
+                     and native['source_digest'] == fact['source_digest'], 'fresh_review_native_mismatch')
+
+
 def validate_terminal_barrier(authority, candidate):
-    plan = object(authority['plan']); validate_plan(plan)
+    return terminal_barrier(authority, candidate)[0]
+
+def terminal_barrier(authority, candidate):
+    """Return the public barrier result plus active facts, each validated once in this barrier."""
+    plan = object(authority['plan']); validate_plan(plan, authority.get('controller_intensity'), authority.get('review_subject'))
+    version = authority.get('producer_version')
+    require_fact(version in ('9.0', '10.0'), 'review_version_unsupported')
+    facts = {}
+    # Every return authority carries the top-level label; a 9.0 top-level label
+    # cannot hide any current 10.0 return from the v10 checks below.
+    for return_authority in authority['return_authorities'].values():
+        require_fact(return_authority.get('producer_version') == version, 'review_version_relabelled')
+    if version == '10.0':
+        require_fact(authority.get('review_subject') in ('plan', 'implementation', 'closure', 'acceptance'), 'review_subject_invalid')
+        for pass_id, return_authority in authority['return_authorities'].items():
+            # Frozen context/tuples exist before native creation. No-response typed
+            # failures carry no invented actor; response-backed paths below still
+            # require and bind real fresh dispatch authority.
+            if 'fresh_dispatch' not in return_authority:
+                continue
+            fact = FreshReviewDispatchAuthority.validate(return_authority, return_authority['context'])
+            require_fact(fact['review_subject'] == authority['review_subject'], 'review_subject_mismatch')
+            facts[pass_id] = fact
+        unique([fact['actor_id'] for fact in facts.values()], 'review_actor_reused')
+        unique_root(facts.values())
     handoff = next(x for x in load_contract('handoffs')['handoffs'] if x['name'] == 'orchestrator_to_reviewer')
     batch_schema = next(x for x in handoff['context_fields'] if x['name'] == 'review_batch')
     ledger_schema = next(x for x in batch_schema['object_fields'] if x['name'] == 'pass_attempt_ledger')
     require_fact(shape_valid(candidate['pass_attempt_ledger'], ledger_schema, {'terminal_barrier': True}), 'terminal_ledger_schema_invalid')
     require_fact(not authority['unresolved_conflicts'], 'unresolved_response_conflicts')
     require_fact(authority.get('source_current') is True and authority.get('producer_current') is True, 'source_or_producer_changed')
-    passes = plan['expected_passes']; require_fact(2 <= len(passes) <= 6, 'pass_count_invalid')
+    passes = plan['expected_passes']; require_fact(1 <= len(passes) <= 6, 'pass_count_invalid')
     pass_ids = [x['review_pass_id'] for x in passes]
     same_set([x['review_pass_id'] for x in candidate['pass_attempt_ledger']], pass_ids, 'terminal_pass_mismatch')
     for key, code in (('active_attempts', 'active_authority_pass_mismatch'), ('return_authorities', 'return_authority_pass_mismatch'), ('canonical_response_events', 'canonical_authority_pass_mismatch')):
@@ -376,6 +493,8 @@ def validate_terminal_barrier(authority, candidate):
         pass_id = item['review_pass_id']; context = authority['return_authorities'][pass_id]['context']
         require_fact(context['batch_id'] == plan['batch_id'] and context['review_snapshot_id'] == plan['review_snapshot_id'] and context['review_pass_id'] == pass_id and context['review_perspective'] == item['perspective'] and equal(context['assigned_scope'], item['assigned_scope']) and context['review_attempt_id'] == authority['active_attempts'][pass_id] and equal(context['snapshot_identity'], authority['snapshot_identity']), 'plan_context_mismatch')
         same_set(authority['return_authorities'][pass_id]['required_coverage_tuples'], [row for row in plan['required_coverage_tuples'] if row['review_pass_id'] == pass_id], 'plan_context_coverage_mismatch')
+        if item['perspective'] in SINGLE_PASS_PERSPECTIVES:
+            require_fact(item['prior_finding_visibility'] == ('closure_ledger' if context.get('previously_fixed') else 'none'), 'plan_visibility_mismatch')
     responses = authority['responses']; seen_events = []; pass_states = {}
     for ledger in candidate['pass_attempt_ledger']:
         pass_id = ledger['review_pass_id']; attempts = ledger['attempts']
@@ -402,30 +521,72 @@ def validate_terminal_barrier(authority, candidate):
                 require_fact(all(native[key] == context[key] for key in ('batch_id', 'review_snapshot_id', 'review_pass_id', 'review_attempt_id')) and native['source_digest'] == context['snapshot_identity']['value'], 'native_context_mismatch')
                 identified = identify_return(retained['identity_authority'], retained['delivery'])
                 require_fact(authority['canonical_response_events'][pass_id] == event_id and identified['classification'] in ('new_evidence', 'exact_replay'), 'nonactive_delivery_cannot_close')
-                reply = parse_json(retained['delivery']['payload']); validate_return(authority['return_authorities'][pass_id], reply)
+                return_authority = authority['return_authorities'][pass_id]
+                # Missing v10 fresh_dispatch fails here; facts validated above are reused within this barrier.
+                fact = facts[pass_id] if pass_id in facts else FreshReviewDispatchAuthority.validate(return_authority, return_authority['context'])
+                validate_native_review_binding(return_authority, native, fact)
+                reply = parse_json(retained['delivery']['payload']); validated_return(return_authority, reply, fact)
                 require_fact(reply['pass_completion_state'] == state and reply['review_attempt_id'] == active and retained['delivery']['event_id'] == event_id, 'terminal_response_mismatch')
             else:
                 require_fact(state in ('timed_out', 'failed', 'invalidated') and not terminals and attempt.get('failure_kind') in ('timeout', 'transport', 'schema_invalid', 'source_mutation') and nonblank(attempt.get('failure_evidence')), 'terminal_failure_evidence_missing')
             pass_states[pass_id] = state
     unique(seen_events, 'response_event_duplicate')
-    return {'terminal_pass_count': len(pass_states), 'coverage_complete': all(state == 'completed' for state in pass_states.values())}
+    return {'terminal_pass_count': len(pass_states), 'coverage_complete': all(state == 'completed' for state in pass_states.values())}, facts
+
+def unique_root(facts):
+    require_fact(len({fact['root_actor_id'] for fact in facts}) <= 1, 'review_root_mismatch')
+
+def validate_review_actors(authority, active_facts, retained_facts):
+    """Every v10 attempt is a distinct new actor under one root; later attempts exclude earlier ones."""
+    by_attempt = dict(retained_facts)
+    for pass_id, fact in active_facts.items():
+        key = (pass_id, authority['active_attempts'][pass_id])
+        require_fact(key not in by_attempt or by_attempt[key]['actor_id'] == fact['actor_id'], 'review_actor_mismatch')
+        by_attempt[key] = fact
+    unique([fact['actor_id'] for fact in by_attempt.values()], 'review_actor_reused')
+    unique_root(by_attempt.values())
+    require_fact(all(fact['review_subject'] == authority['review_subject'] for fact in by_attempt.values()), 'review_subject_mismatch')
+    for entry in authority['terminal_barrier']['pass_attempt_ledger']:
+        earlier = []
+        for attempt in entry['attempts']:
+            fact = by_attempt.get((entry['review_pass_id'], attempt['review_attempt_id']))
+            if fact is None:
+                continue
+            require_fact(set(earlier) <= set(fact['prior_reviewer_actor_ids']), 'review_prior_actor_missing')
+            earlier.append(fact['actor_id'])
 
 def snapshot_identity_valid(identity):
     return type(identity) is dict and all(nonblank(identity.get(key)) for key in ('basis', 'value', 'captured_at', 'scope_manifest_digest')) and identity['basis'] in ('git_revision', 'diff_digest', 'content_digest', 'task_or_pr_revision')
 
 def summary_projection_valid(authority, summary):
-    """Offline projection only; lacks raw return authority and cannot certify closure."""
+    """Offline projection cannot certify closure, actual zero inspection or absent history."""
     try:
         object(summary); plan = authority['plan']
         schema = next(x for x in load_contract('output')['artifacts'] if x['name'] == 'final_summary')
         require_fact(shape_valid(summary, schema), 'aggregate_schema_invalid')
         require_fact(equal(summary['final_batch_plan'], plan) and summary['final_review_snapshot_id'] == authority['review_snapshot_id'] and equal(summary['final_snapshot_identity'], authority['snapshot_identity']), 'aggregate_identity_mismatch')
         batches = summary['batch_summaries']
+        inspected = (any(batch['terminal_response_count'] > 0 for batch in batches)
+                     or any(row['coverage_disposition'] in ('inspected_no_risk', 'finding') for row in summary['coverage_ledger'])
+                     or bool(summary['aggregated_findings']) or bool(summary['fixed_items'])
+                     or bool(authority.get('retained_reviewed_scope', [])))
+        if authority.get('producer_version') == '9.0':
+            require_fact(bool(summary['reviewed_scope']), 'aggregate_scope_invalid')
+        elif 'retained_reviewed_scope' not in authority:
+            # Offline projections lack retained-history truth. Nonempty scope may
+            # come from an inactive inspection; empty scope is provisional only.
+            require_fact(bool(summary['reviewed_scope']) or (not inspected
+                         and summary['coverage_complete'] is False
+                         and summary['result'] == 'HAS_REMAINING_ITEMS'), 'aggregate_scope_invalid')
+        else:
+            require_fact(bool(summary['reviewed_scope']) if inspected else
+                         summary['reviewed_scope'] == [] and summary['coverage_complete'] is False
+                         and summary['result'] == 'HAS_REMAINING_ITEMS', 'aggregate_scope_invalid')
         require_fact(summary['rounds'] > 0 and len(batches) == summary['rounds'] and [x['started_batch_ordinal'] for x in batches] == list(range(1, summary['rounds'] + 1)), 'batch_history_mismatch')
         unique([x['batch_id'] for x in batches], 'batch_identity_duplicate'); unique([x['review_snapshot_id'] for x in batches], 'snapshot_identity_duplicate')
         for batch in batches:
             count = batch['expected_response_count']
-            require_fact(snapshot_identity_valid(batch['snapshot_identity']) and 2 <= count <= 6 and 0 <= batch['terminal_response_count'] <= count, 'batch_arithmetic_mismatch')
+            require_fact(snapshot_identity_valid(batch['snapshot_identity']) and 1 <= count <= 6 and 0 <= batch['terminal_response_count'] <= count, 'batch_arithmetic_mismatch')
             if batch['batch_status'] == 'complete':
                 require_fact(batch['terminal_response_count'] == count and batch['aggregate_rubric_recomputed'] is True, 'batch_arithmetic_mismatch')
             elif batch['batch_status'] in ('incomplete', 'invalidated'):
@@ -440,8 +601,8 @@ def summary_projection_valid(authority, summary):
     except (Invalid, KeyError, TypeError, AttributeError, IndexError):
         return False
 
-def validated_retained_findings(authority):
-    sources = []
+def validated_retained_evidence(authority):
+    sources = []; reviewed_scope = []; facts = {}
     for event_id, retained in authority['responses'].items():
         native = retained['identity_authority']['dispatch_binding']; pass_id = native['review_pass_id']; current = authority['return_authorities'].get(pass_id)
         if current is None or native['batch_id'] != authority['plan']['batch_id'] or native['review_snapshot_id'] != authority['plan']['review_snapshot_id']:
@@ -451,8 +612,24 @@ def validated_retained_findings(authority):
         require_fact(retained['delivery']['event_id'] == event_id, 'retained_event_mismatch')
         identify_return(retained['identity_authority'], retained['delivery'])
         original_context = dict(context, review_attempt_id=native['review_attempt_id'])
-        original = retained.get('return_authority', dict(current, context=original_context))
-        require_fact(equal(original['context'], original_context) and equal(original['required_coverage_tuples'], current['required_coverage_tuples']), 'historical_dispatch_mismatch')
+        if native['producer_version'] in ('10.0', 'v10') and native['review_attempt_id'] != context['review_attempt_id']:
+            require_fact('return_authority' in retained, 'retained_review_authority_missing')
+        original = retained.get('return_authority', dict(current, context=original_context, historical_dispatch_binding=native))
+        require_fact(original.get('producer_version') == authority.get('producer_version'), 'review_version_relabelled')
+        if original.get('producer_version') == '10.0':
+            native_fields = {'reviewer_actor_id', 'native_invocation_id', 'handoff_digest'}
+            expected_context = {key: value for key, value in original_context.items() if key not in native_fields}
+            retained_context = {key: value for key, value in original['context'].items() if key not in native_fields}
+            require_fact(equal(retained_context, expected_context), 'historical_dispatch_mismatch')
+        else:
+            require_fact(equal(original['context'], original_context), 'historical_dispatch_mismatch')
+        require_fact(equal(original['required_coverage_tuples'], current['required_coverage_tuples']), 'historical_dispatch_mismatch')
+        fact = FreshReviewDispatchAuthority.validate(original, original['context'])
+        validate_native_review_binding(original, native, fact)
+        if fact is not None:
+            key = (pass_id, native['review_attempt_id'])
+            require_fact(key not in facts or equal(facts[key], fact), 'review_actor_mismatch')
+            facts[key] = fact
         try:
             reply = parse_json(retained['delivery']['payload'])
         except (Invalid, ValueError, UnicodeError):
@@ -460,11 +637,12 @@ def validated_retained_findings(authority):
         if type(reply) is dict and type(reply.get('rubric_scores')) is dict and 'critical_override' in reply['rubric_scores']:
             require_fact('return_authority' in retained or native['review_attempt_id'] == context['review_attempt_id'], 'historical_override_authority_missing')
         try:
-            validate_return(original, reply)
+            validated_return(original, reply, fact)
         except (Invalid, KeyError, TypeError, AttributeError, IndexError):
             continue
         sources.extend({'source_kind': 'review_pass', 'source_id': pass_id, 'finding': finding} for finding in reply['findings'])
-    return sources
+        reviewed_scope.extend(reply['reviewed_scope'])
+    return {'source_findings': sources, 'reviewed_scope': distinct(reviewed_scope), 'facts': facts}
 
 def unique_source_findings(sources):
     by_id = {}
@@ -475,7 +653,7 @@ def unique_source_findings(sources):
     return list(by_id.values())
 
 def validate_aggregate_accounting(authority, summary):
-    plan = authority['plan']; barrier = validate_terminal_barrier(authority, authority['terminal_barrier'])
+    plan = authority['plan']; barrier, active_facts = terminal_barrier(authority, authority['terminal_barrier'])
     schema = next(x for x in load_contract('output')['artifacts'] if x['name'] == 'final_summary')
     require_fact(shape_valid(summary, schema, {}), 'aggregate_schema_invalid')
     claim = next(field for field in schema['object_fields'] if field['name'] == 'evidence_bounded_claim')['validation'].removeprefix('Exactly: ')
@@ -483,7 +661,10 @@ def validate_aggregate_accounting(authority, summary):
     require_fact(summary.get('evidence_bounded_claim') == claim if clean_claim else 'evidence_bounded_claim' not in summary, 'aggregate_claim_invalid')
     reasons = summary.get('additional_round_reasons', [])
     require_fact([reason['round'] for reason in reasons] == list(range(2, summary['rounds'] + 1)) and (not reasons or reasons[0]['reason'] == 'changed_files'), 'additional_round_reasons_invalid')
-    require_fact(summary_projection_valid({'plan': plan, 'review_snapshot_id': plan['review_snapshot_id'], 'snapshot_identity': authority['snapshot_identity']}, summary), 'aggregate_projection_invalid')
+    retained_evidence = validated_retained_evidence(authority)
+    if authority.get('producer_version') == '10.0':
+        validate_review_actors(authority, active_facts, retained_evidence['facts'])
+    require_fact(summary_projection_valid({'plan': plan, 'review_snapshot_id': plan['review_snapshot_id'], 'snapshot_identity': authority['snapshot_identity'], 'producer_version': authority.get('producer_version'), 'retained_reviewed_scope': retained_evidence['reviewed_scope']}, summary), 'aggregate_projection_invalid')
     require_fact(equal(summary['final_batch_plan'], plan) and summary['final_review_snapshot_id'] == plan['review_snapshot_id'] and equal(summary['final_snapshot_identity'], authority['snapshot_identity']), 'aggregate_identity_mismatch')
     ledger = [row for row in summary['coverage_ledger'] if row['batch_id'] == plan['batch_id'] and row['review_snapshot_id'] == plan['review_snapshot_id']]
     for row in ledger:
@@ -502,8 +683,10 @@ def validate_aggregate_accounting(authority, summary):
     complete = barrier['coverage_complete'] and all(row['terminal_state'] == 'completed' and row['coverage_status'] == 'complete' and row['coverage_disposition'] in ('inspected_no_risk', 'finding') for row in ledger)
     require_fact(summary['coverage_complete'] is complete, 'aggregate_false_coverage')
     require_fact(not summary.get('coverage_gaps', []) or (not complete and summary['result'] == 'HAS_REMAINING_ITEMS'), 'aggregate_explicit_coverage_gaps')
+    if authority.get('producer_version') == '10.0':
+        require_fact(set(retained_evidence['reviewed_scope']) <= set(summary['reviewed_scope']), 'aggregate_scope_lost')
     sources = unique_source_findings(authority['source_findings'])
-    expected_sources = unique_source_findings(validated_retained_findings(authority) + authority.get('pre_batch_findings', []) + authority.get('historical_fixed_findings', []))
+    expected_sources = unique_source_findings(retained_evidence['source_findings'] + authority.get('pre_batch_findings', []) + authority.get('historical_fixed_findings', []))
     same_set(sources, expected_sources, 'source_findings_mismatch')
     aggregates = summary['aggregated_findings']; unique([x['aggregate_finding_id'] for x in aggregates], 'aggregate_finding_duplicate')
     accounting = summary['aggregation_ledger']; rows = [x for x in accounting if x['disposition'] in ('retained', 'merged', 'fixed_closed')]
@@ -526,7 +709,7 @@ def validate_aggregate_accounting(authority, summary):
     same_set([x['aggregate_finding_id'] for x in closure], [x['aggregate_finding_id'] for x in fixed], 'closure_identity_mismatch')
     fresh_closure_finding_ids = []; actual_closure = []
     for pass_id, event_id in authority['canonical_response_events'].items():
-        if authority['return_authorities'][pass_id]['context']['review_perspective'] != 'closure_verification':
+        if not closure_context(authority['return_authorities'][pass_id]['context']):
             continue
         retained = authority['responses'].get(event_id)
         if retained is not None:
@@ -545,7 +728,7 @@ def validate_aggregate_accounting(authority, summary):
         outcome = next(x for x in closure if x['aggregate_finding_id'] == original['aggregate_finding_id']); current = next((x for x in aggregates if x['aggregate_finding_id'] == original['aggregate_finding_id']), None)
         if outcome['status'] == 'verified_closed':
             require_fact(current is None, 'closed_finding_retained')
-        elif outcome['status'] == 'incomplete' and any(authority['return_authorities'][entry['review_pass_id']]['context']['review_perspective'] == 'closure_verification' and entry['terminal_state'] != 'completed' for entry in ledger):
+        elif outcome['status'] == 'incomplete' and any(closure_context(authority['return_authorities'][entry['review_pass_id']]['context']) and entry['terminal_state'] != 'completed' for entry in ledger):
             require_fact(current is None, 'unassessed_closure_finding_invented')
         else:
             require_fact(current is not None and current['severity'] in ('must-fix', 'should-fix') and not any(item in original['source_finding_ids'] for item in current['source_finding_ids']), 'regressed_closure_finding_missing')
@@ -558,10 +741,39 @@ def validate_aggregate_accounting(authority, summary):
     require_fact(last['batch_id'] == plan['batch_id'] and last['review_snapshot_id'] == plan['review_snapshot_id'] and equal(last['snapshot_identity'], authority['snapshot_identity']) and last['expected_response_count'] == len(plan['expected_passes']), 'batch_history_mismatch')
     response_count = sum(next(x for x in entry['attempts'] if x['review_attempt_id'] == entry['active_terminal_attempt_id'])['terminal_state'] in ('completed', 'needs_context', 'blocked') for entry in authority['terminal_barrier']['pass_attempt_ledger'])
     require_fact(last['terminal_response_count'] == response_count and last['aggregate_rubric_recomputed'] is complete and (last['batch_status'] == 'complete' if complete else last['batch_status'] in ('incomplete', 'invalidated')), 'batch_arithmetic_mismatch')
-    material = any(x['severity'] in ('must-fix', 'should-fix') for x in aggregates) or bool(summary.get('remaining_items'))
+    reconciliation = None
+    if authority.get('producer_version') == '10.0' and authority.get('review_subject') in ('plan', 'acceptance'):
+        reconciliation = validate_request_plan_reconciliation(authority.get('request_plan_reconciliation'))
+    incomplete = reconciliation is not None and not reconciliation_complete(reconciliation, authority['review_subject'])
+    if incomplete:
+        missing = set(reconciliation.get('observed_requirement_ids', [])) != set(reconciliation['required_requirement_ids'])
+        require_fact(summary['result'] == 'HAS_REMAINING_ITEMS', 'request_coverage_missing' if missing else 'request_plan_incomplete')
+    material = any(x['severity'] in ('must-fix', 'should-fix') for x in aggregates) or bool(summary.get('remaining_items')) or incomplete
     expected = 'HAS_REMAINING_ITEMS' if not complete or material or any(x['status'] != 'verified_closed' for x in closure) else 'ISSUES_FIXED' if fixed else 'CLEAN'
     require_fact(summary['result'] == expected, 'aggregate_false_clean')
-    return {'coverage_complete': complete, 'result': expected, 'source_finding_count': len(sources)}
+    result = {'producer_version': authority['producer_version'], 'coverage_complete': complete, 'result': expected, 'source_finding_count': len(sources)}
+    if reconciliation is not None:
+        result['request_plan_reconciliation'] = reconciliation
+    return result
+
+def validate_request_plan_reconciliation(value):
+    """Shape comes from contracts/input.yaml; only cross-field set rules live here."""
+    field = next(x for x in load_contract('input')['fields'] if x['name'] == 'request_plan_reconciliation')
+    require_fact(type(value) is dict and nonblank(value.get('original_request_ref')) and nonblank(value.get('approved_plan_ref')), 'request_plan_binding_missing')
+    require_fact(shape_valid(value, field), 'request_coverage_unknown')
+    required = value['required_requirement_ids']; observed = value.get('observed_requirement_ids', [])
+    unique(required, 'request_coverage_duplicate'); unique(observed, 'request_coverage_duplicate')
+    unresolved = value.get('unresolved_requirement_ids', [])
+    require_fact(set(observed) <= set(required) and set(unresolved) <= set(required), 'request_coverage_foreign')
+    return value
+
+def reconciliation_complete(value, subject):
+    # Absent unresolved lists are unknown, never an implicit empty list. A plan
+    # review observes allocation, so planned unfinished task-wide work is not gated;
+    # acceptance observes delivery and requires explicit empty unfinished work.
+    keys = ('unresolved_requirement_ids', 'unresolved_finding_ids') + (('unfinished_task_wide_work',) if subject == 'acceptance' else ())
+    return (set(value.get('observed_requirement_ids', [])) == set(value['required_requirement_ids'])
+            and all(value.get(key) == [] for key in keys))
 
 def probe():
     require_fact(sys.version_info >= (3, 9), 'runtime_capability_unavailable')
@@ -570,8 +782,8 @@ def probe():
     require_fact(Decimal('2.345').quantize(Decimal('.01'), rounding=ROUND_HALF_UP) == Decimal('2.35'), 'runtime_capability_unavailable')
     require_fact(digest('abc') == 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad', 'runtime_capability_unavailable')
     require_fact(not shape_valid(True, {'type': 'int'}) and shape_valid(1, {'type': 'int'}), 'runtime_capability_unavailable')
-    load_contract('handoffs'); load_contract('output')
-    return {'valid': True, 'capabilities': ['json', 'private_passive_yaml', 'decimal', 'sha256', 'exact_types']}
+    load_contract('handoffs'); load_contract('output'); load_contract('input')
+    return {'valid': True, 'capabilities': ['json', 'private_passive_yaml', 'decimal', 'sha256', 'exact_types', 'fresh_review_authority'], 'current_producer_version': '10.0', 'readable_producer_versions': ['9.0', '10.0']}
 
 def call(request):
     receipts = {}
@@ -603,7 +815,76 @@ def main():
         code = str(error) if type(error) is Invalid else 'input_invalid'
         sys.stdout.buffer.write(encoded({'valid': False, 'diagnostics': [code]}) + b'\n'); return 1
 
-HELP = '## Deterministic validation and retained returns\n\nResolve `scripts/review-tools.py` from the loaded assistant-review skill directory,\nindependent of cwd or Workflow. Python3.9+ uses stdlib JSON/Decimal/SHA-256 and its private pinned\npure-Python YAML parser; run `python3 -I -S -B "<skill>/scripts/review-tools.py" --probe`. Missing runtime or\ncontracts blocks validation: restore the prerequisite and rerun, never accept an\nunchecked return. The installers probe before any writes, including dry-run.\n\nInvoke the helper with one JSON object on stdin:\n`{"operation":"identify_return","authority":{...},"candidate":{...}}`.\nThe other operations are `validate_return`, `validate_terminal_barrier`, and\n`validate_aggregate_accounting`. Exit 0 means mechanically valid, exit 1 invalid;\nstdout is a compact JSON object with `valid`, stable `diagnostics`, input receipts\nand, on success, `result`. No raw payload is echoed. Both library and CLI reject\nnon-primitive/oversize inputs (8 MiB, depth 64, library 100000 nodes). No Ruby/pip/site package or compiled YAML dependency is needed. The library\nloads only its own authoritative passive YAML; it never spawns, mutates files,\nfetches network data or resolves caller paths. No second schema is maintained.\n\nThe caller resolves independently retained authority before invoking. Candidate\nfields, receipts and matching hashes cannot establish that authority. Helper\ninputs are primitive transport representations validated on conversion:\n\n- `identify_return`: authority has `dispatch_binding`, `history_known`, `records`,\n  `archives`. A binding has nonempty `task_id`, `native_invocation_id`, `batch_id`,\n  `review_snapshot_id`, `review_pass_id`, `review_attempt_id`, `producer_id`,\n  `producer_version`, `source_digest`. Candidate has that `binding`, `event_id`,\n  `complete:true`, full opaque `payload` UTF-8 text, and `payload_ref`. Each retained\n  record has binding, payload_ref, payload_sha256 and unique event_ids; archives\n  maps resolved refs to exact raw bytes. Same native event returns `exact_replay`;\n  distinct identical delivery returns `duplicate`; first return `new_evidence`.\n  The caller independently establishes completeness from terminal native transport\n  evidence; the transported complete flag is not proof from the agent payload.\n  Whitespace differences remain changed evidence. Conflicting event identity or\n  changed payload fails with a conflict diagnostic; preserve both raw returns.\n- `validate_return`: authority `context` contains exact dispatched round, batch,\n  snapshot ID/identity, pass/active attempt/perspective, assigned_scope, scope_size\n  and applicability flags; `required_coverage_tuples` is that pass\'s independently\n  frozen tuple list. Include previously_fixed for closure. Candidate is the\n  unchanged canonical v9 return. The helper checks recursive canonical fields,\n  conditions, status truth tables, exact unique tuple membership, provenance,\n  closure IDs and decimal rubric arithmetic. Omitted applicability uses canonical\n  literal boolean defaults; rubric defaults true for medium/large scope. Unknown\n  flags/scope and medium+ rubric exemptions fail closed without mutating authority.\n  When rubric_scores includes a\n  critical_override, supply independent authority `critical_override_cap` as\n  1, 2 or 2.5 per the shared rubric; omit it otherwise. The caller classifies the\n  finding and verifies that the override description matches this retained cap.\n  The helper never derives a cap from prose. It cannot judge evidence truth,\n  severity, equivalence, actual inspection or semantic verdict quality.\n- `validate_terminal_barrier`: authority has frozen `plan`, `active_attempts`\n  (pass ID to actual attempt ID), `return_authorities` (pass ID to return authority),\n  `canonical_response_events` (pass ID to original canonical event ID),\n  `source_current`, `producer_current`, `unresolved_conflicts`, and `responses`.\n  Each responses event maps to retained `identity_authority` plus original\n  `delivery` as above. Candidate contains v9 `pass_attempt_ledger`. Canonical\n  archived event replay can support its existing active slot; a distinct duplicate\n  never creates another terminal. Lifecycle failures need typed failure evidence.\n- `validate_aggregate_accounting`: same authority plus `terminal_barrier`,\n  `snapshot_identity`, immutable `previously_fixed`, independently retained\n  `source_findings` envelopes (`source_kind`, `source_id`, `finding`), optional\n  `pre_batch_findings` and `historical_fixed_findings`. Candidate is canonical\n  final_summary. All same-snapshot validated retained returns contribute findings,\n  including inactive attempts; only active returns establish coverage. Historical\n  return identity is reconstructed from native dispatch binding and frozen pass\n  context/tuples. Retain original `return_authority` on a response when rubric\n  override applicability needs its original cap. Identical full source findings\n  with one stable ID deduplicate; conflicting contents block accounting.\n  Validate canonical conditional fields, calibrated claim, later-round reasons,\n  the barrier, identities, exact coverage, lossless source\n  union/provenance, conservative merge arithmetic and closure accounting before\n  the caller assesses equivalence, aggregate rubric and final result. Unassessed\n  closure is incomplete: native NEEDS_CONTEXT/BLOCKED retains exact closure rows;\n  typed lifecycle failure without a response uses each immutable fixed ID with\n  status incomplete and evidence exactly equal to retained failure_evidence.\n  Coverage rows also bind that failure evidence; no finding is invented.\n\nRetain canonical payload once with occurrence bindings; do not add a result,\nfinding or global ledger. Validate source/producer freshness and resolve/rehash\nall referenced archives after compaction; absent history is unknown. Preserve\nactive attempts, unresolved conflicts and validated findings. Use native\ncompletion notifications and bounded waits; full inventories serve discovery or\nrecovery, not repeated result retrieval. Host-injected reports remain visible;\nsavings concern avoidable subsequent retrieval/processing only. Duplicate or\nstale results never constitute coverage or semantic progress.'
+HELP = '## Deterministic validation and retained returns\n\nResolve `scripts/review-tools.py` from the loaded assistant-review skill directory,\nindependent of cwd or Workflow. Python3.9+ uses stdlib JSON/Decimal/SHA-256 and its private pinned\npure-Python YAML parser; run `python3 -I -S -B "<skill>/scripts/review-tools.py" --probe`. Missing runtime or\ncontracts blocks validation: restore the prerequisite and rerun, never accept an\nunchecked return. The installers probe before any writes, including dry-run.\n\nInvoke the helper with one JSON object on stdin:\n`{"operation":"identify_return","authority":{...},"candidate":{...}}`.\nThe other operations are `validate_return`, `validate_terminal_barrier`, and\n`validate_aggregate_accounting`. Exit 0 means mechanically valid, exit 1 invalid;\nstdout is a compact JSON object with `valid`, stable `diagnostics`, input receipts\nand, on success, `result`. No raw payload is echoed. Both library and CLI reject\nnon-primitive/oversize inputs (8 MiB, depth 64, library 100000 nodes). No Ruby/pip/site package or compiled YAML dependency is needed. The library\nloads only its own authoritative passive YAML; it never spawns, mutates files,\nfetches network data or resolves caller paths. No second schema is maintained.\n\nThe caller resolves independently retained authority before invoking. Candidate\nfields, receipts and matching hashes cannot establish that authority. Helper\ninputs are primitive transport representations validated on conversion:\n\n- `identify_return`: authority has `dispatch_binding`, `history_known`, `records`,\n  `archives`. A binding has nonempty `task_id`, `native_invocation_id`, `batch_id`,\n  `review_snapshot_id`, `review_pass_id`, `review_attempt_id`, `producer_id`,\n  `producer_version`, `source_digest`. Candidate has that `binding`, `event_id`,\n  `complete:true`, full opaque `payload` UTF-8 text, and `payload_ref`. Each retained\n  record has binding, payload_ref, payload_sha256 and unique event_ids; archives\n  maps resolved refs to exact raw bytes. Same native event returns `exact_replay`;\n  distinct identical delivery returns `duplicate`; first return `new_evidence`.\n  The caller independently establishes completeness from terminal native transport\n  evidence; the transported complete flag is not proof from the agent payload.\n  Whitespace differences remain changed evidence. Conflicting event identity or\n  changed payload fails with a conflict diagnostic; preserve both raw returns.\n- `validate_return`: authority `context` contains exact dispatched round, batch,\n  snapshot ID/identity, pass/active attempt/perspective, assigned_scope, scope_size\n  and applicability flags; `required_coverage_tuples` is that pass\'s independently\n  frozen tuple list. Include previously_fixed for closure. Candidate is the\n  unchanged canonical v10 return (or explicitly bound historical v9 return). The helper checks recursive canonical fields,\n  conditions, status truth tables, exact unique tuple membership, provenance,\n  closure IDs and decimal rubric arithmetic. Omitted applicability uses canonical\n  literal boolean defaults; rubric defaults true for medium/large scope. Unknown\n  flags/scope and medium+ rubric exemptions fail closed without mutating authority.\n  When rubric_scores includes a\n  critical_override, supply independent authority `critical_override_cap` as\n  1, 2 or 2.5 per the shared rubric; omit it otherwise. The caller classifies the\n  finding and verifies that the override description matches this retained cap.\n  The helper never derives a cap from prose. It cannot judge evidence truth,\n  severity, equivalence, actual inspection or semantic verdict quality.\n- `validate_terminal_barrier`: authority has frozen `plan`, `active_attempts`\n  (pass ID to actual attempt ID), `return_authorities` (pass ID to return authority),\n  `canonical_response_events` (pass ID to original canonical event ID),\n  `source_current`, `producer_current`, `unresolved_conflicts`, and `responses`.\n  Each responses event maps to retained `identity_authority` plus original\n  `delivery` as above. Candidate contains the version-bound `pass_attempt_ledger`. Canonical\n  archived event replay can support its existing active slot; a distinct duplicate\n  never creates another terminal. Lifecycle failures need typed failure evidence.\n- `validate_aggregate_accounting`: same authority plus `terminal_barrier`,\n  `snapshot_identity`, immutable `previously_fixed`, independently retained\n  `source_findings` envelopes (`source_kind`, `source_id`, `finding`), optional\n  `pre_batch_findings` and `historical_fixed_findings`. Candidate is canonical\n  final_summary. All same-snapshot validated retained returns contribute findings,\n  including inactive attempts; only active returns establish coverage. Historical\n  return identity is reconstructed from native dispatch binding and frozen pass\n  context/tuples. Retain original `return_authority` for inactive v10 actors and original rubric override caps. Identical full source findings\n  with one stable ID deduplicate; conflicting contents block accounting.\n  Validate canonical conditional fields, calibrated claim, later-round reasons,\n  the barrier, identities, exact coverage, lossless source\n  union/provenance, conservative merge arithmetic and closure accounting before\n  the caller assesses equivalence, aggregate rubric and final result. Unassessed\n  closure is incomplete: native NEEDS_CONTEXT/BLOCKED retains exact closure rows;\n  typed lifecycle failure without a response uses each immutable fixed ID with\n  status incomplete and evidence exactly equal to retained failure_evidence.\n  Coverage rows also bind that failure evidence; no finding is invented.\n\nRetain canonical payload once with occurrence bindings; do not add a result,\nfinding or global ledger. Validate source/producer freshness and resolve/rehash\nall referenced archives after compaction; absent history is unknown. Preserve\nactive attempts, unresolved conflicts and validated findings. Use native\ncompletion notifications and bounded waits; full inventories serve discovery or\nrecovery, not repeated result retrieval. Host-injected reports remain visible;\nsavings concern avoidable subsequent retrieval/processing only. Duplicate or\nstale results never constitute coverage or semantic progress.'
+
+HELP += """
+
+Current Review v10 authority
+
+Return, terminal and aggregate authorities explicitly declare producer_version
+10.0. No missing-version downgrade exists. validate_return authority contains
+fresh_dispatch with actor_id, root_actor_id, author_actor_ids,
+prior_reviewer_actor_ids, native_invocation_id, creation_evidence_ref,
+runtime_evidence_ref, runtime, context_isolation=fresh_self_contained,
+handoff_digest, source_digest and review_subject (plan|implementation|closure|
+acceptance); runtime codex additionally requires fork_turns=none; runtime must equal
+its stripped lowercase form, so padded or cased codex is invalid. The fresh_dispatch and
+historical_dispatch_binding shapes are their object_fields in contracts/input.yaml,
+loaded at runtime (author_actor_ids non-empty, no unknown keys). Actor disjointness,
+creation and source/context facts come from retained native authority, never the
+return payload. Its caller context binds reviewer_actor_id, native_invocation_id,
+handoff_digest, review_subject and snapshot_identity. These authority facts stay
+outside the reviewer payload and bounded worker bundle.
+
+Terminal/aggregate authority declares the same review_subject and version; every
+current and retained inactive return_authority declares exactly the top-level
+producer_version (review_version_relabelled), which the aggregate result echoes, is current and each actual native invocation binds its fresh actor.
+A typed terminal creation failure without a response retains frozen context/tuples
+and real failure evidence; it needs no invented actor and cannot close coverage.
+The terminal barrier validates each active fresh fact once and reuses it for that
+pass's return. Aggregate accounting runs that barrier, then separately validates the
+original authority of every retained same-snapshot return (active and inactive), and
+compares every actor from active fresh_dispatch and retained inactive v10 return_authority: actor IDs are
+unique across all passes and attempts (review_actor_reused), all share one
+root_actor_id (review_root_mismatch) and review_subject, and each attempt's
+prior_reviewer_actor_ids includes every earlier attempt actor of its pass
+(review_prior_actor_missing). No author, root or prior reviewer substitutes.
+Historical v9 reading explicitly declares 9.0 and historical_dispatch_binding
+with the original complete native binding. It preserves original labels and
+raw payload identity, and cannot certify v10 through omission or relabelling.
+
+Trivial/small light review plans one light_contract_and_runtime pass covering
+both trivial_small concerns (discovery_pass_count 1, no separate closure pass).
+That one-pass topology requires topology.light_review true and terminal/aggregate
+authority controller_intensity light (topology_light_review_missing,
+topology_light_intensity_mismatch); light_review true on any other topology fails
+(topology_light_review_invalid), and small standard/strict keeps >=2 passes;
+its post-fix re-review is one new pass that receives previously_fixed with
+closure_ledger visibility and returns closure_results. Historical two-pass
+trivial/small batches stay valid; medium+ topology is unchanged.
+
+Plan review (authority review_subject plan) plans one plan_coverage_and_feasibility
+pass at any scope size with topology.plan_review true, discovery_pass_count 1 and
+no closure pass (topology_plan_closure_invalid); that perspective without
+plan_review true fails (topology_plan_review_missing) and plan_review true for any
+other subject fails (topology_plan_review_invalid). Its post-fix re-review is one
+new pass with the same closure_ledger/closure_results mechanics as light review.
+Historical multi-pass plan reviews stay readable; new plan reviews use exactly one pass.
+
+For plan/final acceptance, aggregate authority additionally resolves existing
+request_plan_reconciliation: original_request_ref, approved_plan_ref,
+required_requirement_ids, observed_requirement_ids, unresolved_requirement_ids,
+unfinished_task_wide_work and unresolved_finding_ids; for plan review,
+approved_plan_ref is the reviewed plan-definition ref, not an approval. Its shape is the
+request_plan_reconciliation field in contracts/input.yaml, loaded at runtime.
+Completed verdicts require observed == required and explicit empty unresolved
+requirement and finding lists; absent lists are unknown. For plan review observed
+means allocated by the plan and unfinished_task_wide_work may be non-empty; final
+acceptance observes delivery and also requires explicit empty unfinished work. Truthful incomplete coverage remains
+HAS_REMAINING_ITEMS. A valid result echoes the validated object unchanged as
+result.request_plan_reconciliation for workflow admission. This projection consumes existing scope/acceptance evidence;
+it is not another plan ledger or proof that substantive review occurred.
+"""
 
 if __name__ == '__main__':
     raise SystemExit(main())

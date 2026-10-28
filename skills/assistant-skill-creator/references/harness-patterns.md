@@ -26,8 +26,8 @@ Required fields:
 - `accepted_by`: user, orchestrator, or approved plan reference.
 
 Design rule: when `subagent_execution_mode=delegated`, use subagent perspectives
-for the debate when relevant. Direct fallback must record why subagents were not
-used and which role-equivalent perspectives were considered. The debate may
+for the debate when relevant. direct_main needs no fallback reason; direct fallback
+covers Build only and never replaces independent review. The debate may
 clarify acceptance; it must not add unapproved scope.
 
 Contract placement:
