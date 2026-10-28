@@ -178,7 +178,7 @@ else
     fail "reviewer must mirror code-reviewer model/effort and both must say 'Review the work, not the author.'"
 fi
 
-test_start "Installer-managed Codex AGENTS guidance keeps one adaptive main stance without subagent role configuration"
+test_start "Installer-managed Codex and Claude guidance keeps one adaptive main stance without subagent role configuration"
 lean_guidance_failures=()
 unix_guidance=""
 windows_guidance=""
@@ -224,10 +224,12 @@ for installer_source in "$FRAMEWORK_DIR/install.sh" "$FRAMEWORK_DIR/install.ps1"
     done
     normalized_guidance="$(
         awk '
-            /^# AGENTS.md — Codex Agent Instructions$/ { in_guidance = 1 }
+            /^# Assistant Framework - .* Instructions$/ { in_guidance = 1 }
             in_guidance && /^<!-- .*AGENTS_MD.*END/ { exit }
             in_guidance {
                 gsub(/\\`/, "`")
+                gsub(/\$AGENTS_MD_AGENT_NAME|\{\{AGENT_NAME\}\}/, "AGENT_NAME")
+                gsub(/\$AGENTS_MD_GUIDANCE_HOME|\{\{GUIDANCE_HOME\}\}/, "GUIDANCE_HOME")
                 print
             }
         ' "$installer_source"

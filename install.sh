@@ -1039,56 +1039,115 @@ else
     cleanup_legacy_framework_hooks "$LEGACY_HOOK_SETTINGS_FILE" "$HOOKS_TARGET" "$AGENT"
 fi
 
-# ── Generate AGENTS.md for Codex (it reads AGENTS.md, not CLAUDE.md) ────────
-# Generate the current managed AGENTS.md section after legacy cleanup.
+# ── Generate managed instructions (AGENTS.md for Codex, CLAUDE.md for Claude) ─
+# Both agents get the same ASCII guidance; only the title and guidance path differ.
+# Generate the current managed section after legacy cleanup.
 
 AGENTS_MD_MARKER_START="ASSISTANT_FRAMEWORK_AGENTS_MD_START"
 AGENTS_MD_MARKER_END="ASSISTANT_FRAMEWORK_AGENTS_MD_END"
 
-if [[ "$AGENT" == "codex" ]]; then
-    AGENTS_MD="$AGENT_HOME/AGENTS.md"
+if [[ "$AGENT" == "codex" || "$AGENT" == "claude" ]]; then
+    if [[ "$AGENT" == "codex" ]]; then
+        AGENTS_MD="$AGENT_HOME/AGENTS.md"
+        AGENTS_MD_AGENT_NAME="Codex"
+        AGENTS_MD_GUIDANCE_HOME="the configured \`CODEX_HOME\` (default \`~/.codex\`)"
+    else
+        AGENTS_MD="$AGENT_HOME/CLAUDE.md"
+        AGENTS_MD_AGENT_NAME="Claude Code"
+        AGENTS_MD_GUIDANCE_HOME="\`~/.claude\`"
+    fi
     echo ""
 
     # Keep the installer-owned standing guidance small. Installed SKILL.md files
     # are the native source of routing metadata and detailed workflow policy.
     AGENTS_MD_CONTENT="<!-- $AGENTS_MD_MARKER_START -->
-# AGENTS.md — Codex Agent Instructions
+# Assistant Framework - $AGENTS_MD_AGENT_NAME Instructions
 
-Codex uses installed skills through native skill routing. When a skill matches, read its \`SKILL.md\` and load only the references or contracts relevant to the current phase.
+Read \`tools/progress/operating-guidance.md\` under $AGENTS_MD_GUIDANCE_HOME as the common operating guidance for every activity, including when no skill matches.
 
-Read \`tools/progress/operating-guidance.md\` under the configured \`CODEX_HOME\` (default \`~/.codex\`) as the common operating guidance for every activity, including when no skill matches.
+## Skills
 
-For ordinary repository changes, use assistant-workflow when that skill is installed; assistant-clarify helps untangle or structure unclear intent.
+- When a skill's description matches the request, read its \`SKILL.md\` and follow it through to its handoff, loading only the references and contracts the current phase needs.
+- For ordinary repository changes, use assistant-workflow when that skill is installed; use assistant-clarify for unclear or tangled intent.
+- Do not skip a matched skill's gates, verification, or review to save time.
+
+## Involving the user
+
+Work autonomously and resolve what you can from the repository and the request. Stop for the user only to:
+
+- decide a consequential choice about intent, scope, safety, or acceptance that is still open;
+- approve a destructive, external, or hard-to-reverse action, or one beyond the granted access or cost;
+- approve a plan before medium+ or elevated-risk development edits;
+- hear that the shared stagnation guard stopped corrective work.
+
+Do not ask for routine confirmation or repeat an approval already given for the same scope. Otherwise report once at the end: outcome, files changed and why, checks and results, material limits, and next action.
 
 ## Operating stance
 
 - For small, low-risk, localized work, act as a hands-on worker: complete it directly with proportionate validation and a fresh self-review.
 - For medium+ or elevated-risk development work, remain the orchestrator: own user communication, task state, scope, decisions, delegation, and final integration; route implementation and independent review through the matching workflow roles when required.
-- Keep orchestration proportional—do not introduce delegation or ceremony when direct lightweight execution is sufficient.
+- Keep orchestration proportional - do not introduce delegation or ceremony when direct lightweight execution is sufficient.
 
 ## Boundaries
 
-- Get plan approval before medium+ or risky edits.
-- Use subagents when requested by the user or required by applicable project or skill instructions; do not ask for separate spawn consent.
+- Use subagents when the user asks or applicable project or skill instructions require them; no separate spawn consent is needed.
 - Preserve user-authored files and existing dirty work.
 - Verify changes with repository commands and review the approved scope before handoff.
 - Keep credentials, secrets, PII, and private endpoints out of code, logs, task state, and memory.
 <!-- $AGENTS_MD_MARKER_END -->"
 
+    # Count exact marker lines; any unbalanced, nested, or duplicate marker is
+    # ambiguous, so the file is preserved unchanged instead of risking user content.
+    AGENTS_MD_MARKER_STATE="none"
+    if [[ -f "$AGENTS_MD" ]]; then
+        AGENTS_MD_MARKER_STATE="$(awk -v s="<!-- $AGENTS_MD_MARKER_START -->" -v e="<!-- $AGENTS_MD_MARKER_END -->" '
+            { t = $0; gsub(/^[ \t]+|[ \t\r]+$/, "", t) }
+            t == s { if (open || starts > 0) bad = 1; starts++; open = 1; next }
+            t == e { if (!open) bad = 1; ends++; open = 0 }
+            END {
+                if (bad || open || starts > 1 || ends > 1) print "ambiguous"
+                else if (starts == 1) print "block"
+                else print "none"
+            }' "$AGENTS_MD")"
+    fi
+
+    # Build the replacement in a private temp file beside the target, restore the
+    # original mode on it, then rename. The original stays untouched on any failure,
+    # and a read-only original does not block writing the replacement.
+    replace_agents_md() {
+        local tmp mode
+        tmp="$(mktemp "${AGENTS_MD}.XXXXXX")" || return 1
+        {
+            echo "$AGENTS_MD_CONTENT"
+            if [[ -f "$AGENTS_MD" ]]; then
+                echo ""
+                if [[ "$AGENTS_MD_MARKER_STATE" == "block" ]]; then
+                    sed "/^[[:space:]]*<!-- $AGENTS_MD_MARKER_START -->[[:space:]]*\$/,/^[[:space:]]*<!-- $AGENTS_MD_MARKER_END -->[[:space:]]*\$/d" "$AGENTS_MD"
+                else
+                    cat "$AGENTS_MD"
+                fi
+            fi
+        } > "$tmp" || { rm -f "$tmp"; return 1; }
+        if [[ -f "$AGENTS_MD" ]]; then
+            # GNU stat takes -c; BSD stat takes -f. Capture each attempt separately because
+            # GNU stat -f prints filesystem status, which would contaminate a combined result.
+            mode="$(stat -c %a "$AGENTS_MD" 2>/dev/null)" || mode="$(stat -f %Lp "$AGENTS_MD" 2>/dev/null)" || mode=""
+            [[ "$mode" =~ ^[0-7]+$ ]] && chmod "$mode" "$tmp" || { rm -f "$tmp"; return 1; }
+        fi
+        mv -f "$tmp" "$AGENTS_MD" || { rm -f "$tmp"; return 1; }
+    }
+
     if $DRY_RUN; then
-        dry "Would generate/update $AGENTS_MD from installed skills"
-    elif [[ -f "$AGENTS_MD" ]] && grep -q "$AGENTS_MD_MARKER_START" "$AGENTS_MD" 2>/dev/null; then
-        # Re-install: strip old installer block, preserve user content
-        sed -i.bak "/$AGENTS_MD_MARKER_START/,/$AGENTS_MD_MARKER_END/d" "$AGENTS_MD"
-        rm -f "${AGENTS_MD}.bak"
-        # Prepend installer block (it should come first)
-        { echo "$AGENTS_MD_CONTENT"; echo ""; cat "$AGENTS_MD"; } > "${AGENTS_MD}.tmp" \
-            && mv "${AGENTS_MD}.tmp" "$AGENTS_MD"
+        dry "Would generate/update $AGENTS_MD with the managed installer section"
+    elif [[ -L "$AGENTS_MD" ]]; then
+        info "WARNING: $AGENTS_MD is a symbolic link; preserved unchanged. Add the Assistant Framework guidance to the link target yourself if you want it."
+    elif [[ "$AGENTS_MD_MARKER_STATE" == "ambiguous" ]]; then
+        info "WARNING: Ambiguous, duplicate, or unbalanced Assistant Framework markers in $AGENTS_MD; preserved unchanged."
+    elif [[ "$AGENTS_MD_MARKER_STATE" == "block" ]]; then
+        replace_agents_md || fail "Could not update $AGENTS_MD; the original file was left unchanged."
         ok "Updated installer section in $AGENTS_MD (user customizations preserved)"
     elif [[ -f "$AGENTS_MD" ]]; then
-        # Existing file without markers — prepend installer block, keep user content
-        { echo "$AGENTS_MD_CONTENT"; echo ""; cat "$AGENTS_MD"; } > "${AGENTS_MD}.tmp" \
-            && mv "${AGENTS_MD}.tmp" "$AGENTS_MD"
+        replace_agents_md || fail "Could not update $AGENTS_MD; the original file was left unchanged."
         ok "Prepended installer section to existing $AGENTS_MD (user content preserved)"
     else
         # First install
