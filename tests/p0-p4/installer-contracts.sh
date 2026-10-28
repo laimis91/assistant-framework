@@ -1022,7 +1022,11 @@ cat >"$gnu_stat_home/bin/stat" <<GNUSTAT
 #!/bin/bash
 # GNU stat: -f prints filesystem status and fails on %Lp; -c %a prints the mode.
 if [[ "\$1" == "-f" && "\$2" == "%Lp" ]]; then echo "  File: \$3"; echo "    ID: 0 Namelen: 255"; exit 1; fi
-if [[ "\$1" == "-c" && "\$2" == "%a" ]]; then exec "$real_stat" -f %Lp "\$3"; fi
+if [[ "\$1" == "-c" && "\$2" == "%a" ]]; then
+    mode="\$("$real_stat" -c %a "\$3" 2>/dev/null)" || mode="\$("$real_stat" -f %Lp "\$3")" || exit 1
+    echo "\$mode"
+    exit 0
+fi
 exec "$real_stat" "\$@"
 GNUSTAT
 chmod +x "$gnu_stat_home/bin/stat"
