@@ -1464,18 +1464,23 @@ def unchanged_migrated_approval(plan):
         version = "15.0"
     else:
         v15 = provenance["workflow_migration"]
-        if not (bound(v15, "14.0", "15.0", original_digest("15.0"))
-                and digest(v15.get("historical_attestation")) == digest(attestation)):
+        if not bound(v15, "14.0", "15.0", original_digest("15.0")):
             return False
-        version = "14.0"
-        if attestation.get("schema_version") in {"12.0", "13.0"}:
-            # Verified v12/v13 producer provenance attests its own normalized v14 plan.
-            producer = provenance.get("producer")
-            return (isinstance(producer, dict) and producer.get("verified") is True
-                    and attestation == {"schema_version": producer.get("schema_version"), "verified": True,
-                                        "producer_ref": producer.get("producer_ref"),
-                                        "source_sha256": provenance.get("source_sha256")}
-                    and isinstance(attestation["producer_ref"], str) and bool(attestation["producer_ref"].strip()))
+        if "historical_attestation" not in v15:
+            # The released v14 migrator wrote no attestation, so the v15 attestation vouches for its output.
+            version = "15.0"
+        else:
+            if digest(v15["historical_attestation"]) != digest(attestation):
+                return False
+            version = "14.0"
+            if attestation.get("schema_version") in {"12.0", "13.0"}:
+                # Verified v12/v13 producer provenance attests its own normalized v14 plan.
+                producer = provenance.get("producer")
+                return (isinstance(producer, dict) and producer.get("verified") is True
+                        and attestation == {"schema_version": producer.get("schema_version"), "verified": True,
+                                            "producer_ref": producer.get("producer_ref"),
+                                            "source_sha256": provenance.get("source_sha256")}
+                        and isinstance(attestation["producer_ref"], str) and bool(attestation["producer_ref"].strip()))
     return (set(attestation) == {"schema_version", "verified", "producer_ref", "definition_sha256"}
             and attestation.get("schema_version") == version and attestation.get("verified") is True
             and isinstance(attestation.get("producer_ref"), str) and bool(attestation["producer_ref"].strip())

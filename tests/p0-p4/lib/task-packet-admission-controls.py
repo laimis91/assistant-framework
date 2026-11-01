@@ -3182,6 +3182,25 @@ def round4_authority_controls():
             mutate(trial["context"]["historical_plan_attestation"])
             expect(trial, "blocked", "legacy_provenance" if label != "blank producer" else "malformed",
                    name=version + " contradicting attestation: " + label)
+    # A v15 plan from the released v14 migrator has a migration row with no attestation field.
+    released14 = valid_request()
+    released14["plan"]["plan_schema_version"] = "14.0"
+    seal(released14)
+    released = deepcopy(released14)
+    released["plan"], released["context"] = API.normalize_v14(released14["plan"], released14["context"])
+    released["plan"]["reconciliation_provenance"]["workflow_migration"].pop("historical_attestation")
+    released["context"]["historical_plan_attestation"] = attest(released["plan"])
+    released["context"]["previous_plan"] = deepcopy(released["plan"])
+    admitted = expect(released, "accepted", name="released v14 migrator output keeps its unchanged approval with a v15 attestation")
+    expect({"boundary": released["boundary"], "target_packet_id": released["target_packet_id"], "plan": deepcopy(admitted["canonical_plan"]), "context": deepcopy(admitted["canonical_context"])},
+           "accepted", name="retained released v14 migrator output replays at 16.0")
+    unattested = deepcopy(released)
+    unattested["context"].pop("historical_plan_attestation")
+    refused = expect(unattested, "blocked", "review_authority", name="released v14 migrator output without attestation needs plan review", path="plan.review_ref")
+    assert refused["details"].startswith("plan_review_missing"), refused["details"]
+    wrong_version = deepcopy(released)
+    wrong_version["context"]["historical_plan_attestation"] = attest(released14["plan"])
+    expect(wrong_version, "blocked", "legacy_provenance", name="released v14 migrator output rejects a v14 attestation")
     historical, review_ref = historical_fallback_completion()
     expect(historical, "accepted", name="attested historical v9 direct_fallback keeps its original same-session actor")
     unattested = deepcopy(historical)
@@ -3351,7 +3370,8 @@ def round5_admission_controls():
             ("v16 producer version", lambda prov: prov["workflow_v16_migration"].update(producer_schema_version="16.0")),
             ("v16 original identity digest", lambda prov: prov["workflow_v16_migration"]["original_approved_plan_identity"].update(definition_digest="0" * 64)),
             ("v15 normalized digest", lambda prov: prov["workflow_migration"].update(normalized_definition_digest="0" * 64)),
-            ("chain attestation mismatch", lambda prov: prov["workflow_migration"]["historical_attestation"].update(producer_ref="producer:other"))):
+            ("chain attestation mismatch", lambda prov: prov["workflow_migration"]["historical_attestation"].update(producer_ref="producer:other")),
+            ("chain attestation removed from a v14-attested row", lambda prov: prov["workflow_migration"].pop("historical_attestation"))):
         trial = deepcopy(retained)
         for owner in (trial["plan"], trial["context"]["previous_plan"]):
             mutate(owner["reconciliation_provenance"])
