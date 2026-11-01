@@ -1,5 +1,7 @@
 # Project Cleanup Audit and Execution Report - 2026-06-25
 
+> Historical material. Use the [documentation map](README.md) for current guidance; verify dated claims against current source before reuse.
+
 ## Purpose
 
 This document records both the original cleanup audit and the cleanup execution completed from it. It should remain useful for later cleanup sessions by preserving:

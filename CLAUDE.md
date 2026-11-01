@@ -4,6 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Read `tools/progress/operating-guidance.md` for every activity in this repository.
 
+## Documentation maintenance
+
+Start repository work at [docs/README.md](docs/README.md), then load the task-specific guide, relevant [specification](docs/specs/README.md) and owning source. For features and relevant bug fixes, update affected durable specs and canonical guides in the same change, or report a concrete reason they remain accurate. Before handoff, check changed claims against source, verify changed links, and name the documentation updated. Add new durable documents to the owning index with explicit status. Keep development plans, task journals and per-run evidence in local Git-ignored state; commit durable requirements under `docs/specs/`. Historical plans and proposals do not establish implemented behavior.
+
 ## Project Overview
 
 Assistant Framework v0.3.0 — a personal AI assistant framework providing composable skills, agents, rules, and tools for Claude Code, Codex, and Gemini CLI. This is a **framework repo**, not an application — it installs into agent home directories (`~/.claude/`, `~/.codex/`, `~/.gemini/`).
