@@ -446,10 +446,9 @@ for term in \
     fi
 done
 for term in \
-    "docs/plans/bes-candidate-search-phase-2.md" \
-    "docs/plans/bes-candidate-search-phase-3.md"; do
+    "docs/specs/candidate-search.md"; do
     if [[ ! -f "$FRAMEWORK_DIR/$term" ]]; then
-        missing_candidate_terms+=("future plan missing: $term")
+        missing_candidate_terms+=("candidate-search specification missing: $term")
     fi
 done
 if [[ "${#missing_candidate_terms[@]}" -eq 0 ]]; then

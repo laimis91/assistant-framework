@@ -2,6 +2,10 @@
 
 A Personal AI Assistant framework for developers. 16 first-class `assistant-*` skills: structured workflow, clarification, TDD enforcement, debugging, thinking tools, research, security analysis, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), and evidence-based verification selection and assessment.
 
+## Documentation
+
+Start with the [documentation map](docs/README.md) for task-specific guides, [durable specifications](docs/specs/README.md), evaluation instructions and historical context. Update the affected spec and guide alongside relevant features and fixes; development plans and execution state stay local and Git-ignored.
+
 ## What it does
 
 1. **Structured Workflow** — adaptive Discover > optional Plan > Build > Review > Document flow with bounded repair and evidence-gated handoff

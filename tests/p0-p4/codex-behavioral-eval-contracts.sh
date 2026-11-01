@@ -2316,11 +2316,11 @@ else
 fi
 
 test_start "documented smoke command is explicitly GPT-5.6-Terra while runner default remains Sol"
-if grep -Fq -- '--model gpt-5.6-terra' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq -- '--cases small-fix-stays-lightweight,seeded-code-review-regressions' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq -- '--repeats 1' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq 'The general runner default remains `gpt-5.6-sol`' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq 'GPT-5.6-Terra represents the common simple-task smoke profile' "$FRAMEWORK_DIR/docs/evals/README.md"; then
+if grep -Fq -- '--model gpt-5.6-terra' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && grep -Fq -- '--cases small-fix-stays-lightweight,seeded-code-review-regressions' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && grep -Fq -- '--repeats 1' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && grep -Fq 'The general runner default remains `gpt-5.6-sol`' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && grep -Fq 'GPT-5.6-Terra represents the common simple-task smoke profile' "$FRAMEWORK_DIR/docs/evals/codex-trials.md"; then
     pass
 else
     fail "smoke guidance did not pin Terra explicitly without changing the Sol default"
@@ -3755,8 +3755,8 @@ active_adapter_version="$(sed -n 's/^ADAPTER_VERSION="\([^"]*\)"$/\1/p' "$runner
 active_adapter_label="${active_adapter_version##*-}"
 if [[ "$active_adapter_version" =~ ^codex-framework-eval-v[0-9]+$ ]] \
     && grep -Fq "EXPECTED_ADAPTER_VERSION=\"$active_adapter_version\"" "$semantic_finalizer" \
-    && grep -Fq "Before any model call, adapter $active_adapter_label runs" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "\`$active_adapter_version\`" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "Before any model call, adapter $active_adapter_label runs" "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && grep -Fq "\`$active_adapter_version\`" "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
     && grep -Fq "full $active_adapter_label runner bytes" "${BASH_SOURCE[0]}" \
     && grep -Fq "v4 resolved-model traces cannot mix with the $active_adapter_label attestation contract" "${BASH_SOURCE[0]}" \
     && grep -Fq "legacy resolved-model evidence remained valid under the $active_adapter_label schema" "${BASH_SOURCE[0]}"; then
@@ -5008,7 +5008,7 @@ if ruby -e '
     readme.include?("including plan-only admission") &&
     readme.include?("without reapplying the admission-time freshness window")
   exit valid ? 0 : 1
-' "$runner" "$FRAMEWORK_DIR/docs/evals/README.md"; then
+' "$runner" "$FRAMEWORK_DIR/docs/evals/codex-trials.md"; then
     pass
 else
     fail "manual activation freshness does not preflight its Python prerequisite before timestamp validation"
@@ -5033,7 +5033,7 @@ if ruby -e '
     readme.include?("entire process group is reaped") &&
     readme.include?("plan-only runs") && readme.include?("omit the VIEWING case")
   exit valid ? 0 : 1
-' "$runner" "$FRAMEWORK_DIR/docs/evals/README.md"; then
+' "$runner" "$FRAMEWORK_DIR/docs/evals/codex-trials.md"; then
     pass
 else
     fail "VIEWING execute Node preflight is missing, late, or documented as an unconditional prerequisite"
@@ -5849,10 +5849,10 @@ else
 fi
 
 test_start "semantic review documentation distinguishes whole-response deletion from bounded synthetic summaries"
-if grep -Fq 'It never persists the whole model response.' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq 'ready synthetic-only semantic packet' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq '`review_summary`' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && ! grep -Fq 'It never persists the model-authored summary.' "$FRAMEWORK_DIR/docs/evals/README.md"; then
+if grep -Fq 'It never persists the whole model response.' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && grep -Fq 'ready synthetic-only semantic packet' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && grep -Fq '`review_summary`' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && ! grep -Fq 'It never persists the model-authored summary.' "$FRAMEWORK_DIR/docs/evals/codex-trials.md"; then
     pass
 else
     fail "semantic review docs contradicted the bounded synthetic summary retention contract"

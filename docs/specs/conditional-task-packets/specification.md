@@ -1,10 +1,12 @@
 # Conditional decomposition and canonical task packets
 
+> Historical design baseline, prepared 2026-10-16. The proposed/not-started statements below describe that preparation, not current implementation status. For current behavior use the Workflow skill, contracts and admission helper linked from the specification index. Original JSON evidence identities and hashes are retained verbatim.
+
 Status: proposed specification; implementation not started.
 
 Prepared: 2026-10-16. Baseline: `622a58d493a3b17df0af9e632ba28287cdf41fd8` plus the inspected working tree. The current branch and unrelated cleanup changes are recorded in [source-manifest.json](source-manifest.json); they are not part of this proposal.
 
-This specification prepares the recommendation requested in the conversation. It does not change the active workflow, authorize implementation, run a native evaluation, or establish a performance improvement. The companion [plan](plan.md) describes the readiness and adoption sequence. [preparation.json](preparation.json) contains the existing-system evidence matrix and the Architecture Decision Pack, with `execution_status=not_started` and `handoff_binding_state=discover_only`.
+This specification prepares the recommendation requested in the conversation. It does not change the active workflow, authorize implementation, run a native evaluation, or establish a performance improvement. The development readiness plan is retained only in local ignored task state. [preparation.json](preparation.json) contains the existing-system evidence matrix and the Architecture Decision Pack, with `execution_status=not_started` and `handoff_binding_state=discover_only`.
 
 Canonical preparation evidence identity: `docs/plans/conditional-task-packets/preparation.json#feature_preparation_evidence`. Evidence-row identifiers below refine that identity; they do not replace it.
 

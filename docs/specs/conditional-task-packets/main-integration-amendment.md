@@ -1,7 +1,9 @@
 # Main integration amendment for conditional task packets
 
+> Historical integration proposal. This is preserved design rationale, not current workflow authority.
+
 This proposed amendment reconciles the original [specification](specification.md)
-and [readiness plan](plan.md) with main e4c3f0e665a6b9077898c3f2bca7b841345dceb6
+and the original development readiness plan with main e4c3f0e665a6b9077898c3f2bca7b841345dceb6
 and its writer-owned test protocol. It preserves CP01..14 outcomes and historical
 preparation records; it does not claim implementation, passing checks, native
 adoption or completion. Its version/ownership/scope/resource amendments require

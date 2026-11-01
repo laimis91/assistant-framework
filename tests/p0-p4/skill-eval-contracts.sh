@@ -5901,46 +5901,46 @@ if grep -Fq "default eval inventory is $documented_skill_count first-class \`ass
     && grep -Fq "assistant-security" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq 'Canonical first-class fixtures use schema `2.0` and include top-level' "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "Local-only" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "This inventory now covers all $documented_skill_count first-class \`assistant-*\` skills" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq 'Every first-class fixture uses schema `2.0` and declares top-level' "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && grep -Fq "This inventory now covers all $documented_skill_count first-class \`assistant-*\` skills" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq 'Every first-class fixture uses schema `2.0` and declares top-level' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
     && ! grep -Fq "5 of 15 first-class skills remain" "$FRAMEWORK_DIR/README.md" \
-    && ! grep -Fq "skills/assistant-memory/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && ! grep -Fq "skills/assistant-reflexion/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
+    && ! grep -Fq "skills/assistant-memory/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && ! grep -Fq "skills/assistant-reflexion/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
     && ! grep -Fq "Level 4 is future work" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && p0p4_contains_text "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" 'For first-class schema `2.0` `evals/cases.json`, `activation_cases` contains exact' \
     && p0p4_contains_text "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" '--activation-results FILE' \
     && p0p4_contains_text "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" '../../docs/evals/README.md#per-skill-eval-fixtures' \
     && cmp -s "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
-    && grep -Fq "skills/assistant-debugging/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-diagrams/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-docs/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-ideate/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-telos/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-skill-creator/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-research/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-onboard/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-verification/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-workflow/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-review/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-tdd/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq "skills/assistant-security/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq '`empty_array`' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq 'requires the target path to resolve to an empty array' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq '`empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `absent_or_empty_array`, `equals_path`,' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq '`array_type` requires the target path to resolve to an array and permits an empty array.' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq '`path_absent`' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq '`array_object_values_exact`' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq '`object_keys_exact`' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq 'In this exhaustive fixed operator list, `path_absent` passes only when its target' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq 'path cannot resolve; a present `null` value is present and therefore fails.' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq '`absent_or_empty_array` passes when its target path is unresolved or resolves to' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq 'an empty array; a present `null`, non-array, or non-empty array fails.' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq 'unordered exact multiset against bounded `expected_objects`, preserving the' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq '`one_of` permits at most 32 scalar values. `array_object_values_exact` permits' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq 'at most 16 unique fields and 32 expected objects; absent projected fields fail,' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq 'while a present `null` matches only a present `null`.' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq -- '--activation-results /tmp/skill-activation-results.json' "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq 'exactly one result' "$FRAMEWORK_DIR/docs/evals/README.md"; then
+    && grep -Fq "skills/assistant-debugging/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq "skills/assistant-diagrams/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq "skills/assistant-docs/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq "skills/assistant-ideate/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq "skills/assistant-telos/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq "skills/assistant-skill-creator/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq "skills/assistant-research/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq "skills/assistant-onboard/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq "skills/assistant-verification/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq "skills/assistant-workflow/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq "skills/assistant-review/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq "skills/assistant-tdd/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq "skills/assistant-security/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq '`empty_array`' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq 'requires the target path to resolve to an empty array' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq '`empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `absent_or_empty_array`, `equals_path`,' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq '`array_type` requires the target path to resolve to an array and permits an empty array.' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq '`path_absent`' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq '`array_object_values_exact`' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq '`object_keys_exact`' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq 'In this exhaustive fixed operator list, `path_absent` passes only when its target' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq 'path cannot resolve; a present `null` value is present and therefore fails.' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq '`absent_or_empty_array` passes when its target path is unresolved or resolves to' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq 'an empty array; a present `null`, non-array, or non-empty array fails.' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq 'unordered exact multiset against bounded `expected_objects`, preserving the' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq '`one_of` permits at most 32 scalar values. `array_object_values_exact` permits' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq 'at most 16 unique fields and 32 expected objects; absent projected fields fail,' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq 'while a present `null` matches only a present `null`.' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq -- '--activation-results /tmp/skill-activation-results.json' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq 'exactly one result' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md"; then
     pass
 else
     fail "skill eval docs do not describe complete first-class coverage"
@@ -5966,7 +5966,7 @@ structured_operator_list_is_exact() {
     [[ "$actual" == "$expected_structured_operator_names" ]]
 }
 docs_operator_oracle_failures=()
-if ! structured_operator_list_is_exact "$FRAMEWORK_DIR/docs/evals/README.md" evals-readme; then
+if ! structured_operator_list_is_exact "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" evals-readme; then
     docs_operator_oracle_failures+=("evals-readme-current")
 fi
 contract_guide_operator_route_is_current() {
@@ -5977,7 +5977,8 @@ contract_guide_operator_route_is_current() {
         && p0p4_contains_text "$guide" '`../../tools/evals/lib/skill-eval-fixtures.sh`' \
         && p0p4_contains_text "$guide" 'For Windows Codex shared skills, resolve these docs/tools under configured `CODEX_HOME`' \
         && [[ -f "$skill_dir/../../tools/evals/lib/skill-eval-fixtures.sh" ]] \
-        && structured_operator_list_is_exact "$skill_dir/../../docs/evals/README.md" evals-readme
+        && p0p4_contains_text "$skill_dir/../../docs/evals/README.md" "skill-fixtures.md#per-skill-eval-fixtures" \
+        && structured_operator_list_is_exact "$skill_dir/../../docs/evals/skill-fixtures.md" evals-readme
 }
 for guide in "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md"; do
     if ! contract_guide_operator_route_is_current "$guide"; then
@@ -5988,7 +5989,7 @@ docs_operator_mutation_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-operator-li
 p0p4_register_cleanup "$docs_operator_mutation_root"
 for removed_operator in one_of array_object_values_exact array_items_nonempty_array_fields; do
     mutant_document="$docs_operator_mutation_root/evals-readme-$removed_operator.md"
-    cp "$FRAMEWORK_DIR/docs/evals/README.md" "$mutant_document"
+    cp "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" "$mutant_document"
     perl -0pi -e "s/\x60$removed_operator\x60,? ?//" "$mutant_document"
     if structured_operator_list_is_exact "$mutant_document" evals-readme; then
         docs_operator_oracle_failures+=("evals-readme-$removed_operator-mutation-accepted")
