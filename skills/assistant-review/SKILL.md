@@ -44,9 +44,7 @@ or dispatch. Keep this guidance outside Reviewer bundles.
 
 Load [review-loop.md](references/review-loop.md) before the first batch; it owns
 transitions, frozen snapshot identity, response
-barriers, aggregation, deterministic `scripts/review-tools.py` validation and pivots.
-Python3.9+ with the bundled passive YAML parser is required even for standalone review; missing
-runtime blocks validation. Transport receipts remain caller evidence. The current v9 protocol remains authoritative:
+barriers, aggregation, and pivots. The current v9 protocol remains authoritative:
 
 - Each frozen batch plans and attempts at least two independent, sibling-blind
   passes. Resolve `reviewer_context` for each pass, the selected handoff before
@@ -110,5 +108,6 @@ Omit empty checklist and internal protocol sections from the human summary.
 
 Load [review-finding-permanent-rule.md](references/review-finding-permanent-rule.md)
 only for evidence of recurring process gaps or high-impact repeatable failures.
+A finding does not automatically require a permanent rule or new framework.
 Existing mapped all-ID distillation fixtures retain their consumed classification
 envelope; that compatibility requirement does not govern ordinary human summaries.
