@@ -29,3 +29,11 @@ shared three-consecutive-unproductive-cycle guard across tests, checks, workers
 and sessions. Material expansion returns to selection/approval.
 
 For unmatched work, explicitly read `~/.gemini/tools/progress/operating-guidance.md` as the operating guidance for this chat, then handle the request. Standing coverage requires the user's existing native instruction source; installation alone does not demonstrate activation.
+
+Execution delegation is optional at every size/risk; the main agent may implement
+and verify with actual identity and without child records. Formal review uses a
+newly created independent agent with fresh supported context isolation; report
+unavailability honestly. Selected Research v5 uses five sibling-blind native lens
+actors and a new independent peer. Do not describe sequential role-play as
+independence. TDD v3 may explicitly reuse unchanged current GREEN with zero new
+runs/results/counts; actual edits or freshness/binding conflicts rerun due checks.

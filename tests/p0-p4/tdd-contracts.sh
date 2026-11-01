@@ -123,7 +123,7 @@ if ! ruby -ryaml -e '
   results_ok = phases.each_with_index.all? do |phase, index|
     results = phase.fetch("object_fields").find { |f| f["name"] == "command_results" }
     result_fields = results.fetch("object_fields").to_h { |f| [f.fetch("name"), f] }
-    expected_fields = %w[argv check_id cwd freshness result target]
+    expected_fields = %w[argv check_id cwd freshness invocation_ref result target]
     expected_fields += %w[test_file test_name] if index == 0
     phase_required = index.zero? ? phase["required"] == true : phase["required"] == "conditional"
     phase_started_condition = index.zero? || phase.fetch("condition").include?(index == 1 ? "started GREEN after authorizing RED and production edits" : "current GREEN all_tests_pass is true")
@@ -159,7 +159,7 @@ if ! ruby -ryaml -e '
     cycle_log.fetch("validation").include?("may omit not-yet-started GREEN or REFACTOR phases") &&
     cycle_log.fetch("validation").include?("started phase may have zero command_results") &&
     cycle_log.fetch("validation").include?("partial entry without treating it as complete") &&
-    cycle_log.fetch("validation").include?("at least one invocation per phase") &&
+    cycle_log.fetch("validation").include?("at least one invocation per executed phase") &&
     cycle_log.fetch("validation").include?("all intended pass guards") &&
     phases[1].fetch("object_fields").find { |f| f["name"] == "command_results" }.fetch("validation").include?("empty list means verification has not run yet") &&
     phases[2].fetch("object_fields").find { |f| f["name"] == "command_results" }.fetch("validation").include?("empty list means verification has not run yet")
@@ -477,7 +477,7 @@ if ! ruby -ryaml -e '
   exit(check.include?("only start REFACTOR after current GREEN passes") &&
     check.include?("do not close a partial delegated log as complete") &&
     recovery.include?("Preserve actual partial phase evidence") &&
-    recovery.include?("require an actual matching authorizing RED plus passing GREEN and REFACTOR invocations before completion") ? 0 : 1)
+    recovery.include?("require an actual matching authorizing RED plus passing GREEN plus executed REFACTOR or validated reuse_green before completion") ? 0 : 1)
 ' "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/phase-gates.yaml"; then
     missing_tdd_skill_terms+=("INV3 must preserve partial evidence without allowing early refactor or completion")
 fi
@@ -900,7 +900,125 @@ if ruby -ryaml -e '
   index = YAML.load_file(ARGV[1])
   allowed = index.fetch("load_sets").fetch("completion").fetch("selectors").flat_map { |s| s.fetch("allowed_names", []) }
   abort "projection selector missing" unless allowed.include?("ownership_stage_projection")
-  abort "unnecessary major migration" unless output["schema_version"] == "2.0" && index["schema_version"] == "2.0"
+  abort "required v3 migration missing" unless output["schema_version"] == "3.0" && index["schema_version"] == "3.0"
 ' "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/output.yaml" "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/index.yaml"; then pass; else fail "non-executing ownership projection contract invalid"; fi
+
+test_start "TDD v3 declares the GREEN reuse fields its executable consumer reads while v2 rows stay valid"
+if ruby -ryaml -e '
+  output = YAML.load_file(ARGV[0])
+  script = File.read(ARGV[1])
+  cycle = output.fetch("artifacts").find { |a| a["name"] == "cycle_log" }.fetch("object_fields")
+  by_name = ->(fields, name) { fields.find { |f| f["name"] == name } }
+  green = by_name.call(cycle, "green").fetch("object_fields")
+  refactor = by_name.call(cycle, "refactor").fetch("object_fields")
+  version = by_name.call(cycle, "schema_version")
+  abort "cycle schema_version undeclared" unless version && version["type"] == "enum" && version["enum_values"] == ["3.0"] &&
+    version["on_missing"] && version.fetch("validation").include?("historical v2 entry") && script.include?(%q{cycle.get("schema_version") == "3.0"})
+  identity = by_name.call(green, "relevant_input_identity")
+  consumer_categories = script[/fields = \{([^}]*)\}\s*\n\s*value = object_value\(value, pid \+ "\.relevant_input_identity"\)/, 1].to_s.scan(/"([a-z_]+)"/).flatten.sort
+  abort "consumer categories not found" unless consumer_categories.size == 7
+  abort "relevant_input_identity undeclared" unless identity && identity["type"] == "object" && identity["on_missing"] == "fail" &&
+    identity.fetch("condition").include?("reuse_green") && identity.fetch("condition").include?("reuse_identity_mode == detailed")
+  categories = identity.fetch("object_fields")
+  abort "input categories drift from consumer" unless categories.map { |f| f["name"] }.sort == consumer_categories
+  # The category identity shape is defined exactly once and every category references it.
+  shape = identity.fetch("category_fields")
+  abort "category shape drifts from consumer" unless shape.map { |f| f["name"] } == %w[identity freshness] &&
+    shape.last.fetch("enum_values") == %w[current stale unknown] && shape.all? { |f| f["on_missing"] == "fail" }
+  abort "category shape repeated or unreferenced" unless categories.all? { |c| c["on_missing"] == "fail" &&
+    c["fields_from"] == "category_fields" && !c.key?("object_fields") }
+  abort "identity shape defined more than once" unless File.read(ARGV[0]).scan("Only current supports reuse_green.").size == 1
+
+  # Digest is the default reuse proof; detailed identity is an explicit persisted opt-in.
+  mode = by_name.call(cycle, "reuse_identity_mode")
+  abort "reuse_identity_mode undeclared" unless mode && mode["type"] == "enum" && mode["enum_values"] == %w[digest detailed] &&
+    mode["required"] == false && mode["on_missing"] == "infer" && mode.fetch("infer_from") == "Absent means digest."
+  reuse_digest = by_name.call(green, "reuse_digest")
+  abort "green.reuse_digest undeclared" unless reuse_digest && reuse_digest["type"] == "string" && reuse_digest["required"] == "conditional" &&
+    reuse_digest.fetch("condition") == "schema_version == 3.0 and refactor.verification_disposition == reuse_green" &&
+    reuse_digest["on_missing"] == "fail" && reuse_digest.fetch("validation").include?("independently resolved current digest") &&
+    reuse_digest.fetch("validation").include?("a failed GREEN, blocks reuse")
+  digest_recipe = reuse_digest.fetch("description")
+  abort "green.reuse_digest format or computation unstated" unless reuse_digest.fetch("validation").include?("No sentinel (unknown, n/a, none); never invented") &&
+    digest_recipe.start_with?("Lowercase `sha256:` then 64 lowercase hex: SHA-256 of bytewise-sorted sha256sum lines (hash, relative path)") &&
+    digest_recipe.include?("scoped tracked and untracked non-ignored files GREEN checks read (git ls-files -co --exclude-standard)") &&
+    digest_recipe.include?("callers recompute identically")
+  abort "green.reuse_digest keeps a second digest recipe" if digest_recipe.include?("git tree id") || digest_recipe.include?("dirty-diff") ||
+    reuse_digest.fetch("validation").include?("or 64 hex")
+  abort "assessment required outside detailed mode" unless by_name.call(refactor, "reuse_assessment_ref").fetch("condition").include?("reuse_identity_mode == detailed")
+  abort "consumer does not read the digest wire field" unless script.include?(%q{resolved.get("reuse_digest")}) &&
+    script.include?(%q{cycle.get("reuse_identity_mode", "digest")})
+  refs = by_name.call(refactor, "green_invocation_refs")
+  abort "green_invocation_refs required outside detailed mode" unless refs.fetch("condition").include?("reuse_identity_mode == detailed") &&
+    refs.fetch("validation").start_with?("When present in either mode")
+  all_pass = by_name.call(refactor, "all_tests_pass")
+  abort "reuse all_tests_pass treats green_invocation_refs as always required" unless all_pass.fetch("validation").include?("green_invocation_refs, when present (required in detailed mode), resolve to")
+  # Every inferred field names its inference source (C6).
+  inferred = []
+  walk = ->(fields) { fields.each { |f| inferred << f if f["on_missing"] == "infer"; walk.call(f["object_fields"] || []) } }
+  walk.call(output.fetch("artifacts"))
+  abort "infer without infer_from: #{inferred.reject { |f| f["infer_from"] }.map { |f| f["name"] }}" unless inferred.all? { |f| f["infer_from"].to_s.strip != "" }
+  %w[green refactor].each do |phase|
+    ref = by_name.call(phase == "green" ? green : refactor, "invocation_ref")
+    abort "#{phase} phase-level invocation_ref undeclared" unless ref && ref["type"] == "string" && ref["required"] == "conditional" &&
+      ref.fetch("condition").include?("schema_version == 3.0") && ref["on_missing"] == "fail"
+  end
+  abort "consumer no longer reads phase refs" unless script.include?(%q{refactor["invocation_ref"] == green["invocation_ref"]})
+  abort "reuse ref must equal original GREEN" unless by_name.call(refactor, "invocation_ref").fetch("validation").include?("equals green.invocation_ref")
+  disposition = by_name.call(refactor, "verification_disposition")
+  abort "disposition breaks v2" unless disposition["required"] == "conditional" && disposition["on_missing"] == "infer" &&
+    disposition.fetch("validation").include?("Infer executed when absent")
+  %w[green_invocation_refs reuse_assessment_ref].each { |n| abort "#{n} lacks on_missing" unless by_name.call(refactor, n)["on_missing"] == "fail" }
+
+  # A historical v2 row (no cycle schema_version) without invocation_ref must remain valid;
+  # a v3 row needs one only when a phase-level ref or green_invocation_refs references it.
+  required_now = lambda do |field, entry, referenced = false|
+    return true if field["required"] == true
+    return false unless field["required"] == "conditional"
+    cond = field.fetch("condition")
+    v3 = cond.include?("schema_version 3.0") ? entry["schema_version"] == "3.0" : true
+    v3 && (!cond.include?("referenced by a phase-level invocation_ref or green_invocation_refs") || referenced)
+  end
+  v2_entry = {"red" => {"command_results" => [{"target" => "t", "argv" => ["x"], "cwd" => ".", "result" => "failed", "freshness" => "current"}]}}
+  v3_entry = v2_entry.merge("schema_version" => "3.0")
+  row_ref_fields = %w[red green refactor].map do |phase|
+    by_name.call(by_name.call(cycle, phase).fetch("object_fields"), "command_results").fetch("object_fields").find { |f| f["name"] == "invocation_ref" }
+  end
+  abort "v2 row without invocation_ref rejected" if row_ref_fields.any? { |f| required_now.call(f, v2_entry) }
+  abort "v3 referenced row may omit invocation_ref" unless row_ref_fields.all? { |f| required_now.call(f, v3_entry, true) && f["on_missing"] == "fail" }
+  abort "unreferenced v3 row still needs invocation_ref" if row_ref_fields.any? { |f| required_now.call(f, v3_entry, false) }
+  mutated = Marshal.load(Marshal.dump(row_ref_fields.first)).merge("required" => true)
+  abort "evaluator cannot detect unconditional row ref" unless required_now.call(mutated, v2_entry)
+
+  # Reuse requires zero new invocations and all_tests_pass is true under reuse without any invocation.
+  refactor_results = by_name.call(refactor, "command_results")
+  pass_rule = by_name.call(refactor, "all_tests_pass")
+  abort "reuse may add invocations" unless refactor_results.fetch("validation").include?("reuse_green requires an empty list") &&
+    disposition.fetch("validation").include?("empty REFACTOR command_results list") &&
+    script.include?(%q{refactor.get("command_results") == []})
+  abort "all_tests_pass contradicts reuse" unless pass_rule.fetch("condition").include?("verification_disposition == reuse_green") &&
+    pass_rule.fetch("validation").include?("For reuse_green: REFACTOR command_results stays empty, and true only when") &&
+    !pass_rule.fetch("validation").include?("Omit until a REFACTOR invocation is recorded")
+  abort "reuse requires no-change refactor" unless by_name.call(refactor, "changes_made").fetch("validation").include?("reuse_green requires exactly none needed") &&
+    script.include?(%q{refactor.get("changes_made") == "none needed"})
+' "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/output.yaml" "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/task-packet-admission.py"; then pass; else fail "TDD v3 reuse fields, v2 compatibility, or zero-invocation reuse contract invalid"; fi
+
+test_start "TDD prose and gates allow validated reuse without an unconditional distinct REFACTOR run"
+if ruby -ryaml -e '
+  skill = File.read(ARGV[0])
+  gates = YAML.load_file(ARGV[1])
+  ref1 = gates.fetch("gates").find { |g| g["phase"] == "REFACTOR" }.fetch("exit_assertions").find { |a| a["id"] == "REF1" }
+  abort "distinct REFACTOR run still unconditional" if skill.match?(/run a distinct\s+REFACTOR verification/)
+  abort "SKILL lacks reuse/edit rule" unless skill.include?("After edits, run affected checks") && skill.include?("reuse_green") &&
+    skill.include?("Historical v2 cycle entries stay readable")
+  flat = skill.gsub(/\s+/, " ")
+  abort "standalone no-change reuse is not a no-rerun digest rule" unless flat.include?("No edits after GREEN and nothing changed since means no rerun") &&
+    flat.include?("`green.reuse_digest`") && flat.include?("Failed GREEN, an unknown digest, or a changed one reruns") &&
+    flat.include?("`green.reuse_digest` (`contracts/output.yaml` recipe) from that passing GREEN run") && !flat.include?("source/test/config snapshot digest") &&
+    flat.include?("`reuse_identity_mode: detailed`")
+  abort "REF1 lacks digest equality" unless ref1.fetch("check").include?("current snapshot digest equal to green.reuse_digest")
+  abort "REF1 disagrees with reuse contract" unless ref1.fetch("check").include?("After any refactor edit") &&
+    ref1.fetch("check").include?("validated v3 reuse_green") && ref1.fetch("check").include?("zero new invocations")
+' "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md" "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/phase-gates.yaml"; then pass; else fail "TDD prose or REF1 still requires a distinct REFACTOR run"; fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

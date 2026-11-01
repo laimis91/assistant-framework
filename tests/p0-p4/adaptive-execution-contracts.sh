@@ -10,7 +10,7 @@ tdd="$FRAMEWORK_DIR/skills/assistant-tdd"
 
 test_start "workflow defines adaptive build execution lanes"
 if p0p4_contains_text "$workflow/contracts/input.yaml" "- name: build_execution_lane" \
-    && p0p4_contains_text "$workflow/contracts/input.yaml" "enum_values: [none, inline_direct, bounded_executor, separated_workers]" \
+    && p0p4_contains_text "$workflow/contracts/input.yaml" "enum_values: [none, direct_main, bounded_executor, separated_workers]" \
     && p0p4_contains_text "$workflow/contracts/output.yaml" "- name: build_execution_lane"; then
     pass
 else
@@ -25,22 +25,22 @@ else
     fail "prepare-only routing does not select the no-execution lane"
 fi
 
-test_start "ordinary medium defaults to bounded executor plus independent review"
+test_start "ordinary medium permits direct main execution and independent review"
 if p0p4_contains_text "$workflow/references/workflow-controller.md" "ordinary medium" \
-    && p0p4_contains_text "$workflow/references/workflow-controller.md" "build_execution_lane=bounded_executor" \
-    && p0p4_contains_text "$workflow/references/workflow-controller.md" "independent Code Reviewer"; then
+    && p0p4_contains_text "$workflow/references/workflow-controller.md" "build_execution_lane=direct_main" \
+    && p0p4_contains_text "$workflow/references/workflow-controller.md" "newly created reviewers with fresh context"; then
     pass
 else
-    fail "ordinary medium still requires split write/test workers"
+    fail "ordinary medium lacks direct execution or fresh independent review"
 fi
 
 test_start "separated workers are conditional rather than size ceremony"
-if p0p4_contains_text "$workflow/references/build-worker-protocol.md" "broad or noisy verification" \
-    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "environment-heavy" \
-    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "high or critical risk"; then
+if p0p4_contains_text "$workflow/references/build-worker-protocol.md" "concrete execution benefit" \
+    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "no mandatory spawn chain" \
+    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "execution-only Builder/Tester"; then
     pass
 else
-    fail "Builder/Tester separation lacks explicit risk and verification triggers"
+    fail "optional separation loses concrete benefit or writer/verifier ownership"
 fi
 
 test_start "phase gates accept bounded executor evidence without fake Builder dispatch"
@@ -81,10 +81,10 @@ fi
 test_start "subagent evidence contract follows selected execution lane"
 if p0p4_contains_text "$workflow/contracts/output.yaml" "bounded_executor_evidence" \
     && p0p4_contains_text "$workflow/contracts/output.yaml" "separated_worker_evidence" \
-    && p0p4_contains_text "$workflow/contracts/output.yaml" "Independent Code Reviewer evidence remains required"; then
+    && p0p4_contains_text "$workflow/contracts/output.yaml" "Newly created fresh-context Code Reviewer evidence is required at completion in every lane and execution_mode, including direct_main"; then
     pass
 else
-    fail "completion evidence cannot distinguish bounded and separated lanes"
+    fail "completion evidence cannot distinguish lanes or lost fresh reviewer evidence in every lane"
 fi
 
 test_start "TDD supports one bounded owner without weakening RED"
@@ -136,7 +136,7 @@ root = ARGV.fetch(0)
 source = File.read(File.join(root, "SKILL.md")).gsub(/\s+/, " ")
 index = YAML.load_file(File.join(root, "contracts/index.yaml"))
 entry = index.fetch("load_sets").fetch("entry").fetch("selectors").find { |item| item["id"] == "workflow-entry-fields" }
-valid = source.include?("load `contracts/index.yaml` and the relevant entry, current-phase, selected-handoff, packet-admission, and completion sets") &&
+valid = source.include?("load `contracts/index.yaml` and the relevant entry, current-phase, selected-handoff, packet-admission, and completion sets; executable admission also loads `build_admission` or `completion_admission`") &&
   entry && entry["path"] == "contracts/input.yaml" && entry["section"] == "fields" && entry["key"] == "name" &&
   !entry.fetch("names").empty? && entry.fetch("names").uniq == entry.fetch("names") &&
   !source.include?("select `task_description`, `task_type`, `scope_hint`")

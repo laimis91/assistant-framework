@@ -32,8 +32,9 @@ A diagnosis-only request authorizes investigation, not source changes.
    TDD. Label an uncertain emergency change as mitigation.
 4. **Verify the original path.** Run the original reproduction and selected/
    binding checks against the fix. Preserve unavailable, partial, failed, and
-   skipped results as gaps. Use assistant-review for non-trivial or risky fixes.
-   An active TDD fix needs the complete current canonical cycle.
+   skipped results as gaps. Every fix, local repairs included, gets a local
+   self-check plus fresh independent assistant-review. An active TDD fix needs
+   the complete current canonical cycle.
 
 ## Boundaries and handoffs
 
@@ -47,8 +48,9 @@ Load `contracts/index.yaml` for a structured diagnosis, fix/handoff, persisted
 continuation, or executable consumer. Load only the current boundary: `entry`,
 `current_phase`, `fix_verification` before mutation, `selected_handoff` before
 selected delegation, and `completion`. Missing/invalid selectors load the full
-named contract. Current v2 fix contracts preserve canonical verification/TDD
-bindings; a persisted v1.1 fix needs a refreshed decision, never inferred checks
+named contract. Current v3 fix contracts preserve canonical verification/TDD
+bindings and accept validated TDD v3 `reuse_green`; persisted v2 fixes stay
+readable; a persisted v1.1 fix needs a refreshed decision, never inferred checks
 or RED.
 
 For affected acquisition/readiness, active work, cancellation, collection/finalization, shutdown, owned resources, cleanup or retry, load

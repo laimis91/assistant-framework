@@ -1,4 +1,4 @@
-# Applicability: current v4 structured consumers, persisted packets, handoffs,
+# Applicability: current v5 structured consumers, persisted packets, handoffs,
 # and the existing five-lens audit/eval fixture. Numeric tier/source-count rules
 # below are compatibility-fixture rules, not ordinary claim-confidence policy.
 # Human-only source research uses claim-specific evidence and concise output.
@@ -6,9 +6,10 @@
 # synthesis, separate peer review, material follow-ups, and honest limits.
 
 # Research Input Contract
-# Resolve these fields for a structured v4 consumer or audit/eval fixture.
+# Resolve these fields for a structured v5 consumer or audit/eval fixture;
+# historical v4 records stay readable under their original labels.
 
-schema_version: "4.0"
+schema_version: "5.0"
 contract: input
 skill: assistant-research
 
@@ -98,18 +99,18 @@ fields:
     required: true
     enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
     description: "Policy state."
-    validation: "source_research=not_required; five_lens_briefing=delegation_triggered unless an admissible exception is evidenced."
+    validation: "source_research=not_required; five_lens_briefing=delegation_triggered; unavailable isolation cannot certify current v5 completion. An explicit user opt-out records a method change to source_research and therefore resolves to not_required; delegation_opted_out is a historical v4 label only."
     on_missing: infer
-    infer_from: "source_research => not_required; five_lens_briefing => delegation_triggered unless an exception is evidenced."
+    infer_from: "source_research => not_required; five_lens_briefing => delegation_triggered; an explicit method change may select ordinary source_research but never independent v5 fallback."
 
   - name: subagent_execution_mode
     type: enum
     required: true
-    enum_values: [delegated, sequential_fallback, not_applicable]
+    enum_values: [delegated, not_applicable]
     description: "Execution mode."
-    validation: "source_research => not_applicable; exceptions => sequential_fallback only with evidence."
+    validation: "source_research => not_applicable; current v5 five_lens_briefing requires delegated isolation, with unavailable isolation incomplete."
     on_missing: infer
-    infer_from: "Derive from policy state; fallback requires evidence."
+    infer_from: "Current five_lens_briefing uses delegated isolation; no fallback certifies v5."
 
   - name: subagent_trigger_scope
     type: string[]
@@ -130,9 +131,9 @@ fields:
   - name: sequential_fallback_evidence
     type: object
     required: conditional
-    condition: "subagent_execution_mode == sequential_fallback"
-    description: "Fallback evidence."
-    validation: "Records explicit opt-out, actual spawn failure/unavailability, supported configuration proof, or exact policy block; never fabricates native dispatch references."
+    condition: "historical Research v4 reader and the retained v4 record's lens_execution_mode or peer_review_execution_mode == sequential_fallback (a historical label outside the current subagent_execution_mode enum)"
+    description: "Historical v4 fallback evidence; never an input to current v5 work."
+    validation: "Historical v4 reader only: records explicit opt-out, actual spawn failure/unavailability, supported configuration proof, or exact policy block; never fabricates native dispatch references and never certifies current v5 completion."
     on_missing: fail
     object_fields:
       - {name: basis, type: enum, required: true, enum_values: [explicit_opt_out, spawn_failure_or_unavailable, supported_configuration_proof, exact_policy_block]}
@@ -143,3 +144,52 @@ fields:
 # 1. Resolve question, tier, tool, research_method, subagent_policy_state, and subagent_execution_mode before any search activity
 # 2. Log: >> Research: {tier} | tool: {tool} | method: {research_method} | question: "{question (truncated to 80 chars)}"
 # 3. Read the corresponding tool file (research.md, five-lens-briefing.md, or investigate.md) for detailed instructions
+
+  - name: research_dispatch_authority
+    type: object
+    required: conditional
+    condition: "current five_lens_briefing v5 completion or semantic validation"
+    description: "Trusted producer version and retained native root/lens/peer actor, creation, fresh context, handoff digest and frozen source identity; not supplied by the research payload"
+    validation: "Parsed by research-semantic-validator.cjs. producer_version is exactly 5.0 and matches the response producer_version. Five sibling-blind lens actors and the fresh peer are distinct from root/each other and from one another. Codex fork_turns=none. Historical v4 fallback labels cannot relabel into v5 authority."
+    on_missing: fail
+    object_fields:
+      - {name: producer_version, type: enum, required: true, enum_values: ["5.0"], description: "Trusted current producer version; the response producer_version must equal it", on_missing: fail}
+      - {name: root_actor_id, type: string, required: true, description: "Retained root Orchestrator actor identity; no lens or peer actor may reuse it", on_missing: fail}
+      - {name: source_identity, type: string, required: true, description: "Frozen source identity every lens and peer dispatch binds", on_missing: fail}
+      - name: lens_dispatches
+        type: object[]
+        required: true
+        min_items: 5
+        max_items: 5
+        description: "One retained native dispatch per LensKind"
+        validation: "Covers each LensKind exactly once; every actor_id is unique and differs from root_actor_id and peer_dispatch.actor_id."
+        on_missing: fail
+        object_fields:
+          - {name: lens_kind, type: enum, required: true, enum_values: [practitioner, academic_or_technical_expert, skeptic, economist_or_incentives_analyst, historian_or_pattern_matcher], on_missing: fail}
+          - {name: actor_id, type: string, required: true, validation: "Equals the matching lens_dispatches[].dispatch_identity in the response.", on_missing: fail}
+          - {name: assignment_id, type: string, required: true, validation: "Equals the matching response lens assignment_id.", on_missing: fail}
+          - {name: handoff_digest, type: string, required: true, validation: "Equals the matching response packet_content_digest.", on_missing: fail}
+          - {name: source_identity, type: string, required: true, validation: "Equals the top-level source_identity.", on_missing: fail}
+          - {name: native_invocation_id, type: string, required: true, on_missing: fail}
+          - {name: creation_evidence_ref, type: string, required: true, description: "Evidence that the actor was newly created for this assignment", on_missing: fail}
+          - {name: runtime_evidence_ref, type: string, required: true, on_missing: fail}
+          - {name: runtime, type: string, required: true, description: "Actual runtime that created the actor, for example codex", on_missing: fail}
+          - {name: fork_turns, type: enum, required: conditional, condition: "runtime == codex", enum_values: [none], validation: "Absent when runtime is not codex.", on_missing: fail}
+          - {name: context_isolation, type: enum, required: true, enum_values: [fresh_self_contained], on_missing: fail}
+      - name: peer_dispatch
+        type: object
+        required: true
+        description: "Retained native dispatch of the newly created ResearchPeerReviewer"
+        validation: "actor_id differs from root_actor_id and every lens actor_id; it equals the response peer_reviewer_identity, assignment_id equals peer_review_assignment_id, and handoff_digest equals peer_review_input_binding.peer_review_input_digest."
+        on_missing: fail
+        object_fields:
+          - {name: actor_id, type: string, required: true, on_missing: fail}
+          - {name: assignment_id, type: string, required: true, on_missing: fail}
+          - {name: handoff_digest, type: string, required: true, on_missing: fail}
+          - {name: source_identity, type: string, required: true, validation: "Equals the top-level source_identity.", on_missing: fail}
+          - {name: native_invocation_id, type: string, required: true, on_missing: fail}
+          - {name: creation_evidence_ref, type: string, required: true, on_missing: fail}
+          - {name: runtime_evidence_ref, type: string, required: true, on_missing: fail}
+          - {name: runtime, type: string, required: true, on_missing: fail}
+          - {name: fork_turns, type: enum, required: conditional, condition: "runtime == codex", enum_values: [none], validation: "Absent when runtime is not codex.", on_missing: fail}
+          - {name: context_isolation, type: enum, required: true, enum_values: [fresh_self_contained], on_missing: fail}

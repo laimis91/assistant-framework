@@ -17,7 +17,7 @@ Agent definitions are per-platform: Claude uses `.md` files in `agents/claude/`,
 
 ## Related skills (invoke when applicable)
 
-- **assistant-review**: Autonomous review loop — MUST be invoked for Stage 2 quality review
+- **assistant-review**: Autonomous review loop — MUST be invoked for the Stage 2 final acceptance review
 - **assistant-tdd**: Test-Driven Development enforcement — Red-Green-Refactor cycle (Build phase, when TDD is active)
 - **assistant-thinking**: Structured reasoning for architecture decisions (Discovery, Plan phases)
 - **assistant-research**: Information gathering during Discovery phase
@@ -35,7 +35,7 @@ Agent definitions are per-platform: Claude uses `.md` files in `agents/claude/`,
 - **Mega-step:** One plan step at a time
 - **Silent drift:** Stop and flag plan deviations
 - **Tests after:** Write tests alongside each step
-- **Skip review:** For implementation/execution work, NEVER skip review. Invoke `assistant-review` skill when the Review phase applies. `prepare_only` ends at Preparation Completion without a review or final-handoff claim.
+- **Skip review:** For implementation/execution work, NEVER skip review. Invoke `assistant-review` skill when the Review phase applies. `prepare_only` retains requested/required fresh readiness-plan review and selected research isolation; it makes no post-Build review or final-handoff claim.
 - **Review once and done:** Review has two stages (spec + quality) and quality is an autonomous loop
 - **No gate:** Always wait for approval before Build
 - **No checkpoints:** Exact phase checkpoints are required only when controller intensity, explicit project policy, or the user requires them. Missing required checkpoints = workflow not followed.

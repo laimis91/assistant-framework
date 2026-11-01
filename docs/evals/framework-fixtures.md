@@ -41,9 +41,9 @@ under common operating conditions:
 - TDD RED-before-GREEN handoff behavior
 - executable task packet requirements before build
 - per-slice verification before advancing
-- separate spec review and quality review gates
+- spec obligations folded into the final acceptance review, not replaced by quality findings
 - structured worker status packets from subagents
-- subagent opt-out direct fallback
+- subagent opt-out keeps review isolation
 - Native Codex role constraints without extra runtime reinforcement
 - Done Contract debate and Harness Recipe before Build
 - trace/replay artifacts and typed artifact refs for harness recovery

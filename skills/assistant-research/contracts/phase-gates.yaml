@@ -1,4 +1,4 @@
-# Applicability: current v4 structured consumers, persisted packets, handoffs,
+# Applicability: current v5 structured consumers, persisted packets, handoffs,
 # and the existing five-lens audit/eval fixture. Numeric tier/source-count rules
 # below are compatibility-fixture rules, not ordinary claim-confidence policy.
 # Human-only source research uses claim-specific evidence and concise output.
@@ -9,7 +9,7 @@
 # Research has a search → synthesize → verify pipeline.
 # Gates ensure each stage completes before the next begins.
 
-schema_version: "4.0"
+schema_version: "5.0"
 contract: phase-gates
 skill: assistant-research
 
@@ -48,7 +48,7 @@ gates:
       - id: S5
         check: "For five_lens_briefing delegated lens mode: subagent_policy_state=delegation_triggered has non-empty trigger scope and five unique native lens dispatch identities cover the exact LensKind enum before synthesis (practitioner, academic/technical expert, skeptic, economist/incentives analyst, historian/pattern matcher); source_research remains not_required/not_applicable"
         condition: "research_method == five_lens_briefing and lens_execution_mode == delegated"
-        on_fail: "Read five-lens-briefing.md and dispatch or evidenced-fallback the complete missing lens stage before synthesizing"
+        on_fail: "Read five-lens-briefing.md and dispatch the complete missing independent lens stage or report incomplete isolation before synthesizing"
 
       - id: S6
         check: "For five_lens_briefing: lens inferences are separated from source-backed findings and weakly sourced lens claims are marked LOW confidence; a HIGH final finding retains source_provenance whose source set exactly matches findings[].sources and proves both at least three unique independence keys and at least one primary/official source"
@@ -76,8 +76,8 @@ gates:
         on_fail: "Block over-ceiling output or restore exact usage, exhaustion gaps, and confidence downgrade evidence before synthesis"
 
       - id: S9
-        check: "For five_lens_briefing sequential fallback lens mode: sequential_fallback_evidence records explicit opt-out, real spawn failure/unavailability, supported configuration proof, or exact policy block; policy_disallowed also records exact policy_blocking_source with no exception; exactly five frozen root passes cover LensKind exactly once, bind the frozen packet set, have no native dispatch identity, carry admissible lens fallback evidence, and record reduced independence"
-        condition: "research_method == five_lens_briefing and lens_execution_mode == sequential_fallback"
+        check: "Historical v4 only, never current v5 completion: sequential_fallback_evidence records explicit opt-out, real spawn failure/unavailability, supported configuration proof, or exact policy block; policy_disallowed also records exact policy_blocking_source with no exception; exactly five frozen root passes cover LensKind exactly once, bind the frozen packet set, have no native dispatch identity, carry admissible lens fallback evidence, and record reduced independence"
+        condition: "historical Research v4 reader and lens_execution_mode == sequential_fallback"
         on_fail: "Obtain an admissible fallback basis or block; do not call ordinary sequential role-play independent delegation"
 
       - id: SY_FIVE_LENS_FOLLOW_UPS
@@ -130,19 +130,19 @@ gates:
         on_fail: "Revise root synthesis with all five valid lens results before dispatching the separate peer reviewer from five-lens-briefing.md"
 
       - id: SY8
-        check: "For five_lens_briefing: under the shared task guard, a failed lens stage reruns completely through evidenced fallback or blocks; partial delegated/root mixtures never claim independence"
+        check: "For current v5 five_lens_briefing: after same-assignment correction under the shared task guard, a failed lens stage is redispatched to newly created separate sibling-blind lens actors or the run is recorded blocked/incomplete with an honest gap; no sequential or partial delegated/root lens set is synthesized"
         condition: "research_method == five_lens_briefing"
-        on_fail: "Discard the incomplete stage evidence, record fallback or blocker evidence, and do not synthesize from a mixed lens set"
+        on_fail: "Discard the incomplete stage evidence, record the isolation blocker and gap, and do not synthesize from a mixed or sequential lens set; historical v4 fallback records stay readable only under gate S9"
 
       - id: SY9
         check: "For five_lens_briefing delegated peer mode: a distinct native ResearchPeerReviewer peer reviewer identity, distinct from every lens identity, validates a usable peer status and verdict before presentation"
         condition: "research_method == five_lens_briefing and peer_review_execution_mode == delegated"
-        on_fail: "Dispatch a distinct peer reviewer or record a valid fresh reviewer fallback; do not present an unusable peer result."
+        on_fail: "Dispatch a newly created distinct peer reviewer or record the run blocked/incomplete with an honest peer-isolation gap; do not present an unusable peer result."
 
       - id: SY10
-        check: "For five_lens_briefing reviewer-only fallback sequential peer mode: a fresh peer fallback pass ID, concrete admissible peer fallback evidence, reduced_independence, and no fabricated native identity are recorded; valid delegated lens evidence remains retained"
-        condition: "research_method == five_lens_briefing and peer_review_execution_mode == sequential_fallback"
-        on_fail: "Run a separate fresh peer fallback pass with concrete evidence or block presentation; never erase valid lens evidence or fabricate a native identity."
+        check: "Historical v4 only, never current v5 completion: a reviewer-only sequential peer record has a fresh peer fallback pass ID, concrete admissible peer fallback evidence, reduced_independence, and no fabricated native identity; valid delegated lens evidence remains retained"
+        condition: "historical Research v4 reader and research_method == five_lens_briefing and peer_review_execution_mode == sequential_fallback"
+        on_fail: "Keep the historical record under its original reduced-independence verdict or reject it; never relabel it as v5, erase valid lens evidence, or fabricate a native identity."
 
   # ─────────────────────────────────────────────
   # VERIFY → PRESENT
@@ -170,9 +170,9 @@ gates:
         on_fail: "Rewrite candidate mechanisms as hypotheses, add validation_method and gaps, or move validated source-backed claims to findings with evidence."
 
       - id: VR4
-        check: "For five_lens_briefing: peer_review has a usable DONE or DONE_WITH_CONCERNS status and a compatible accepted, accepted_with_concerns, or revise verdict; peer_review_input_digest is exactly bound across peer context, return, retained peer review, and process binding; findings, normalized candidate_mechanisms, conflicts, contradiction_map, and verification_gaps remain exactly equal to their final top-level artifacts; accepted and accepted_with_concerns have required_revisions=[] and final_synthesis_digest equals the reviewed initial synthesis digest; revise in delegated or sequential fallback mode has one or more required synthesis revisions and an orchestrator-owned revision_disposition covering every required revision exactly once as applied or claim_downgraded, with revision_disposition_id exactly equal to process peer_review_revision_disposition_id and every resulting_synthesis_digest equal to final_synthesis_digest; peer_review.supported_recommendation equals final recommendation. Current revision disposition closes synthesis changes only; any later change to findings, candidate_mechanisms, conflicts, or contradiction_map requires a fresh peer review and digest. Unresolved revision blocks presentation; NEEDS_CONTEXT or BLOCKED cannot reach presentation unless a valid fresh fallback completed"
+        check: "For five_lens_briefing: peer_review has a usable DONE or DONE_WITH_CONCERNS status and a compatible accepted, accepted_with_concerns, or revise verdict; peer_review_input_digest is exactly bound across peer context, return, retained peer review, and process binding; findings, normalized candidate_mechanisms, conflicts, contradiction_map, and verification_gaps remain exactly equal to their final top-level artifacts; accepted and accepted_with_concerns have required_revisions=[] and final_synthesis_digest equals the reviewed initial synthesis digest; revise in delegated or sequential fallback mode has one or more required synthesis revisions and an orchestrator-owned revision_disposition covering every required revision exactly once as applied or claim_downgraded, with revision_disposition_id exactly equal to process peer_review_revision_disposition_id and every resulting_synthesis_digest equal to final_synthesis_digest; peer_review.supported_recommendation equals final recommendation. Current revision disposition closes synthesis changes only; any later change to findings, candidate_mechanisms, conflicts, or contradiction_map requires a fresh peer review and digest. Unresolved revision blocks presentation; NEEDS_CONTEXT or BLOCKED cannot reach current v5 presentation. Historical v4 reader only: a valid fresh peer fallback that completed under original v4 authority remains readable with reduced independence"
         condition: "research_method == five_lens_briefing"
-        on_fail: "Block presentation or complete and validate a fresh peer fallback; do not finalize an unusable peer status."
+        on_fail: "Block presentation and record the run incomplete, or redispatch a newly created independent peer; do not finalize an unusable peer status."
 
       - id: VR5
         check: "For five_lens_briefing: each decision-critical verified_source_evidence row uses a method-specific safe reference; public_url is successfully checked globally routable HTTPS, rejects reserved domains and non-global or alternate-encoded addresses, and equals verified_url, while local_repository, authenticated_source, and offline_authoritative_source omit verified_url and expose no URI userinfo, credentials, tokens, secrets, PII, parent traversal, or absolute host paths. Every URL-shaped conflict source_a/source_b follows the same globally routable public-URL rule, and non-URL conflict references follow the same safe-reference rule."
@@ -204,9 +204,9 @@ invariants:
     on_fail: "Reformat output to match the required FINDINGS/CONFLICTS/GAPS structure"
 
   - id: INV4
-    check: "source_research is direct-capable with policy=not_required and execution=not_applicable; five_lens_briefing is delegation_triggered by skill instruction and may use sequential fallback only with an evidenced admissible basis; delegation_opted_out or policy_disallowed forces peer review into matching sequential fallback and forbids peer subagent dispatch"
+    check: "source_research is direct-capable with policy=not_required and execution=not_applicable; current v5 five_lens_briefing is delegation_triggered with delegated lenses and delegated peer, and subagents_unavailable or policy_disallowed records the run blocked/incomplete; an explicit user opt-out is recorded as a method change to source_research and never completes five_lens_briefing. Historical v4 reader only: evidenced sequential fallback records stay readable with reduced independence"
     scope: all_phases
-    on_fail: "Use the selected method's required process mode and record admissible fallback evidence before continuing"
+    on_fail: "Use the selected method's required process mode; record the isolation blocker as incomplete, or record the user's method change to source_research, before continuing"
 
   - id: INV5
     check: "For five_lens_briefing, the final recommendation is not stronger than the verified evidence and peer review support"
@@ -229,6 +229,6 @@ invariants:
     on_fail: "Remove sibling or synthesis context from lens assignments and rerun the invalid lens stage"
 
   - id: INV9
-    check: "For five_lens_briefing, peer critique is a separate fresh ResearchPeerReviewer pass; reviewer-only fallback is separately recorded and does not erase valid lens dispatch evidence"
+    check: "For current v5 five_lens_briefing, peer critique is a separate newly created ResearchPeerReviewer actor distinct from root and every lens; historical v4 reviewer-only fallback records are read only under their original reduced-independence verdict and do not erase valid lens dispatch evidence"
     scope: all_phases
-    on_fail: "Run or record a separate peer-review pass before final presentation"
+    on_fail: "Dispatch a newly created separate peer reviewer, or record the run blocked/incomplete with an honest peer-isolation gap, before final presentation"

@@ -357,7 +357,7 @@ abort "review reference trigger omits cosmetic" unless review_ref.include?("beha
 end
 
 controller = section.call("skills/assistant-workflow/references/workflow-controller.md", "- `light`:", "- `standard`:")
-build = section.call("skills/assistant-workflow/references/build-worker-protocol.md", "## Adaptive Source-Changing Role Ownership", "## Expanded-impact mutation authorization")
+build = section.call("skills/assistant-workflow/references/build-worker-protocol.md", "## Source-changing execution ownership", "## Expanded-impact mutation authorization")
 triage = section.call("skills/assistant-workflow/references/triage-rubric.md", "| Intensity | Use when |", "## Candidate Scope Scan")
 abort "light controller promotes shared fanout" unless controller.include?("Shared fanout alone keeps this Build policy")
 abort "Build protocol promotes shared fanout" unless build.include?("Shared fanout alone does not promote this Build lane")
@@ -718,8 +718,8 @@ jq '
       {"operator":"equals","path":["change_impact_evidence","assessment_ref"],"expected":"fixture#assessment"},
       {"operator":"equals","path":["change_impact_evidence","review_projection_ref"],"expected":"fixture#review"},
       {"operator":"equals","path":["change_impact_review","schema_version"],"expected":"change-impact-review/v1"},
-      {"operator":"equals","path":["current_review_delegation_path","artifact","subagent_policy_state"],"expected":"not_required"},
-      {"operator":"equals","path":["current_review_delegation_path","artifact","subagent_execution_mode"],"expected":"direct_fallback"},
+      {"operator":"equals","path":["current_review_delegation_path","artifact","subagent_policy_state"],"expected":"delegation_triggered"},
+      {"operator":"equals","path":["current_review_delegation_path","artifact","subagent_execution_mode"],"expected":"delegated"},
       {"operator":"path_absent","path":["fresh_review_result","architecture_decision_pack_review_ref"]},
       {"operator":"path_absent","path":["fresh_review_result","architecture_decision_pack_review_contract"]}
     ]
@@ -736,9 +736,9 @@ jq --slurpfile completion "$expanded_completion" '
   | .architecture_design_mode = "not_applicable"
   | .change_impact_evidence = {artifact_identity:"capture-example-current",phase:"completion",impact_scope:"shared",validator_result_ref:"fixture#completion-checker",status:"valid",capture_ref:"fixture#capture",expected_context_ref:"fixture#expected",assessment_ref:"fixture#assessment",review_projection_ref:"fixture#review"}
   | .change_impact_review = $completion[0].review
-  | .current_review_delegation_path.artifact.subagent_policy_state = "not_required"
-  | .current_review_delegation_path.artifact.subagent_execution_mode = "direct_fallback"
-  | .current_review_delegation_path.artifact.subagent_trigger_scope = []
+  | .current_review_delegation_path.artifact.subagent_policy_state = "delegation_triggered"
+  | .current_review_delegation_path.artifact.subagent_execution_mode = "delegated"
+  | .current_review_delegation_path.artifact.subagent_trigger_scope = ["active-skill:current-formal-review"]
   | del(.fresh_review_result.architecture_decision_pack_review_ref, .fresh_review_result.architecture_decision_pack_review_contract)
 ' "$expanded_response" >"$expanded_response.rewritten" && mv "$expanded_response.rewritten" "$expanded_response"
 run_light_expanded_fixture() {
@@ -777,9 +777,9 @@ for mutation in \
       .impact_scope = "shared" | .controller_intensity = "light" | .risk_tier = "low" | .expanded_artifact_carried = true | .architecture_design_mode = "not_applicable"
       | .change_impact_evidence = {artifact_identity:"capture-example-current",phase:"completion",impact_scope:"shared",validator_result_ref:"fixture#completion-checker",status:"valid",capture_ref:"fixture#capture",expected_context_ref:"fixture#expected",assessment_ref:"fixture#assessment",review_projection_ref:"fixture#review"}
       | .change_impact_review = $completion[0].review
-      | .current_review_delegation_path.artifact.subagent_policy_state = "not_required"
-      | .current_review_delegation_path.artifact.subagent_execution_mode = "direct_fallback"
-      | .current_review_delegation_path.artifact.subagent_trigger_scope = []
+      | .current_review_delegation_path.artifact.subagent_policy_state = "delegation_triggered"
+      | .current_review_delegation_path.artifact.subagent_execution_mode = "delegated"
+      | .current_review_delegation_path.artifact.subagent_trigger_scope = ["active-skill:current-formal-review"]
       | del(.fresh_review_result.architecture_decision_pack_review_ref, .fresh_review_result.architecture_decision_pack_review_contract)
     ' "$expanded_response" >"$expanded_response.rewritten" && mv "$expanded_response.rewritten" "$expanded_response"
 done

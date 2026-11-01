@@ -12,6 +12,13 @@ handoff. Requirement evidence comes from
 `references/requirement-acceptance-map.md`; every accepted requirement is
 passed or explicitly excluded with approval.
 
+Final independent review reconciles the original request IDs and approved plan
+against actual outcomes, current checks, deviations, unresolved findings and all
+packet/task-wide completion allocation. Reuse existing review/acceptance owners;
+no second plan-progress ledger or additional completion agent. Unimplemented,
+failed or blocked work stays an explicit partial handoff unless the user changed
+accepted scope. Approval is not evidence of implementation.
+
 Before completion, bind `final_handoff.review_completion` to the validated
 canonical assistant-review `final_summary` and applicable QA result, including
 current producer versions, the exact final-batch alias/identity, and any carried

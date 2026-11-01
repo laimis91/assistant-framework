@@ -57,7 +57,7 @@ for file in agents/codex/builder-tester.toml agents/claude/builder-tester.md; do
         "stage-only" \
         "pending REFACTOR" \
         "second" \
-        "separate current REFACTOR invocations" \
+        "executed current REFACTOR invocations or validated unchanged GREEN reuse" \
         "omit unstarted phases"; do
         if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/$file"; then
             tdd_profile_failures+=("$file missing $term")
