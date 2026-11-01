@@ -307,7 +307,8 @@ function Get-TreeFingerprint {
             'AppData/Local/Microsoft',
             'AppData/Local/Microsoft/PowerShell',
             'AppData/Local/Microsoft/Windows',
-            'AppData/Local/Microsoft/Windows/PowerShell'
+            'AppData/Local/Microsoft/Windows/PowerShell',
+            'AppData/Roaming'
         ) | ForEach-Object {
             [System.IO.Path]::GetFullPath((Join-Path $script:ActiveIsolatedUserProfile $_))
         }
@@ -1443,6 +1444,13 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                 [System.IO.File]::WriteAllText($runtimePath, 'runtime-after')
             }
             Assert-Equal $withLookalike (Get-TreeFingerprint -LiteralPath $root) 'PowerShell-owned startup cache churn changed the installer fingerprint'
+            # Windows PowerShell 5.1 creates the empty directory itself; anything inside it still counts.
+            $roaming = Join-Path $isolatedUserProfile 'AppData/Roaming'
+            [void][System.IO.Directory]::CreateDirectory($roaming)
+            $withEmptyRoaming = Get-TreeFingerprint -LiteralPath $root
+            Assert-Equal $withLookalike $withEmptyRoaming 'Host-created empty Roaming directory changed the installer fingerprint'
+            [System.IO.File]::WriteAllText((Join-Path $roaming 'installer-owned.txt'), 'owned')
+            Assert-True ($withEmptyRoaming -cne (Get-TreeFingerprint -LiteralPath $root)) 'A file inside Roaming was hidden from the installer fingerprint'
 
             [System.IO.File]::Delete($runtimePaths[1])
             [void][System.IO.Directory]::CreateDirectory($runtimePaths[1])
