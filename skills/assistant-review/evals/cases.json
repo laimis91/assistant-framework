@@ -1409,6 +1409,82 @@
       ]
     },
     {
+      "id": "csharp-review-loads-csharp-reference-and-finds-async-defects",
+      "title": "C# change review applies the C# reference",
+      "category": "csharp_review",
+      "purpose": "Regression fixture (not proof of discrimination): checks that a review of a C# change from another developer loads the C# reference and reports blocking async and disposal defects.",
+      "prompt": "Review this small C# change from another developer. Excerpt: `public string Load(string id) { var client = new HttpClient(); return GetAsync(client, id).Result; } private async void Refresh() { await Task.Delay(10); throw new InvalidOperationException(); }`. Check it before merge.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
+        "The batch is small (scope_size small, two discovery passes: contract_and_test_oracle and runtime_lifecycle_and_failure_paths).",
+        "The reviewed material is C# source (*.cs)."
+      ],
+      "expected_behavior": [
+        "Resolves references/csharp-review.md because the reviewed material includes C#.",
+        "Reports blocking on a task with Result as a deadlock and AggregateException risk.",
+        "Reports async void outside an event handler as unobservable and untestable failure.",
+        "Reports the HttpClient created per call and never disposed or reused."
+      ],
+      "pass_criteria": [
+        "The response cites the C# review reference or its disposal and async checks.",
+        "The response reports the blocking Result call and the async void method as defects.",
+        "The response reports the undisposed HttpClient.",
+        "Findings include Evidence, Impact, Recommendation, and Confidence."
+      ],
+      "fail_signals": [
+        "Treats the change as style only.",
+        "Does not mention async void or blocking on Result.",
+        "Only lists checklist categories without the code excerpt."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "async void",
+          "Result",
+          "deadlock",
+          "dispos",
+          "Evidence:",
+          "Impact:",
+          "Recommendation:",
+          "Confidence:"
+        ],
+        "forbidden_substrings": [
+          "async void is fine",
+          "blocking on Result is safe",
+          "no disposal concerns"
+        ]
+      },
+      "false_positive_budget": 1,
+      "seeded_defects": [
+        {
+          "id": "blocking-result-and-async-void",
+          "description": "Blocking on Result can deadlock, and async void hides the exception from callers.",
+          "must_detect": true,
+          "detection_anchors": [
+            "Result",
+            "async void"
+          ],
+          "evidence_anchors": [
+            "deadlock",
+            "event handler",
+            "Task"
+          ],
+          "acceptable_severities": [
+            "must-fix",
+            "should-fix"
+          ],
+          "finding_markers": [
+            "blocking on Result and async void"
+          ]
+        }
+      ],
+      "false_positive_markers": [
+        "rewrite the whole class",
+        "block merge because names are subjective",
+        "unrelated architectural rewrite"
+      ]
+    },
+    {
       "id": "installer-rewrite-widens-user-file-mode",
       "title": "Installer rewrite widens a user's file mode",
       "category": "behavioral_contract_review",

@@ -1999,7 +1999,7 @@ if ruby -ryaml -e '
   ref = bundle.fetch("worker_references").find { |r| r["path"] == guide }
   condition = "assigned_scope or coverage_obligations affect acquisition/readiness, active work, cancellation, collection/finalization, shutdown, owned resources, cleanup or retry"
   loop_text = File.read(ARGV.fetch(2))
-  valid = !ordinary.fetch("references").include?(guide) && lifecycle.fetch("references") == ordinary.fetch("references") + [guide] &&
+  valid = !ordinary.fetch("references").include?(guide) && lifecycle.fetch("references") == ordinary.fetch("references") - ["references/document-review.md", "references/csharp-review.md"] + [guide] &&
     lifecycle.fetch("budget_words") == 5653 && ordinary.fetch("budget_words") == 5653 &&
     lifecycle.fetch("selectors").map { |x| x.reject { |key, _| key == "id" } } == ordinary.fetch("selectors").map { |x| x.reject { |key, _| key == "id" } } &&
     ref && ref["condition"] == condition && loop_text.include?(condition) && loop_text.include?("condition worker references identically")

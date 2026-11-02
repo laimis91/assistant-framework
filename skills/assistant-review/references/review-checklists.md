@@ -138,13 +138,3 @@ For assigned_scope or coverage_obligations affecting lifecycle boundaries, use
 [lifecycle verification](lifecycle-verification.md) for precise cancellation,
 settlement and ownership observations. Synchronous/cosmetic changes alone do not
 load it; this is no new gate or universal test matrix.
-
-## Document Review Checklist (provisional)
-
-For a specification, plan, ticket, refinement item or tests: use instead of code sections.
-
-1. **Intent**: restate it. Each requirement or step must be testable and traceable to it.
-2. **Gaps**: conflicts, unstated assumptions, missing failure paths, owners; per plan step, rollback and verification; run a pre-mortem.
-3. **Plan versus code**: trace both ways; unplanned behavior is scope creep or a missing requirement.
-4. **Ticket**: testable criteria, linked dependencies. Jira write-back needs approval.
-5. **Tests**: could each fail for the right reason against a plausible wrong implementation?

@@ -90,6 +90,8 @@ load_sets:
       - references/review-principles.md
       - references/review-checklists.md
       - references/review-rubric.md
+      - references/document-review.md
+      - references/csharp-review.md
     selectors:
       - id: fresh-reviewer-context-bundle
         path: contracts/handoffs.yaml
