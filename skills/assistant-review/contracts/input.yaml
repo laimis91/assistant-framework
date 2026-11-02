@@ -393,13 +393,13 @@ fields:
   - name: behavioral_contract_review_required
     type: boolean
     required: true
-    description: "Whether to apply the Behavioral Contract Review Checklist for behavior-bearing code changes"
+    description: "Whether to apply the Behavioral Contract Review Checklist for behavior-bearing changes"
     on_missing: infer
     infer_from: >
-      true when change_kind is code or mixed and the reviewed material touches public APIs, domain/business logic,
-      persistence/migrations, auth/permissions, money/payments/trading, config/feature flags, external protocols/SDKs,
-      algorithms, infrastructure/deployment, generated schemas/clients, or other behavior-bearing surfaces.
-      false for docs-only/config-only changes that cannot affect runtime behavior unless the user requests behavioral review.
+      true for scripts rewriting user-owned files outside the repo; or, for change_kind code
+      or mixed, material touching public APIs, domain logic, persistence/migrations, auth/permissions, money,
+      config/feature flags, external protocols/SDKs, algorithms, infrastructure/deployment, generated schemas/clients,
+      or other behavior-bearing surfaces. false for docs/config-only changes without runtime effect unless requested.
 
   - name: agentic_loop_safety_review_required
     type: boolean
