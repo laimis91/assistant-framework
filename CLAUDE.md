@@ -6,9 +6,18 @@ Read `tools/progress/operating-guidance.md` for every activity in this repositor
 
 ## Project Overview
 
-Assistant Framework v0.3.0 — a personal AI assistant framework providing composable skills, agents, rules, and tools for Claude Code, Codex, and Gemini CLI. This is a **framework repo**, not an application — it installs into agent home directories (`~/.claude/`, `~/.codex/`, `~/.gemini/`).
+Assistant Framework v0.2.0 (see `version.txt`) — a personal AI assistant framework providing composable skills, agents, rules, and tools for Claude Code, Codex, and Gemini CLI. This is a **framework repo**, not an application — it installs into agent home directories (`~/.claude/`, `~/.codex/`, `~/.gemini/`).
+
+Root `skills/assistant-*` directories are the editable source of truth. Keep behavior-driving skill prose, contracts, evals, tests, and documentation aligned.
 
 ## Build and Test Commands
+
+### Validation
+
+```bash
+tools/skills/validate-skills.sh          # Skill frontmatter and structure
+./tests/test-p0-p4-contracts.sh          # Contract suites
+```
 
 ### Cognitive Complexity Tool
 
@@ -34,6 +43,11 @@ assistant-research is a Process skill; research contracts and evidence methods r
 
 2. **Tools** (`tools/`) — Compiled and script utilities used for repository validation and installation.
    - `cognitive-complexity/` — Roslyn-based method complexity scorer used by the review stage.
+   - `progress/` — Shared operating guidance and the `stagnation.py` progress-guard helper.
+   - `skills/` — Skill validator and contract-guide/workflow-reference sync scripts.
+   - `evals/` — Skill and framework instruction eval runners.
+   - `change-impact/` — Change-impact protocol and validator.
+   - `patterns/` — Pattern library script.
 
 ### Skill anatomy
 
@@ -50,12 +64,14 @@ Each supported agent discovers installed skills natively from required names and
 
 ### Agent configurations
 
-`agents/` contains agent-specific definitions (reviewer, builder-tester, code-writer, code-mapper, explorer, architect, lens-researcher, research-peer-reviewer) for multi-agent orchestration. Claude agents are markdown files (`agents/claude/*.md`), Codex agents are TOML files (`agents/codex/*.toml`). These define subagent roles, tool access, and prompts.
+`agents/` contains agent-specific definitions (architect, builder-tester, code-mapper, code-reviewer, explorer, intelligent-writer, mechanical-writer, qa-evaluator, lens-researcher, research-peer-reviewer, plus the compatibility `reviewer` and deprecated `code-writer` roles) for multi-agent orchestration. Claude agents are markdown files (`agents/claude/*.md`), Codex agents are TOML files (`agents/codex/*.toml`); Gemini agent definitions are not yet implemented (`agents/gemini/README.md`). These define subagent roles, tool access, and prompts.
 
 ### Codex execution policy rules
 
 `codex-rules/` contains Starlark `.rules` files installed to `~/.codex/rules/`. These provide **deterministic** enforcement (system-level, not prompt-level) — they always execute regardless of LLM reasoning. Current rules:
 - `workflow.rules` — Git safety (block force push, confirm commits/pushes), destructive operation guards, build/test allow-listing
+
+Do not weaken permission prompts or destructive-operation safeguards.
 
 ## Mandatory: Skill Contract Design Guide
 
@@ -69,6 +85,7 @@ When creating or modifying skills, you **must** follow the contract design guide
 - **Handoff schemas must match** — producer's `return_fields` must satisfy consumer's `context_fields`.
 - **Corrective actions must be actionable** — "fix it" is not a corrective action; "re-dispatch CodeMapper requesting the missing field" is.
 - **Consumed contracts need compatibility decisions** — removing required fields requires versioning and aligned consumers; preserve historical labels.
+- **Expert-judgment guidance needs an evidenced method** — derive cue-to-method decisions from representative expert cases or an authoritative method; see the creator's `references/expert-method-design.md`.
 
 Use the field schema, phase gate schema, and handoff schema formats defined in the guide. Refer to existing skills' `contracts/` directories for examples.
 
@@ -78,3 +95,4 @@ Use the field schema, phase gate schema, and handoff schema formats defined in t
 - **Native skill discovery drives routing.** Adding a new skill requires only a well-described SKILL.md and any actual consumed contracts; no runtime script changes are needed.
 - **install.sh auto-discovers skills** — any subdirectory of `skills/` containing a SKILL.md is installable.
 - **Contracts** (`contracts/` dirs) define structured input/output schemas in YAML. Instruction-only skills are valid; see the canonical guide.
+- **C# code** targets modern .NET and follows the existing Clean Architecture style. Tests use descriptive names and Arrange-Act-Assert where applicable.

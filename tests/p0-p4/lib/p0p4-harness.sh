@@ -8,6 +8,12 @@ P0P4_SUITE_DIR="$(cd "$P0P4_HARNESS_DIR/.." && pwd)"
 SCRIPT_DIR="$(cd "$P0P4_SUITE_DIR/.." && pwd)"
 FRAMEWORK_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+# Suites use `rg` for content checks; without it, negated checks pass vacuously.
+if ! command -v rg >/dev/null 2>&1; then
+    echo "P0-P4 prerequisite missing: ripgrep (rg). Install it (brew install ripgrep / apt-get install ripgrep / winget install BurntSushi.ripgrep.MSVC) and rerun." >&2
+    exit 1
+fi
+
 P0P4_HARNESS_LOADED=1
 P0P4_HARNESS_STARTED_AT_SECONDS=$SECONDS
 PASS=0

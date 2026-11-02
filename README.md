@@ -433,6 +433,7 @@ fixture:
 ./tests/test-p0-p4-contracts.sh
 ```
 
+The suites require ripgrep (`rg`) on `PATH` and stop with an error without it.
 For the locked Draft 2020-12 evaluator checks in that aggregate, first use
 Node.js 22 and run `(cd tools/evals && npm ci --ignore-scripts)`.
 
