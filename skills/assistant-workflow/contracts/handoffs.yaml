@@ -7,7 +7,7 @@
 # Any subagent returning results MUST include the required output fields.
 # If a required field is missing from the return, follow the on_missing action.
 
-schema_version: "15.0"
+schema_version: "16.0"
 contract: handoffs
 skill: assistant-workflow
 
@@ -48,7 +48,7 @@ worker_status_protocol:
 
 # Writer stages are semantic selectors on the existing CodeWriter handoff.
 worker_stage_protocol:
-  description: "One selected writer owns tests and implementation; BuilderTester executes already authored checks. Stage completion never closes Build. Canonical v15 stored implementation_steps are stage-neutral. The caller overlay materializes worker_stage/verification_stage and matching inline aliases; changing stage never changes definition or packet_definition. Native actor and authored/reused test proofs are caller-resolved, not a second plan or execution attestation."
+  description: "One selected writer owns tests and implementation; BuilderTester executes already authored checks. Stage completion never closes Build. Canonical v16 stored implementation_steps are stage-neutral. The caller overlay materializes worker_stage/verification_stage and matching inline aliases; changing stage never changes definition or packet_definition. Native actor and authored/reused test proofs are caller-resolved, not a second plan or execution attestation."
   stages:
     - value: test_authoring
       mutation_scope: tests_only
@@ -64,7 +64,7 @@ worker_stage_protocol:
       completes_build: false
   rules:
     - "test_authoring permits selected tests, fixtures, snapshots, helpers and test/build configuration only, with no incoming RED. No production edits."
-    - "Separated active TDD: selected writer test_authoring -> BuilderTester pre_production_red -> SAME writer production -> BuilderTester GREEN -> SAME writer refactor -> BuilderTester distinct REFACTOR verification."
+    - "Separated active TDD: selected writer test_authoring -> BuilderTester pre_production_red -> SAME writer production -> BuilderTester GREEN -> SAME writer refactor -> BuilderTester executed REFACTOR verification or validated unchanged GREEN reuse."
     - "Dispatch admission during active TDD: only separated_workers production requires incoming observed RED and its canonical cycle ref before dispatch; bounded_executor initial dispatch may carry the exact planned RED tuple without observed RED or a started cycle. That SAME executor records current meaningful RED and its canonical cycle ref before its FIRST production edit."
     - "The production active-TDD prerequisite gates production edits in every lane: current exact seven-field RED and its canonical cycle ref are required; refactor requires current green.all_tests_pass. Wrong/missing/stale identity, argv/cwd, target or oracle blocks dependent edits; preserve history and observe fresh RED after an authorizing-input change."
     - "Inactive TDD uses writer tests plus code then verifier; bounded/direct lanes preserve selected checks and phase order. Reuse/run/inspect checks do not force new tests or a test_authoring stage."
@@ -1238,7 +1238,7 @@ handoffs:
           - name: execution
             type: object
             required: true
-            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume."
+            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume. Lane/actor execution stamps are immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline: the history row carrying stamp_baseline {evidence_refs, tdd_cycle_log_ref when present}, appended once with each first stamp (reason dispatch stamp baseline) or replacement (which also keeps replaced_stamps, reason stamp replaced by a newly admitted dispatch before start or old-actor evidence). A relabelled or stripped stamp blocks. Before then, only a newly admitted dispatch may replace a stamp."
             object_fields:
               - {name: state, type: enum, required: true, enum_values: [PENDING, RUNNING, VERIFIED, BLOCKED, INVALIDATED]}
               - {name: evidence_refs, type: "string[]", required: true}
@@ -1252,6 +1252,8 @@ handoffs:
               - {name: progress_guard_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Stable outcome guard identity; never derived from legacy recovery counters."}
               - {name: action_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Exact admitted semantic action identity."}
               - {name: action_admission_ref, type: string, required: conditional, condition: "A semantic action admission has been committed", description: "Retained admission reused by later stages of the same RUNNING action."}
+              - {name: build_execution_lane, type: enum, required: conditional, enum_values: [direct_main, bounded_executor, separated_workers], condition: "The packet has been dispatched", description: "Admitted dispatch lane stamp written by admission; immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline, otherwise replaceable only by a newly admitted dispatch with the old stamp kept in history."}
+              - {name: execution_actor_id, type: string, required: conditional, condition: "The packet has been dispatched and its lane resolves an actual execution actor", description: "Admitted direct_main execution actor or writer actor stamp; immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline, otherwise replaceable only by a newly admitted dispatch with the old stamp kept in history."}
               - name: recovery
                 type: object
                 required: false
@@ -1881,7 +1883,7 @@ handoffs:
           - name: execution
             type: object
             required: true
-            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume."
+            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume. Lane/actor execution stamps are immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline: the history row carrying stamp_baseline {evidence_refs, tdd_cycle_log_ref when present}, appended once with each first stamp (reason dispatch stamp baseline) or replacement (which also keeps replaced_stamps, reason stamp replaced by a newly admitted dispatch before start or old-actor evidence). A relabelled or stripped stamp blocks. Before then, only a newly admitted dispatch may replace a stamp."
             object_fields:
               - {name: state, type: enum, required: true, enum_values: [PENDING, RUNNING, VERIFIED, BLOCKED, INVALIDATED]}
               - {name: evidence_refs, type: "string[]", required: true}
@@ -1895,6 +1897,8 @@ handoffs:
               - {name: progress_guard_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Stable outcome guard identity; never derived from legacy recovery counters."}
               - {name: action_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Exact admitted semantic action identity."}
               - {name: action_admission_ref, type: string, required: conditional, condition: "A semantic action admission has been committed", description: "Retained admission reused by later stages of the same RUNNING action."}
+              - {name: build_execution_lane, type: enum, required: conditional, enum_values: [direct_main, bounded_executor, separated_workers], condition: "The packet has been dispatched", description: "Admitted dispatch lane stamp written by admission; immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline, otherwise replaceable only by a newly admitted dispatch with the old stamp kept in history."}
+              - {name: execution_actor_id, type: string, required: conditional, condition: "The packet has been dispatched and its lane resolves an actual execution actor", description: "Admitted direct_main execution actor or writer actor stamp; immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline, otherwise replaceable only by a newly admitted dispatch with the old stamp kept in history."}
               - name: recovery
                 type: object
                 required: false
@@ -2344,7 +2348,7 @@ handoffs:
           - name: execution
             type: object
             required: true
-            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume."
+            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume. Lane/actor execution stamps are immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline: the history row carrying stamp_baseline {evidence_refs, tdd_cycle_log_ref when present}, appended once with each first stamp (reason dispatch stamp baseline) or replacement (which also keeps replaced_stamps, reason stamp replaced by a newly admitted dispatch before start or old-actor evidence). A relabelled or stripped stamp blocks. Before then, only a newly admitted dispatch may replace a stamp."
             object_fields:
               - {name: state, type: enum, required: true, enum_values: [PENDING, RUNNING, VERIFIED, BLOCKED, INVALIDATED]}
               - {name: evidence_refs, type: "string[]", required: true}
@@ -2358,6 +2362,8 @@ handoffs:
               - {name: progress_guard_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Stable outcome guard identity; never derived from legacy recovery counters."}
               - {name: action_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Exact admitted semantic action identity."}
               - {name: action_admission_ref, type: string, required: conditional, condition: "A semantic action admission has been committed", description: "Retained admission reused by later stages of the same RUNNING action."}
+              - {name: build_execution_lane, type: enum, required: conditional, enum_values: [direct_main, bounded_executor, separated_workers], condition: "The packet has been dispatched", description: "Admitted dispatch lane stamp written by admission; immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline, otherwise replaceable only by a newly admitted dispatch with the old stamp kept in history."}
+              - {name: execution_actor_id, type: string, required: conditional, condition: "The packet has been dispatched and its lane resolves an actual execution actor", description: "Admitted direct_main execution actor or writer actor stamp; immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline, otherwise replaceable only by a newly admitted dispatch with the old stamp kept in history."}
               - name: recovery
                 type: object
                 required: false
@@ -2983,7 +2989,7 @@ handoffs:
           - name: execution
             type: object
             required: true
-            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume."
+            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume. Lane/actor execution stamps are immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline: the history row carrying stamp_baseline {evidence_refs, tdd_cycle_log_ref when present}, appended once with each first stamp (reason dispatch stamp baseline) or replacement (which also keeps replaced_stamps, reason stamp replaced by a newly admitted dispatch before start or old-actor evidence). A relabelled or stripped stamp blocks. Before then, only a newly admitted dispatch may replace a stamp."
             object_fields:
               - {name: state, type: enum, required: true, enum_values: [PENDING, RUNNING, VERIFIED, BLOCKED, INVALIDATED]}
               - {name: evidence_refs, type: "string[]", required: true}
@@ -2997,6 +3003,8 @@ handoffs:
               - {name: progress_guard_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Stable outcome guard identity; never derived from legacy recovery counters."}
               - {name: action_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Exact admitted semantic action identity."}
               - {name: action_admission_ref, type: string, required: conditional, condition: "A semantic action admission has been committed", description: "Retained admission reused by later stages of the same RUNNING action."}
+              - {name: build_execution_lane, type: enum, required: conditional, enum_values: [direct_main, bounded_executor, separated_workers], condition: "The packet has been dispatched", description: "Admitted dispatch lane stamp written by admission; immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline, otherwise replaceable only by a newly admitted dispatch with the old stamp kept in history."}
+              - {name: execution_actor_id, type: string, required: conditional, condition: "The packet has been dispatched and its lane resolves an actual execution actor", description: "Admitted direct_main execution actor or writer actor stamp; immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline, otherwise replaceable only by a newly admitted dispatch with the old stamp kept in history."}
               - name: recovery
                 type: object
                 required: false
@@ -3469,7 +3477,7 @@ handoffs:
         required: conditional
         condition: "current_task_packet is absent and tdd_applies is true and the canonical cycle_log has started"
         description: "Current canonical assistant-tdd cycle_log reference carried across BuilderTester dispatches and retries."
-        validation: "On the first observed RED invocation, create the current task-journal or workflow-output cycle_log entry conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log if no ref exists and return its actual resolvable location. Later dispatches resolve that same entry: the first final_verification appends separate current GREEN invocations, and the post-REFACTOR final_verification appends separate current REFACTOR invocations. Preserve history and omit unstarted work."
+        validation: "On the first observed RED invocation, create the current task-journal or workflow-output cycle_log entry conforming to assistant-tdd/contracts/output.yaml#artifacts/cycle_log if no ref exists and return its actual resolvable location. Later dispatches resolve that same entry: the first final_verification appends separate current GREEN invocations, and the post-REFACTOR final_verification appends executed current REFACTOR invocations or validated unchanged GREEN reuse. Preserve history and omit unstarted work."
       - name: tdd_mode
         type: boolean
         required: true
@@ -3600,7 +3608,7 @@ handoffs:
             required: conditional
             condition: "tdd_applies is true"
             enum_values: [pre_production_red, final_verification]
-            description: "Caller materialized verifier stage; GREEN and distinct REFACTOR follow current cycle evidence, never a CodeWriter stage."
+            description: "Caller materialized verifier stage; GREEN and executed REFACTOR or validated unchanged GREEN reuse follow current cycle evidence, never a CodeWriter stage."
           - name: writer_selection
             type: object
             required: conditional
@@ -3972,7 +3980,7 @@ handoffs:
           - name: execution
             type: object
             required: true
-            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume."
+            description: "Only coordinator-owned progress on this same packet; worker DONE does not imply VERIFIED. Preserve historical evidence and spent repair counters across resume. Lane/actor execution stamps are immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline: the history row carrying stamp_baseline {evidence_refs, tdd_cycle_log_ref when present}, appended once with each first stamp (reason dispatch stamp baseline) or replacement (which also keeps replaced_stamps, reason stamp replaced by a newly admitted dispatch before start or old-actor evidence). A relabelled or stripped stamp blocks. Before then, only a newly admitted dispatch may replace a stamp."
             object_fields:
               - {name: state, type: enum, required: true, enum_values: [PENDING, RUNNING, VERIFIED, BLOCKED, INVALIDATED]}
               - {name: evidence_refs, type: "string[]", required: true}
@@ -3986,6 +3994,8 @@ handoffs:
               - {name: progress_guard_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Stable outcome guard identity; never derived from legacy recovery counters."}
               - {name: action_ref, type: string, required: conditional, condition: "Shared semantic continuation uses context.progress", description: "Exact admitted semantic action identity."}
               - {name: action_admission_ref, type: string, required: conditional, condition: "A semantic action admission has been committed", description: "Retained admission reused by later stages of the same RUNNING action."}
+              - {name: build_execution_lane, type: enum, required: conditional, enum_values: [direct_main, bounded_executor, separated_workers], condition: "The packet has been dispatched", description: "Admitted dispatch lane stamp written by admission; immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline, otherwise replaceable only by a newly admitted dispatch with the old stamp kept in history."}
+              - {name: execution_actor_id, type: string, required: conditional, condition: "The packet has been dispatched and its lane resolves an actual execution actor", description: "Admitted direct_main execution actor or writer actor stamp; immutable once the packet is RUNNING, BLOCKED or VERIFIED (or INVALIDATED from those) under the current stamp, or has old-actor evidence beyond the latest stamp_baseline, otherwise replaceable only by a newly admitted dispatch with the old stamp kept in history."}
               - name: recovery
                 type: object
                 required: false
@@ -4087,7 +4097,7 @@ handoffs:
             type: enum
             required: true
             enum_values: [passed, failed, partial, unavailable, not_run, not_applicable]
-            validation: "For active TDD, first final_verification records current GREEN but aggregates partial with explicit pending REFACTOR even when checks pass; after actual refactor.changes_made and separate current REFACTOR invocations, passing due checks may aggregate passed. Inactive TDD uses ordinary final verification. Passed requires current observed or admissibly reused passing results for every due selected and binding check. Ordinary failure takes precedence. pre_production_red retains actual failed RED counts and pending GREEN. Partial, unavailable, and blocked per-check results remain gaps and never close a due selected or binding check; not_run means a due required check could not run and requires NEEDS_CONTEXT or BLOCKED; not_applicable requires no due selected or binding check applies."
+            validation: "For active TDD, first final_verification records current GREEN but aggregates partial with explicit pending REFACTOR even when checks pass; after actual refactor.changes_made and executed current REFACTOR invocations or validated unchanged GREEN reuse, passing due checks may aggregate passed. Inactive TDD uses ordinary final verification. Passed requires current observed or admissibly reused passing results for every due selected and binding check. Ordinary failure takes precedence. pre_production_red retains actual failed RED counts and pending GREEN. Partial, unavailable, and blocked per-check results remain gaps and never close a due selected or binding check; not_run means a due required check could not run and requires NEEDS_CONTEXT or BLOCKED; not_applicable requires no due selected or binding check applies."
           - name: evidence
             type: string[]
             required: true
@@ -4098,7 +4108,7 @@ handoffs:
         required: true
         min_items: 1
         description: "Per-check results preserving selected CheckSpec and applicable binding identity for the separated-workers lane"
-        validation: "Each row binds exact IDs/tuples to actual current procedure/oracle; started commands require exact selected CheckSpec argv/cwd. In active TDD, pre_production_red retains matching failed RED and pending GREEN; first final_verification retains current GREEN but aggregates partial with REFACTOR pending; second final_verification after CodeWriter refactor records REFACTOR and closes the cycle. Inactive TDD uses ordinary final verification. Ordinary failure yields FAILED_VERIFICATION; blocked per-check results remain gaps. Partial and unavailable are explicit gaps and never close a due check or establish sufficiency. Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."
+        validation: "Each row binds exact IDs/tuples to actual current procedure/oracle; started commands require exact selected CheckSpec argv/cwd. In active TDD, pre_production_red retains matching failed RED and pending GREEN; first final_verification retains current GREEN but aggregates partial with REFACTOR pending; second final_verification after CodeWriter refactor records REFACTOR and closes the cycle for actual refactor edits; a no-change REFACTOR closes through validated unchanged GREEN reuse (verification_disposition=reuse_green, zero new invocations) without another dispatch. Inactive TDD uses ordinary final verification. Ordinary failure yields FAILED_VERIFICATION; blocked per-check results remain gaps. Partial and unavailable are explicit gaps and never close a due check or establish sufficiency. Blocked is a distinct explicit gap and never closes a due check or establishes sufficiency."
         object_fields:
           - {name: command_or_check, type: string, required: true}
           - {name: result, type: enum, required: true, enum_values: [passed, failed, partial, unavailable, skipped, not_applicable, blocked]}
@@ -4239,7 +4249,7 @@ delegated_skill_contract_owners:
 # 1. Before dispatching: verify all required context_fields are populated
 # 2. After return: verify all required return_fields are present, including the worker status packet
 # 3. If on_missing_field action is "re-dispatch": use the same shared task guard with the exact missing-field request
-# 4. Continue authorized missing-field correction under the shared task guard; on an actual blocker or stall, log the gap and use policy-allowed direct fallback, BLOCKED, or an honest degraded result with explicit gaps/evidence; never fabricate required fields
+# 4. Continue authorized missing-field correction under the shared task guard; on an actual blocker or stall, log the gap and use policy-allowed Build/execution direct fallback (never for formal review, QA acceptance or research-lens isolation), BLOCKED, or an honest degraded result with explicit gaps/evidence; never fabricate required fields
 # 5. When CodeWriter returns blocker_type, the orchestrator records the blocker evidence and routes to debugging, explorer, architect, candidate_search, replan, restart, user clarification, environment fix, or permission request. Do not ask CodeWriter to widen scope or patch blindly through a legacy blocker.
 # 6. Never silently proceed with missing required fields — always log what was missing and how the missing evidence was resolved, deferred, or blocked
 # ─────────────────────────────────────────────

@@ -11,6 +11,7 @@ RESPONSES_DIR=""
 ACTIVATION_RESULTS_FILE=""
 CREATOR_RUN_BINDINGS_FILE=""
 CREATOR_RUN_BINDINGS_SHA256=""
+RESEARCH_DISPATCH_AUTHORITY_FILE=""
 INCLUDE_LOCAL=false
 SKILL_SELECTORS=()
 CASE_SELECTORS=()
@@ -34,7 +35,7 @@ Usage:
   run-skill-evals.sh --list [--skill NAME|PATH ...] [--case CASE_ID ...] [--include-local]
   run-skill-evals.sh --emit-prompts DIR [--skill NAME|PATH ...] [--case CASE_ID ...] [--include-local]
   run-skill-evals.sh --responses DIR [--skill NAME|PATH ...] [--case CASE_ID ...] [--include-local]
-                      [--creator-run-bindings FILE]
+                      [--creator-run-bindings FILE] [--research-dispatch-authority FILE]
   run-skill-evals.sh --activation-results FILE [--skill NAME|PATH ...] [--include-local]
   run-skill-evals.sh --help
 
@@ -58,6 +59,12 @@ Options:
   --creator-run-bindings FILE
                       Supply an independent per-run manifest for selected creator
                       behavior cases; valid only with --responses.
+  --research-dispatch-authority FILE
+                      Grade live Research v5 responses against retained runtime
+                      authority {"cases": {"<case_id>": authority}}; valid only
+                      with --responses. Live v5 grading fails closed when a case
+                      has no runtime entry or the entry only copies fixture
+                      authority. Without it, grading uses fixture authority.
   --activation-results FILE
                       Compare externally observed native skill selections for every
                       selected activation case. The runner does not route requests.
@@ -109,6 +116,13 @@ while [[ $# -gt 0 ]]; do
             CREATOR_RUN_BINDINGS_FILE="$2"
             shift 2
             ;;
+        --research-dispatch-authority)
+            [[ $# -ge 2 ]] || die "Missing file for --research-dispatch-authority."
+            [[ -z "$RESEARCH_DISPATCH_AUTHORITY_FILE" ]] || die "--research-dispatch-authority may be specified only once."
+            [[ -n "$2" ]] || die "File for --research-dispatch-authority must not be empty."
+            RESEARCH_DISPATCH_AUTHORITY_FILE="$2"
+            shift 2
+            ;;
         --activation-results)
             [[ -z "$MODE" ]] || die "Only one mode may be specified."
             [[ $# -ge 2 ]] || die "Missing file for --activation-results."
@@ -150,6 +164,18 @@ if [[ -n "$CREATOR_RUN_BINDINGS_FILE" && "$MODE" != "responses" ]]; then
 fi
 if [[ -n "$CREATOR_RUN_BINDINGS_FILE" && "$CREATOR_RUN_BINDINGS_FILE" != /* ]]; then
     CREATOR_RUN_BINDINGS_FILE="$PWD/$CREATOR_RUN_BINDINGS_FILE"
+fi
+
+if [[ -n "$RESEARCH_DISPATCH_AUTHORITY_FILE" && "$MODE" != "responses" ]]; then
+    die "--research-dispatch-authority is supported only with --responses."
+fi
+if [[ -n "$RESEARCH_DISPATCH_AUTHORITY_FILE" ]]; then
+    [[ "$RESEARCH_DISPATCH_AUTHORITY_FILE" == /* ]] || RESEARCH_DISPATCH_AUTHORITY_FILE="$PWD/$RESEARCH_DISPATCH_AUTHORITY_FILE"
+    [[ -f "$RESEARCH_DISPATCH_AUTHORITY_FILE" && -r "$RESEARCH_DISPATCH_AUTHORITY_FILE" ]] \
+        || die "Research dispatch authority file is not readable: $RESEARCH_DISPATCH_AUTHORITY_FILE"
+    export RESEARCH_DISPATCH_AUTHORITY_FILE
+else
+    unset RESEARCH_DISPATCH_AUTHORITY_FILE
 fi
 
 require_skill_eval_ruby "$MODE"

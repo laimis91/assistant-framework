@@ -3,7 +3,7 @@
 # report slots. Fix authorization, reproduction, verification, and active TDD
 # prerequisites apply regardless of presentation.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: input
 skill: assistant-debugging
 

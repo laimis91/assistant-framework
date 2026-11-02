@@ -6,7 +6,7 @@ fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 context_report="$FRAMEWORK_DIR/tools/context-budget-report.sh"
-eval_readme="$FRAMEWORK_DIR/docs/evals/README.md"
+eval_readme="$FRAMEWORK_DIR/docs/evals/codex-trials.md"
 context_evidence_lib="$FRAMEWORK_DIR/tools/evals/lib/context-budget-evidence.sh"
 
 test_start "context budget reporter exists and is executable"

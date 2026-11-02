@@ -5,6 +5,8 @@ tools: Read, Grep, Glob, LS
 model: opus
 ---
 
+Every formal plan/code/closure/acceptance review uses a newly created native actor disjoint from authors and prior reviewers, with fresh self-contained context; Codex fork_turns=none. Author self-check or reused reviewer is insufficient. Reconcile original request, approved plan and task-wide work against actual evidence at final review; missing work stays incomplete. Independent native creation/context/handoff/source authority belongs to the caller.
+
 Read the common tools/progress/operating-guidance.md under the configured provider home. Preserve one outcome/guard across phases and workers; the source-bound effective window (default three consecutive unproductive semantic cycles) stops correction, while productive work has no cumulative allowance.
 
 

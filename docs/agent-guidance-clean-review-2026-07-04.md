@@ -1,5 +1,7 @@
 # Agent Guidance Clean Review - 2026-07-04
 
+> Historical material. Use the [documentation map](README.md) for current guidance; verify dated claims against current source before reuse.
+
 ## Result
 
 The original pre-fix audit found 6 counted violations, all should-fix, documented in `docs/agent-guidance-violation-audit-2026-07-03.md`.

@@ -14,7 +14,12 @@ assistant_research_five_lens_v4_valid() {
     local response_path="$1"
     local fixture_file="$2"
     local case_id="$3"
-    node "$semantic_validator_dir/research-semantic-validator.cjs" "$response_path" "$fixture_file" "$case_id"
+    if [[ -n "${RESEARCH_DISPATCH_AUTHORITY_FILE:-}" ]]; then
+        node "$semantic_validator_dir/research-semantic-validator.cjs" "$response_path" "$fixture_file" "$case_id" \
+            --research-dispatch-authority "$RESEARCH_DISPATCH_AUTHORITY_FILE"
+    else
+        node "$semantic_validator_dir/research-semantic-validator.cjs" "$response_path" "$fixture_file" "$case_id"
+    fi
 }
 
 assistant_skill_creator_behavior_v1_valid() {
@@ -134,7 +139,7 @@ run_semantic_validator() {
     local selected_skill_file="${5:-}"
 
     case "$validator_id" in
-        assistant-research.five_lens_v4) assistant_research_five_lens_v4_valid "$response_path" "$fixture_file" "$case_id" ;;
+        assistant-research.five_lens_v4|assistant-research.five_lens_v5) assistant_research_five_lens_v4_valid "$response_path" "$fixture_file" "$case_id" ;;
         assistant-skill-creator.behavior_v1) assistant_skill_creator_behavior_v1_valid "$response_path" "$fixture_file" "$case_id" ;;
         assistant-workflow.packet_admission_v15) assistant_workflow_packet_admission_v15_valid "$response_path" "$fixture_file" "$case_id" "$selected_skill_file" ;;
         *)

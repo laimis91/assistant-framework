@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Documentation maintenance
+
+Start repository work at [docs/README.md](docs/README.md), then load the task-specific guide, relevant [specification](docs/specs/README.md) and owning source. For features and relevant bug fixes, update affected durable specs and canonical guides in the same change, or report a concrete reason they remain accurate. Before handoff, check changed claims against source, verify changed links, and name the documentation updated. Add new durable documents to the owning index with explicit status. Keep development plans, task journals and per-run evidence in local Git-ignored state; commit durable requirements under `docs/specs/`. Historical plans and proposals do not establish implemented behavior.
+
 ## Repository
 
 Assistant Framework is a framework repository, not an application. It installs skills, agents, rules, and tools for Claude Code, Codex, and Gemini CLI.
@@ -7,6 +11,9 @@ Assistant Framework is a framework repository, not an application. It installs s
 Root `skills/assistant-*` directories are the editable source of truth. See `README.md` for architecture and platform details. Skills route natively from their `SKILL.md` name and description; instruction-only skills are valid. Subagent role definitions live in `agents/claude/*.md` and `agents/codex/*.toml`.
 
 ## Workflow
+
+- The main agent may implement and verify directly at every size/risk; choose optional execution delegation for concrete benefit.
+- Formal plan/code/closure/acceptance reviews use newly created independent agents with fresh context (Codex `fork_turns=none`); selected research lenses retain sibling-blind isolation.
 
 - Keep behavior-driving skill prose, contracts, evals, tests, and documentation aligned.
 - Before changing skills, read `docs/skill-contract-design-guide.md`; keep detailed contract rules there.

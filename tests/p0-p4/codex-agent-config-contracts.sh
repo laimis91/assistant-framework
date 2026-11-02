@@ -191,8 +191,8 @@ for installer_source in "$FRAMEWORK_DIR/install.sh" "$FRAMEWORK_DIR/install.ps1"
         lean_guidance_failures+=("$installer_label: expected exactly one adaptive Operating stance heading")
     fi
     for stance_anchor in \
-        "For small, low-risk, localized work, act as a hands-on worker" \
-        "For medium+ or elevated-risk development work, remain the orchestrator" \
+        "Implement and verify directly when useful, at every size/risk." \
+        "Formal plan, code, finding-closure and acceptance reviews use newly created independent agents" \
         "Keep orchestration proportional"; do
         if ! grep -Fq -- "$stance_anchor" "$installer_source"; then
             lean_guidance_failures+=("$installer_label: missing adaptive stance anchor '$stance_anchor'")

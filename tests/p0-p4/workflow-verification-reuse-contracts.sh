@@ -22,7 +22,7 @@ normalized_contains() { tr -s '[:space:]' ' ' <"$1" | grep -Fq "$2"; }
 test_start "current verification reuse keeps conservative invalidation and review boundaries"
 missing=()
 for term in "exact argv and cwd" "complete passing result/log" "source/test/config/dependency" "toolchain and relevant non-secret environment" "covered acceptance obligations" "Unknown identity, freshness, or coverage requires rerun" "mutable external state" "user explicitly requests a fresh run" "source changes after a fix"; do normalized_contains "$worker_protocol" "$term" || missing+=("protocol:$term"); done
-for term in "references/build-worker-protocol.md" "reuse only full matching identity/coverage evidence" "new integration coverage" "run the selected checks and binding project checks over the completed scope before fresh Review" "independent code review" "final review snapshot"; do normalized_contains "$phases" "$term" || missing+=("phases:$term"); done
+for term in "references/build-worker-protocol.md" "reuse only full matching identity/coverage evidence" "new integration coverage" "run the selected checks and binding project checks over the completed scope before fresh Review" "Reused validation evidence never replaces the final fresh acceptance review" "final review snapshot"; do normalized_contains "$phases" "$term" || missing+=("phases:$term"); done
 for term in \
   "Each result carries the exact selected_check_ids and binding_obligation_refs it actually observes" \
   "Resolve IDs and exact {kind,value,source_ref} tuples against the unchanged decision" \

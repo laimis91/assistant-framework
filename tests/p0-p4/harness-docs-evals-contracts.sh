@@ -26,7 +26,7 @@ require_terms() {
 }
 
 harness_doc="$FRAMEWORK_DIR/docs/harness-design-guide.md"
-eval_readme="$FRAMEWORK_DIR/docs/evals/README.md"
+eval_readme="$FRAMEWORK_DIR/docs/evals/framework-fixtures.md"
 contract_guide="$FRAMEWORK_DIR/docs/skill-contract-design-guide.md"
 skill_creator_patterns="$FRAMEWORK_DIR/skills/assistant-skill-creator/references/harness-patterns.md"
 framework_fixture="$FRAMEWORK_DIR/docs/evals/framework-instruction-cases.json"

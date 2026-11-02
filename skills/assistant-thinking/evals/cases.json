@@ -181,43 +181,43 @@
     },
     {
       "id": "thinking-required-roles-dispatch-from-instruction-trigger",
-      "title": "Thinking roles dispatch from an applicable instruction trigger",
+      "title": "Required independent challenge dispatches a fresh reviewer from an instruction trigger",
       "category": "subagent_delegation_trigger",
-      "purpose": "Checks that Perspectives dispatches its required independent roles from active instructions without a second permission question.",
-      "prompt": "Think through this architecture decision with Perspectives using the active assistant-thinking process.",
+      "purpose": "Checks that a required independent high-risk challenge uses a newly created fresh-context reviewer from active instructions without a second permission question, or is recorded incomplete, while ordinary perspectives stay discretionary.",
+      "prompt": "Think through this high-risk architecture decision with Perspectives, including an independent challenge of the recommendation, using the active assistant-thinking process.",
       "setup_context": [
         "The assistant-thinking skill instructions are active.",
-        "Perspectives requires independent roles and the active thinking skill instruction covers them.",
+        "The decision is high-risk, so the recommendation needs a required independent challenge; the perspective angles themselves are discretionary.",
         "No explicit user opt-out or exact active policy block exists."
       ],
       "expected_behavior": [
-        "Sets subagent_policy_state=delegation_triggered and infers subagent_trigger_scope before spawning the perspective roles.",
-        "Dispatches without a separate permission question.",
-        "Does not use sequential_fallback without explicit opt-out, real spawn failure or supported configuration proof, or policy_disallowed with an exact policy_blocking_source.",
+        "Sets subagent_policy_state=delegation_triggered and infers subagent_trigger_scope for the required independent challenge without asking.",
+        "Dispatches a newly created fresh-context reviewer for the independent challenge without a separate permission question.",
+        "May reason through the discretionary perspective angles directly; does not require a spawned actor per perspective.",
+        "If a fresh reviewer cannot be created, records the independent challenge incomplete with the actual isolation gap instead of sequential role-play; policy_disallowed names its policy_blocking_source.",
         "Preserves parent sandbox and action/tool approval safeguards."
       ],
       "pass_criteria": [
         "The delegation path records delegation_triggered and the inferred trigger scope.",
-        "The response dispatches the required roles without a separate permission question.",
+        "The independent challenge comes from a newly created fresh-context reviewer, or is recorded incomplete.",
         "Any policy_disallowed path includes policy_blocking_source."
       ],
       "fail_signals": [
-        "Runs sequential_fallback without fallback evidence.",
+        "Presents sequential role-play or self-critique as the independent challenge.",
         "Asks a separate spawn-permission question.",
-        "Uses policy_disallowed without policy_blocking_source.",
-        "Ignores the active skill exception to the conditional policy."
+        "Requires a spawned actor for every discretionary perspective.",
+        "Uses policy_disallowed without policy_blocking_source."
       ],
       "machine_expectations": {
         "required_substrings": [
           "delegation_triggered",
           "subagent_trigger_scope",
           "without a separate permission question",
-          "sequential_fallback",
-          "policy_blocking_source"
+          "newly created fresh-context reviewer"
         ],
         "forbidden_substrings": [
           "ask for permission to spawn",
-          "sequential fallback without fallback evidence",
+          "sequential_fallback for the independent challenge",
           "policy_disallowed without policy_blocking_source"
         ]
       }

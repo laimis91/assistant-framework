@@ -594,7 +594,7 @@ check("per-request deadline caps cumulative body reads under the invocation dead
 
 def registry_preserves_exact_preparation_identity():
     current = json.loads((skill_root / "references/upstream-guidelines.json").read_text(encoding="utf-8"))
-    manifest = json.loads((repo / "docs/plans/assistant-skill-creator-refresh/source-manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads((repo / "docs/specs/assistant-skill-creator-refresh/source-manifest.json").read_text(encoding="utf-8"))
     assert current["schema_version"] == "1.0"
     assert current["assessment_window_days"] == 30
     records = {item["source_id"]: item for item in current["sources"]}

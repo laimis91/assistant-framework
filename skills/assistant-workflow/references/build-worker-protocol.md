@@ -6,65 +6,35 @@ contracts, or generated artifacts. `references/phases.md` keeps the compact
 Build shell; this file owns worker sequencing, evidence, TDD ownership,
 unexpected blocker routing, and per-slice verification.
 
-## Adaptive Source-Changing Role Ownership
+## Source-changing execution ownership
 
-Small, low-risk, localized source changes may use the light lane when they have
-no public behavior, data, security, harness, or QA acceptance risk:
+Shared fanout alone does not promote this Build lane.
 
-- `controller_intensity=light`
-- `workflow_state_mode=inline`
-- `subagent_policy_state=not_required`
-- `subagent_execution_mode=not_applicable`
-- direct implementation with the checks selected by `verification_decision`
-- a fresh self-review after validation
+Select `direct_main`, `bounded_executor`, or `separated_workers` for concrete
+execution benefit. The main agent may implement and verify at every size/risk;
+there is no mandatory spawn chain or orchestrator edit prohibition. Direct work
+is an ordinary lane without fallback exemptions, fake children or worker logs.
+Optional delegated bounded execution owns tests/code/checks; separated workers
+retain the same writer and execution-only Builder/Tester. Formal review always
+uses newly created independent agents with fresh context: one pass (plus one
+fresh re-review after a fix) for trivial/small light work, at least two
+sibling-blind passes for medium+.
+Read subagent-dispatch.md for actual actor and isolation bindings. Lane/actor
+stamps are immutable once the packet is RUNNING, BLOCKED or VERIFIED (or
+INVALIDATED from those) under the current stamp, or has old-actor evidence beyond
+the latest `stamp_baseline` history row;
+before then only a newly admitted dispatch may replace them, keeping the replaced
+stamp in `execution.history`. Separated workers with Builder
+evidence declare `builder_actor_ids`, and plan, final and QA reviewers are
+distinct actors. Plan review is re-checked at verification and completion; a
+v14/v15 version label without `historical_plan_attestation` grandfathers nothing.
 
-Shared fanout alone does not promote this Build lane. The light lane does not require Code Writer, Builder/Tester, Code Reviewer, or
-Reviewer dispatch/direct-fallback evidence. Any security-sensitive, high-risk,
-harness-capable, required-QA, non-localized, or otherwise promoted work uses the
-standard/strict lane and its existing gates.
-
-Expanded impact keeps this Build lane; Review records canonical
-`assistant-review` final-summary and delegation-path refs.
-
-Select `build_execution_lane` before dispatch:
-
-- `bounded_executor` is the default for ordinary medium standard-risk work.
-  One Code Writer/bounded executor owns implementation and selected checks;
-  RED/GREEN/REFACTOR applies only to packets whose `tdd_applies` is true.
-  Independent review is dispatched only
-  after Build enters Review.
-- `separated_workers` is used for high or critical risk, broad or noisy
-  verification, environment-heavy validation, an explicit independent TDD
-  evidence requirement, or explicit role separation. It uses Code Writer,
-  Builder/Tester, and Code Reviewer.
-
-Task size alone does not select separated workers. `reviewer` remains
-compatibility routing for legacy handoffs. Add QA Evaluator only when
-`qa_evaluation_mode=required`.
-
-Delegated mode (`subagent_execution_mode=delegated`):
-
-- The orchestrator does not edit project source files or write
-  implementation/test code directly.
-- Framework-owned state artifacts (`{agent_state_dir}/task.md`,
-  `{agent_state_dir}/context-map.md`, `{agent_state_dir}/session.md`, and
-  `{agent_state_dir}/working-buffer.md`) are the exception only when configured
-  and policy-allowed.
-- In `bounded_executor`, project/test changes and focused verification go
-  through one bounded Code Writer executor.
-- In `separated_workers`, project source changes go through Code Writer and
-  build/verification goes through Builder/Tester.
-- Independent Review goes through Code Reviewer, or Reviewer compatibility only
-  for existing/legacy handoffs.
-- QA Evaluator runs only when `qa_evaluation_mode=required`.
-
-For standard/strict work, Direct fallback mode
-(`subagent_execution_mode=direct_fallback`) is allowed only for
-`delegation_opted_out`, `subagents_unavailable`, or `policy_disallowed`.
-Do not pretend delegation happened. Record `subagent_policy_state`,
-`subagent_execution_mode`, `build_execution_lane`, the explicit direct fallback
-reason, matching bounded/separated evidence, independent Code Reviewer
-evidence during Review, and QA Evaluator evidence when QA is required.
+Direct single-pass work retains only relevant source and verification evidence.
+At a persisted/executable consumer, direct_main uses execution_stage and the real
+ExecutionActorBinding and execution_actor_id; no worker-only current_task_packet,
+worker_role, worker_stage or builder projection. Shared pre-build, approval,
+dependency/workspace, exact selected checks, meaningful RED and progress gates
+remain controlling. Optional agents cannot bypass any boundary.
 
 ## Expanded-impact mutation authorization
 
@@ -83,8 +53,8 @@ those paths may remain local without the expanded trigger.
 ## Standard/Strict Phase Evidence Gates
 
 Before standard/strict Build can complete, the task journal Agent Dispatch Log
-or equivalent carried-forward state contains only the selected Build-lane
-evidence:
+or equivalent carried-forward state contains only the actual selected Build-lane
+evidence, including direct main implementation/current-check evidence without child records:
 
 - `bounded executor dispatch/result` plus selected verification evidence and
   RED/GREEN evidence only when TDD is active for `build_execution_lane=bounded_executor`, or `Code Writer` and
@@ -92,7 +62,7 @@ evidence:
 
 After Build, Review separately adds `Code Reviewer dispatch/result` (or legacy
 Reviewer compatibility), `review_result`, and QA Evaluator evidence when QA is
-required. Direct fallback follows the same phase split. Review evidence cannot
+required. Direct main execution follows the same phase gates without child dispatch records. Review evidence cannot
 be used to satisfy a Build exit. `subagent_execution_mode=not_applicable` is invalid for
 standard/strict source-changing Build. Silent fallback is invalid; Silent
 fallback cannot complete.
@@ -182,9 +152,9 @@ cannot authorize it.
 
 For light work, implement the carried Discover scope/criteria or the inline plan
 when `plan_mode=inline`, run selected checks and binding project checks, and record the
-changed scope plus results in the inline packet. Then perform the compact fresh
-self-review. Do not create worker or
-independent-review dispatch evidence solely to satisfy the light lane.
+changed scope plus results in the inline packet. A local self-check may prepare
+the review; Review then dispatches a newly created independent reviewer for formal
+completion. Do not create worker records solely to satisfy the light lane.
 
 For medium+ tasks with slices, execute source-changing slices sequentially in a shared or unknown workspace. Independently executable source-changing slices may overlap only when runtime evidence proves isolated workspaces. Each slice is the unit of implementation and verification.
 
@@ -209,10 +179,10 @@ GREEN, REFACTOR, and separate phase invocations in one canonical cycle log.
 Active separated TDD dispatches the selected writer `worker_stage=test_authoring` only when tests need creation or repair, without incoming RED. Successful DONE/DONE_WITH_CONCERNS requires at least one actual permitted test-scope mutation from this stage in both `changed_files` and `files_changed`; otherwise do not claim authoring success or fabricate changes. Reused unchanged tests skip authoring and proceed directly to RED. Refactor `none needed` and truthful nonmutating blocker returns may keep empty changes. Stage-only DONE cannot complete Build or permit Review. Dispatch Builder/Tester `pre_production_red` on the selected authored or reused tests, carrying
 its typed RED and `tdd_cycle_log_ref` to the SAME Code Writer `worker_stage=production` for production, then uses
 Builder/Tester `final_verification` for GREEN. Only after GREEN passes does the
-same Code Writer `worker_stage=refactor` own REFACTOR; a second `final_verification` records separate
-REFACTOR invocations. A GREEN-only return is partial with REFACTOR pending, not
+same Code Writer `worker_stage=refactor` own REFACTOR; actual refactor edits require a second `final_verification` with separate
+REFACTOR invocations of the affected checks. A no-change REFACTOR (`none needed`, no edits after GREEN) may instead record validated unchanged GREEN reuse (`verification_disposition=reuse_green`, zero new invocations, empty REFACTOR command results, REFACTOR `invocation_ref` equal to the passing GREEN's) without another Builder/Tester dispatch. Default `reuse_identity_mode=digest` requires `green.reuse_digest` to equal the caller's independently resolved `current_input_identities[packet_id].reuse_digest`, both computed with the canonical recipe in assistant-tdd `contracts/output.yaml` (`green.reuse_digest`); opt-in `detailed` mode instead requires `green.relevant_input_identity` and `verification_reuse_authority`. Failed GREEN is never reused; a missing or unknown current digest requires executed REFACTOR verification. A GREEN-only return is partial with REFACTOR pending, not
 final Build evidence. Inactive TDD runs the selected checks without adding a
-RED step. Direct fallback follows the same selected lane. Never edit production
+RED step. Direct main execution follows the same selected checks and phase order. Never edit production
 before observed meaningful RED when that packet applies TDD, refactor before
 passing GREEN, or invent unstarted phase evidence.
 
@@ -232,7 +202,7 @@ selected-lane responsibilities. For active separated-worker TDD, the selected wr
 pre_production_red execution stage, the SAME Code Writer worker_stage=production consumes its unchanged typed RED before
 production edits, then Builder/Tester owns final_verification for GREEN. After
 that current GREEN passes, the same Code Writer handles REFACTOR and Builder/
-Tester runs final_verification again for a distinct REFACTOR invocation.
+Tester runs final_verification again for executed REFACTOR verification; a no-change REFACTOR may record validated unchanged GREEN reuse, as defined above, without another Builder/Tester final_verification dispatch.
 
 For every Code Writer return, preserve actual changed implementation or test
 files even when a later `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or
@@ -255,7 +225,8 @@ Removal/quarantine needs the existing selection/authorization route. Never weake
 assertions, suppress errors, increase timeouts or add retries just to get green.
 
 For repeated work, use one task-level ProgressState in the existing journal or
-carried context under [the shared policy](../../../tools/progress/operating-guidance.md).
+carried context under [the shared policy](../../../tools/progress/operating-guidance.md);
+persisted/executable progress admission follows [the wire boundary](../../../tools/progress/wire-boundary.md).
 Record the completed correction plus its due/executable verification/review as
 one semantic checkpoint before next-work blockers. The source-bound effective
 window (default three consecutive unproductive cycles) stops corrective work.
@@ -313,7 +284,7 @@ gate rather than being inferred from a passing wrapper test.
 - `bounded_executor`: when TDD is active, the bounded executor adds or extends
   one assertion, records the observed intended failure and actual production
   file, verifies GREEN, then makes refactor edits only after GREEN passes and
-  records separate REFACTOR invocations; with false TDD it runs only the
+  records executed REFACTOR invocations or validated unchanged GREEN reuse; with false TDD it runs only the
   selected verification plan.
 - `separated_workers`: when TDD is active, the selected writer first owns test_authoring for tests only without incoming RED; Builder/Tester returns one typed
   authorizing RED and its current log reference in `pre_production_red`, the SAME Code
@@ -321,8 +292,9 @@ gate rather than being inferred from a passing wrapper test.
   Tester `final_verification` records actual GREEN invocations. GREEN may return
   stage-only DONE with aggregate partial and pending REFACTOR rows; after it
   passes, the same Code Writer owns actual refactor changes or `none needed`,
-  and Builder/Tester performs a separate REFACTOR invocation in a second
-  `final_verification`. Preserve the same reference and actual history; no
+  and Builder/Tester records executed REFACTOR verification; validated unchanged
+  GREEN reuse (zero new invocations) may be recorded without another Builder/Tester
+  dispatch under the digest/detailed reuse rule above. Preserve actual history; no
   phase may be inferred. Inactive TDD stays Code Writer then Builder/Tester.
   Only the complete current cycle closes Build or Review. Reused checks do not force new tests or authoring stages. Changes to test/target/argv/cwd/oracle invalidate authorizing RED: preserve old history and observe current RED before dependent production. Refactor requires current GREEN and its canonical cycle ref.
 

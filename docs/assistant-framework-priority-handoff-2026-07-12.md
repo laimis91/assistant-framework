@@ -1,5 +1,7 @@
 # Assistant Framework Eight-Priority Handoff
 
+> Historical material. Use the [documentation map](README.md) for current guidance; verify dated claims against current source before reuse.
+
 This report is a dated, evidence-backed handoff for the eight framework
 priorities implemented in the current working tree. It separates source and
 contract completion from live promotion evidence so a future maintainer can

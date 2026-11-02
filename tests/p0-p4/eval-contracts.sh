@@ -12,7 +12,7 @@ semantic_finalizer="$FRAMEWORK_DIR/tools/evals/finalize-workflow-kernel-review.s
 semantic_verdict_schema="$FRAMEWORK_DIR/docs/evals/framework-semantic-review-verdict.schema.json"
 promotion_decision_schema="$FRAMEWORK_DIR/docs/evals/framework-promotion-decision.schema.json"
 workflow_kernel_manifest="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/manifest.json"
-eval_readme="$FRAMEWORK_DIR/docs/evals/README.md"
+eval_readme="$FRAMEWORK_DIR/docs/evals/codex-trials.md"
 eval_package="$FRAMEWORK_DIR/tools/evals/package.json"
 eval_package_lock="$FRAMEWORK_DIR/tools/evals/package-lock.json"
 framework_validation_workflow="$FRAMEWORK_DIR/.github/workflows/framework-validation.yml"
@@ -199,7 +199,7 @@ if jq -e '
       "review-loop-continues-after-findings",
       "small-fix-stays-lightweight",
       "spec-review-not-replaced-by-quality-review",
-      "subagent-opt-out-uses-direct-fallback",
+      "subagent-opt-out-keeps-review-isolation",
       "tdd-red-before-green-handoff",
       "worker-status-packet-required"
     ]))
@@ -219,7 +219,7 @@ if jq -e '
     and case_category("per-slice-verification-before-advancing"; "slice_verification")
     and case_category("spec-review-not-replaced-by-quality-review"; "review_gates")
     and case_category("worker-status-packet-required"; "subagent_handoffs")
-    and case_category("subagent-opt-out-uses-direct-fallback"; "subagent_delegation_trigger")
+    and case_category("subagent-opt-out-keeps-review-isolation"; "subagent_delegation_trigger")
     and case_category("codex-role-constraints-native"; "role_constraints")
 ' "$eval_fixture" >/dev/null; then
     pass
@@ -262,11 +262,11 @@ for term in \
     "TDD RED-before-GREEN handoff behavior" \
     "executable task packet requirements before build" \
     "per-slice verification before advancing" \
-    "separate spec review and quality review gates" \
+    "spec obligations folded into the final acceptance review, not replaced by quality findings" \
     "structured worker status packets from subagents" \
-    "subagent opt-out direct fallback" \
+    "subagent opt-out keeps review isolation" \
     "Native Codex role constraints without extra runtime reinforcement"; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/docs/evals/README.md"; then
+    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/docs/evals/framework-fixtures.md"; then
         missing_eval_readme_terms+=("$term")
     fi
 done
@@ -611,10 +611,10 @@ if jq -e '
     and (.trace_results.statuses | contains(["completed", "adapter_unavailable"]))
     and (.trace_results.variants | contains(["baseline", "candidate"]))
 ' "$eval_fixture" >/dev/null \
-    && grep -Fq -- "--validate-traces DIR" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq -- "--compare-traces DIR" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq -- "adapter_unavailable" "$FRAMEWORK_DIR/docs/evals/README.md" \
-    && grep -Fq -- "not counted as an acceptance failure" "$FRAMEWORK_DIR/docs/evals/README.md"; then
+    && grep -Fq -- "--validate-traces DIR" "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && grep -Fq -- "--compare-traces DIR" "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && grep -Fq -- "adapter_unavailable" "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && grep -Fq -- "not counted as an acceptance failure" "$FRAMEWORK_DIR/docs/evals/codex-trials.md"; then
     pass
 else
     fail "eval fixture or README is missing the trace schema, modes, variants, or unavailable-run semantics"

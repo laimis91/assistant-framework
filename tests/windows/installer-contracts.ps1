@@ -307,7 +307,8 @@ function Get-TreeFingerprint {
             'AppData/Local/Microsoft',
             'AppData/Local/Microsoft/PowerShell',
             'AppData/Local/Microsoft/Windows',
-            'AppData/Local/Microsoft/Windows/PowerShell'
+            'AppData/Local/Microsoft/Windows/PowerShell',
+            'AppData/Roaming'
         ) | ForEach-Object {
             [System.IO.Path]::GetFullPath((Join-Path $script:ActiveIsolatedUserProfile $_))
         }
@@ -1443,6 +1444,13 @@ if (-not $caught.Contains($failedReplacements[0].FullName)) {
                 [System.IO.File]::WriteAllText($runtimePath, 'runtime-after')
             }
             Assert-Equal $withLookalike (Get-TreeFingerprint -LiteralPath $root) 'PowerShell-owned startup cache churn changed the installer fingerprint'
+            # Windows PowerShell 5.1 creates the empty directory itself; anything inside it still counts.
+            $roaming = Join-Path $isolatedUserProfile 'AppData/Roaming'
+            [void][System.IO.Directory]::CreateDirectory($roaming)
+            $withEmptyRoaming = Get-TreeFingerprint -LiteralPath $root
+            Assert-Equal $withLookalike $withEmptyRoaming 'Host-created empty Roaming directory changed the installer fingerprint'
+            [System.IO.File]::WriteAllText((Join-Path $roaming 'installer-owned.txt'), 'owned')
+            Assert-True ($withEmptyRoaming -cne (Get-TreeFingerprint -LiteralPath $root)) 'A file inside Roaming was hidden from the installer fingerprint'
 
             [System.IO.File]::Delete($runtimePaths[1])
             [void][System.IO.Directory]::CreateDirectory($runtimePaths[1])
@@ -2631,10 +2639,10 @@ requires:
             [void][System.IO.Directory]::CreateDirectory((Join-Path $Workflow 'contracts'))
             $utf8 = New-Object System.Text.UTF8Encoding($false)
             $skillText = "---`nname: assistant-workflow`ndescription: Retained ownership protocol fixture.`n---`n"
-            $indexText = "schema_version: `"15.0`"`ncontract: index`nskill: assistant-workflow`n"
+            $indexText = "schema_version: `"16.0`"`ncontract: index`nskill: assistant-workflow`n"
             # Fixed declared tuples, independent of the production compatibility reader.
             $handoffsText = @'
-schema_version: "15.0"
+schema_version: "16.0"
 contract: handoffs
 skill: assistant-workflow
 worker_stage_protocol:
@@ -2654,17 +2662,18 @@ worker_stage_protocol:
 '@
             $handoffsText = $handoffsText.Replace("`r`n", "`n") + "`n"
             switch ($Variant) {
-                'old13' { $indexText = $indexText.Replace('15.0', '13.0'); $handoffsText = $handoffsText.Replace('15.0', '13.0') }
-                'old14' { $indexText = $indexText.Replace('15.0', '14.0'); $handoffsText = $handoffsText.Replace('15.0', '14.0') }
-                'unknown-version' { $indexText = $indexText.Replace('15.0', '16.0'); $handoffsText = $handoffsText.Replace('15.0', '16.0') }
-                'mixed-version' { $indexText = $indexText.Replace('15.0', '14.0') }
-                { $_ -in @('old', 'recovery', 'full') } { $indexText = $indexText.Replace('15.0', '12.0') }
+                'old13' { $indexText = $indexText.Replace('16.0', '13.0'); $handoffsText = $handoffsText.Replace('16.0', '13.0') }
+                'old14' { $indexText = $indexText.Replace('16.0', '14.0'); $handoffsText = $handoffsText.Replace('16.0', '14.0') }
+                'old15' { $indexText = $indexText.Replace('16.0', '15.0'); $handoffsText = $handoffsText.Replace('16.0', '15.0') }
+                'unknown-version' { $indexText = $indexText.Replace('16.0', '17.0'); $handoffsText = $handoffsText.Replace('16.0', '17.0') }
+                'mixed-version' { $indexText = $indexText.Replace('16.0', '14.0') }
+                { $_ -in @('old', 'recovery', 'full') } { $indexText = $indexText.Replace('16.0', '12.0') }
                 'no-stages' { $handoffsText = $handoffsText.Substring(0, $handoffsText.IndexOf('worker_stage_protocol:')) }
                 'stage-mismatch' { $handoffsText = $handoffsText.Replace('current_matching_red', 'none') }
                 'early-completion' { $handoffsText = $handoffsText.Replace('completes_build: false', 'completes_build: true') }
                 'duplicate-index' { $indexText += "skill: assistant-workflow`n" }
-                'duplicate-handoffs' { $handoffsText += "schema_version: `"15.0`"`n" }
-                'malformed' { $indexText = "schema_version: `"15.0`ncontract: index`nskill: assistant-workflow`n" }
+                'duplicate-handoffs' { $handoffsText += "schema_version: `"16.0`"`n" }
+                'malformed' { $indexText = "schema_version: `"16.0`ncontract: index`nskill: assistant-workflow`n" }
                 'wrong-identity' { $indexText = $indexText.Replace('contract: index', 'contract: output') }
                 'bom-crlf' {
                     $utf8 = New-Object System.Text.UTF8Encoding($true)
@@ -2694,7 +2703,7 @@ worker_stage_protocol:
         }
 
         foreach ($agent in @('codex', 'claude', 'gemini')) {
-            foreach ($variant in @('old13', 'old14', 'old', 'no-stages', 'stage-mismatch', 'early-completion', 'missing-index', 'duplicate-index', 'duplicate-handoffs', 'malformed', 'wrong-identity', 'unsafe-workflow', 'unsafe-skill', 'unsafe-index', 'absent', 'current', 'current15', 'unknown-version', 'mixed-version', 'bom-crlf', 'recovery', 'full')) {
+            foreach ($variant in @('old13', 'old14', 'old', 'no-stages', 'stage-mismatch', 'early-completion', 'missing-index', 'duplicate-index', 'duplicate-handoffs', 'malformed', 'wrong-identity', 'unsafe-workflow', 'unsafe-skill', 'unsafe-index', 'absent', 'current', 'old15', 'unknown-version', 'mixed-version', 'bom-crlf', 'recovery', 'full')) {
                 foreach ($mode in @('normal', 'dry-run')) {
                     if ($mode -eq 'dry-run' -and $variant -in @('recovery', 'full')) { continue }
                     Use-IsolatedEnvironment ("ownership-$agent-$variant-$mode") {
@@ -2742,11 +2751,11 @@ worker_stage_protocol:
                         $result = Invoke-Installer -Arguments $installArguments
                         $after = Get-TreeFingerprint -LiteralPath $root
                         $label = "$agent/$variant/$mode"
-                        if ($variant -in @('absent', 'current', 'current15', 'bom-crlf', 'recovery', 'full')) {
+                        if ($variant -in @('absent', 'current', 'bom-crlf', 'recovery', 'full')) {
                             Assert-Equal 0 $result.ExitCode "$label unexpectedly rejected: $($result.Output)"
                             if ($mode -eq 'dry-run') { Assert-Equal $before $after "$label dry-run mutated scratch tree" }
                             if ($variant -eq 'absent') { Assert-False (Test-Path -LiteralPath $workflow) "$label added unselected workflow" }
-                            if ($variant -in @('current', 'current15', 'bom-crlf')) {
+                            if ($variant -in @('current', 'bom-crlf')) {
                                 Assert-Equal $workflowBefore (Get-TreeFingerprint -LiteralPath $workflow) "$label refreshed retained compatible controller"
                             }
                             if ($variant -in @('recovery', 'full')) {
@@ -2773,6 +2782,70 @@ worker_stage_protocol:
                         }
                     }
                 }
+            }
+        }
+        # Mirrors the Unix mixed-protocol test: Assert-ProtocolCompatibility rejects a
+        # retained incompatible producer/consumer before any normal or dry-run write.
+        foreach ($protocolAgent in @('codex', 'claude', 'gemini')) {
+            foreach ($protocolCase in @('review-with-old-workflow', 'workflow-with-old-debugging', 'review-with-old-debugging')) {
+                foreach ($protocolMode in @('normal', 'dry-run')) {
+                    Use-IsolatedEnvironment ("protocol-$protocolAgent-$protocolCase-$protocolMode") {
+                        param($root, $isolatedUserProfile)
+                        if ($protocolAgent -eq 'codex') {
+                            [Environment]::SetEnvironmentVariable('CODEX_HOME', (Join-Path $isolatedUserProfile '.codex'), 'Process')
+                            $protocolTarget = Join-Path $isolatedUserProfile '.agents/skills'
+                        }
+                        else {
+                            [Environment]::SetEnvironmentVariable('CODEX_HOME', [System.IO.Path]::GetPathRoot($root), 'Process')
+                            $protocolTarget = Join-Path $isolatedUserProfile ('.' + $protocolAgent + '/skills')
+                        }
+                        [void][System.IO.Directory]::CreateDirectory($protocolTarget)
+                        $protocolArguments = @('-Agent', $protocolAgent, '-NoHooks')
+                        if ($protocolCase -eq 'review-with-old-workflow') {
+                            Write-OwnershipWorkflowFixture -Workflow (Join-Path $protocolTarget 'assistant-workflow') -Variant 'old15'
+                            $protocolArguments += @('-Skill', 'assistant-review')
+                        }
+                        else {
+                            $debugging = Join-Path $protocolTarget 'assistant-debugging'
+                            [void][System.IO.Directory]::CreateDirectory((Join-Path $debugging 'contracts'))
+                            [System.IO.File]::WriteAllText((Join-Path $debugging 'SKILL.md'), "---`nname: assistant-debugging`ndescription: Original v2 debugging consumer.`n---`n")
+                            [System.IO.File]::WriteAllText((Join-Path $debugging 'contracts/index.yaml'), "schema_version: `"2.0`"`ncontract: index`nskill: assistant-debugging`n")
+                            # review-with-old-debugging exercises the debugging/review protocol pair alone.
+                            if ($protocolCase -eq 'review-with-old-debugging') { $protocolArguments += @('-Skill', 'assistant-review') }
+                            else { $protocolArguments += @('-Skill', 'assistant-workflow') }
+                        }
+                        if ($protocolMode -eq 'dry-run') { $protocolArguments += '-DryRun' }
+                        $protocolLabel = "$protocolAgent/$protocolCase/$protocolMode"
+                        $protocolBefore = Get-TreeFingerprint -LiteralPath $root
+                        $protocolResult = Invoke-Installer -Arguments $protocolArguments
+                        Assert-True ($protocolResult.ExitCode -ne 0) "$protocolLabel accepted incompatible retained consumer"
+                        Assert-Contains $protocolResult.Output 'INCOMPATIBLE_SKILL_PROTOCOL_UPGRADE' "$protocolLabel rejected for wrong reason"
+                        Assert-Equal $protocolBefore (Get-TreeFingerprint -LiteralPath $root) "$protocolLabel wrote before rejection"
+                    }
+                }
+            }
+        }
+        # Missing retained protocol metadata reports the protocol diagnostic, matching install.sh.
+        foreach ($protocolAgent in @('codex', 'claude', 'gemini')) {
+            Use-IsolatedEnvironment ("protocol-missing-index-$protocolAgent") {
+                param($root, $isolatedUserProfile)
+                if ($protocolAgent -eq 'codex') {
+                    [Environment]::SetEnvironmentVariable('CODEX_HOME', (Join-Path $isolatedUserProfile '.codex'), 'Process')
+                    $protocolTarget = Join-Path $isolatedUserProfile '.agents/skills'
+                }
+                else {
+                    [Environment]::SetEnvironmentVariable('CODEX_HOME', [System.IO.Path]::GetPathRoot($root), 'Process')
+                    $protocolTarget = Join-Path $isolatedUserProfile ('.' + $protocolAgent + '/skills')
+                }
+                $debugging = Join-Path $protocolTarget 'assistant-debugging'
+                [void][System.IO.Directory]::CreateDirectory((Join-Path $debugging 'contracts'))
+                [System.IO.File]::WriteAllText((Join-Path $debugging 'SKILL.md'), "---`nname: assistant-debugging`ndescription: Retained debugging consumer.`n---`n")
+                $protocolLabel = "$protocolAgent/missing-index"
+                $protocolBefore = Get-TreeFingerprint -LiteralPath $root
+                $protocolResult = Invoke-Installer -Arguments @('-Agent', $protocolAgent, '-NoHooks', '-Skill', 'assistant-workflow', '-DryRun')
+                Assert-True ($protocolResult.ExitCode -ne 0) "$protocolLabel accepted missing protocol metadata"
+                Assert-Contains $protocolResult.Output 'INCOMPATIBLE_SKILL_PROTOCOL_UPGRADE: missing or unreadable contracts/index.yaml' "$protocolLabel rejected for wrong reason"
+                Assert-Equal $protocolBefore (Get-TreeFingerprint -LiteralPath $root) "$protocolLabel wrote before rejection"
             }
         }
         # Representative callers of the same pre-mode source completeness guard.

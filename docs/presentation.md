@@ -1,5 +1,7 @@
 # Assistant Framework
 
+> Historical material. Use the [documentation map](README.md) for current guidance; verify dated claims against current source before reuse.
+
 ## A development workflow that makes delivery more reliable
 
 ---
