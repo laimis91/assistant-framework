@@ -888,8 +888,8 @@ elif ! grep -Fq 'architecture_decision_pack_review' <<<"$(phase_block REVIEW)" \
     || ! grep -Fq 'assistant-review/contracts/output.yaml#final_summary' "$review_router" \
     || ! p0p4_contains_text "$review_router" 'review_delegation_path' \
     || ! p0p4_contains_text "$review_router" 'expanded impact' \
-    || ! p0p4_contains_text "$review_router" 'resolve its own policy' \
-    || ! p0p4_contains_text "$review_router" 'do not copy light Build policy'; then
+    || ! p0p4_contains_text "$review_router" 'newly created' \
+    || ! p0p4_contains_text "$review_router" 'no direct author fallback'; then
     fail "light Pack review routing does not preserve the canonical delegation-path requirement"
 else
     pass
@@ -2084,6 +2084,38 @@ else
     fail "terminal review consumer endpoint gaps: canonical=$canonical_review_schema_version ${terminal_shape_failures[*]}"
 fi
 
+test_start "Workflow 16 compact fresh_review_result evals require reviewer_identity"
+reviewer_identity_failures=()
+for case_id in light-pack-review-result-retains-current-snapshot combined-preparation-and-implementation-routes-end-to-end; do
+    required_summary="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .machine_expectations.required_substrings[]' "$workflow_dir/evals/cases.json" | paste -sd ' ' -)"
+    response_file="$(mktemp)"
+    p0p4_register_cleanup "$response_file"
+    if [[ "$case_id" == combined-preparation-and-implementation-routes-end-to-end ]]; then
+        build_small_end_to_end_response "$response_file" "$required_summary"
+    else
+        build_workflow_review_lifecycle_eval_response "$case_id" "$response_file" "$required_summary"
+    fi
+    valid_response="$(<"$response_file")"
+    if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$valid_response" PASS; then
+        reviewer_identity_failures+=("$case_id rejects its baseline")
+        continue
+    fi
+    for mutation in \
+        'del(.fresh_review_result.reviewer_identity)' \
+        'del(.fresh_review_result.reviewer_identity.actor_id)' \
+        'del(.fresh_review_result.reviewer_identity.native_invocation_id)' \
+        '.fresh_review_result.reviewer_identity.runtime = " "'; do
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$(jq "$mutation" <<<"$valid_response")" FAIL; then
+            reviewer_identity_failures+=("$case_id accepts $mutation")
+        fi
+    done
+done
+if [[ ${#reviewer_identity_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "compact fresh_review_result reviewer_identity eval gaps: ${reviewer_identity_failures[*]}"
+fi
+
 test_start "canonical review evidence uses producer-faithful envelopes"
 producer_envelope_failures=()
 for case_id in \
@@ -2445,11 +2477,15 @@ for case_id in \
     build_workflow_review_lifecycle_eval_response "$case_id" "$response_file" "$required_summary"
     valid_response="$(<"$response_file")"
     setup_context="$(jq -r --arg case_id "$case_id" '.cases[] | select(.id == $case_id) | .setup_context | join(" ")' "$workflow_dir/evals/cases.json")"
-    if ! jq -e '
-      .completion_policy.build_execution_lane == "bounded_executor" and
+    expected_build_lane="bounded_executor"
+    if [[ "$case_id" == fulfilled-* ]]; then
+        expected_build_lane="direct_main"
+    fi
+    if ! jq -e --arg lane "$expected_build_lane" '
+      .completion_policy.build_execution_lane == $lane and
       .completion_policy.workflow_state_mode == "journal" and
       .triage_result.risk_tier == "low" and
-      .triage_result.build_execution_lane == "bounded_executor" and
+      .triage_result.build_execution_lane == $lane and
       .triage_result.workflow_state_mode == "journal" and
       (.triage_result.architecture_design_trigger_reasons | type == "array" and length > 0) and
       (.triage_result.subagent_trigger_scope | type == "array" and length > 0)
@@ -2457,13 +2493,13 @@ for case_id in \
         small_elevated_fixture_failures+=("$case_id baseline uses contract-invalid strict lifecycle routing")
     fi
     if [[ "$case_id" == fulfilled-preparation-* ]]; then
-        for required_setup_phrase in "approved implementation packet" "bounded-executor" "Subagents are unavailable" "localized reversible low-risk"; do
+        for required_setup_phrase in "approved implementation packet" "direct_main" "fresh-context Code Reviewer and QA Evaluator" "localized reversible low-risk"; do
             if [[ "$setup_context" != *"$required_setup_phrase"* ]]; then
                 small_elevated_fixture_failures+=("$case_id setup omits $required_setup_phrase")
             fi
         done
-        if ! jq -e '.triage_result.execution_intent == "implement_only" and .triage_result.subagent_policy_state == "subagents_unavailable" and .triage_result.subagent_execution_mode == "direct_fallback"' <<<"$valid_response" >/dev/null; then
-            small_elevated_fixture_failures+=("$case_id does not match its approved-packet direct-fallback route")
+        if ! jq -e '.triage_result.execution_intent == "implement_only" and .triage_result.subagent_policy_state == "delegation_triggered" and .triage_result.subagent_execution_mode == "delegated" and .subagent_evidence.execution_mode == "not_applicable" and .subagent_evidence.build_execution_lane == "direct_main" and (.subagent_evidence | has("bounded_executor_evidence") or has("direct_fallback_reason") or has("direct_fallback_role_evidence") or has("delegated_dispatch_results") | not)' <<<"$valid_response" >/dev/null; then
+            small_elevated_fixture_failures+=("$case_id does not match its approved-packet direct_main route with delegated fresh review isolation")
         fi
         if ! jq -e '.approved_feature_preparation_evidence_ref == "prep/viewing-route"' <<<"$valid_response" >/dev/null; then
             small_elevated_fixture_failures+=("$case_id omits the approved existing-system preparation evidence ref")
@@ -2473,13 +2509,13 @@ for case_id in \
             small_elevated_fixture_failures+=("$case_id accepts a missing approved existing-system preparation evidence ref")
         fi
     elif [[ "$case_id" == fulfilled-not-applicable-* ]]; then
-        for required_setup_phrase in "approved implementation packet" "bounded-executor" "Subagents are unavailable" "localized reversible low-risk"; do
+        for required_setup_phrase in "approved implementation packet" "direct_main" "fresh-context Code Reviewer and QA Evaluator" "localized reversible low-risk"; do
             if [[ "$setup_context" != *"$required_setup_phrase"* ]]; then
                 small_elevated_fixture_failures+=("$case_id setup omits $required_setup_phrase")
             fi
         done
-        if ! jq -e '.triage_result.execution_intent == "implement_only" and .triage_result.subagent_policy_state == "subagents_unavailable" and .triage_result.subagent_execution_mode == "direct_fallback"' <<<"$valid_response" >/dev/null; then
-            small_elevated_fixture_failures+=("$case_id does not match its approved-packet direct-fallback route")
+        if ! jq -e '.triage_result.execution_intent == "implement_only" and .triage_result.subagent_policy_state == "delegation_triggered" and .triage_result.subagent_execution_mode == "delegated" and .subagent_evidence.execution_mode == "not_applicable" and .subagent_evidence.build_execution_lane == "direct_main" and (.subagent_evidence | has("bounded_executor_evidence") or has("direct_fallback_reason") or has("direct_fallback_role_evidence") or has("delegated_dispatch_results") | not)' <<<"$valid_response" >/dev/null; then
+            small_elevated_fixture_failures+=("$case_id does not match its approved-packet direct_main route with delegated fresh review isolation")
         fi
         if jq -e 'has("approved_feature_preparation_evidence_ref")' <<<"$valid_response" >/dev/null; then
             small_elevated_fixture_failures+=("$case_id invents an existing-system preparation evidence ref")
@@ -2497,6 +2533,18 @@ for case_id in \
         if ! jq -e '.triage_result.execution_intent == "end_to_end" and .triage_result.subagent_policy_state == "delegation_triggered" and .triage_result.subagent_execution_mode == "delegated"' <<<"$valid_response" >/dev/null; then
             small_elevated_fixture_failures+=("$case_id does not match its generic end-to-end delegated route")
         fi
+    fi
+    if [[ "$case_id" == fulfilled-* ]]; then
+        for mutation in \
+            '.subagent_evidence.direct_fallback_reason = "subagents_unavailable" | .subagent_evidence.direct_fallback_role_evidence = [{role:"Code Reviewer",phase_owner:"REVIEW",result_ref:"journal#final-summary"}]' \
+            '.subagent_evidence.bounded_executor_evidence = {executor_ref:"dispatch#bounded-executor",changed_files:["x"],focused_verification:"passed",regression_evidence:"passed"}' \
+            '.subagent_evidence.execution_mode = "direct_fallback"' \
+            '.triage_result.subagent_policy_state = "subagents_unavailable" | .triage_result.subagent_execution_mode = "direct_fallback"'; do
+            unsafe_response="$(jq "$mutation" <<<"$valid_response")"
+            if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$case_id" "$unsafe_response" FAIL; then
+                small_elevated_fixture_failures+=("$case_id accepts fallback or worker evidence on the direct_main route: $mutation")
+            fi
+        done
     fi
     unsafe_response="$(jq '
       .completion_policy.build_execution_lane = "inline_direct"
@@ -2569,7 +2617,7 @@ for case_id in \
         'subagent_evidence.code_reviewer_evidence.reviewer_ref' \
         'subagent_evidence.code_reviewer_evidence.result_ref' \
         'subagent_evidence.qa_evaluator_evidence.qa_evaluator_result' \
-        'subagent_evidence.qa_evaluator_evidence.qa_evaluator_direct_evidence' \
+        'subagent_evidence.qa_evaluator_evidence.qa_evaluator_dispatch' \
         'changed_files.0.path' \
         'changed_files.0.change_type' \
         'changed_files.0.description' \
@@ -2580,6 +2628,8 @@ for case_id in \
         'validation_results.0.result' \
         'validation_results.0.evidence' \
         'spec_review_result.status' \
+        'spec_review_result.final_review_snapshot_id' \
+        'spec_review_result.request_plan_reconciliation_ref' \
         'spec_review_result.scope_reviewed' \
         'spec_review_result.missing_acceptance_criteria' \
         'spec_review_result.extra_scope' \
@@ -2589,7 +2639,9 @@ for case_id in \
         if [[ "$case_id" == small-* ]] && [[ "$required_path" == subagent_evidence.direct_fallback_* ]]; then
             continue
         fi
-        if [[ "$case_id" == fulfilled-* ]] && [[ "$required_path" == "subagent_evidence.delegated_dispatch_results" ]]; then
+        if [[ "$case_id" == fulfilled-* ]] && [[ "$required_path" == subagent_evidence.bounded_executor_evidence.* \
+            || "$required_path" == subagent_evidence.direct_fallback_* \
+            || "$required_path" == "subagent_evidence.delegated_dispatch_results" ]]; then
             continue
         fi
         unsafe_response="$(jq --arg path "$required_path" 'delpaths([($path | split(".") | map(if test("^[0-9]+$") then tonumber else . end))])' <<<"$valid_response")"

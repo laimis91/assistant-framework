@@ -45,9 +45,9 @@ It is required for medium+ harness-capable work and contains:
 
 When `subagent_execution_mode=delegated`, the debate should use relevant
 subagent perspectives such as Architect, Builder/Tester, Code Reviewer, QA
-Evaluator, Security, Docs, or Product. Direct fallback must record why subagents
-were unavailable or unauthorized and which role-equivalent perspectives were
-used. The debate cannot add scope; scope changes return to Plan.
+Evaluator, Security, Docs, or Product. Direct main work records which
+role-equivalent perspectives were used; they never replace required independent
+review. The debate cannot add scope; scope changes return to Plan.
 
 ### Harness Recipe
 
@@ -127,8 +127,8 @@ responsibilities:
 `reviewer` remains a compatibility route for older handoffs, but new code review
 dispatches should use `code-reviewer`. QA Evaluator does not replace Code
 Reviewer; QA findings are about acceptance and evidence, not general code
-quality. Both delegated mode and direct fallback must record Code Reviewer
-evidence separately from QA Evaluator evidence.
+quality. Code Reviewer and QA Evaluator evidence stay separate, and both come
+from newly created fresh-context agents; direct fallback cannot supply either.
 
 ### Conditional Domain Rubrics
 

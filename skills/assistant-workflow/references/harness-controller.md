@@ -116,8 +116,9 @@ conditional on `harness_capable=true` and are not ordinary medium+ requirements.
   contract changes scope or acceptance.
 - Missing Harness Recipe: return to Plan, classify task/model/risk/context
   profile, select a recipe, and record rationale plus corrective action.
-- Missing debate perspectives: collect the missing perspective through delegated
-  subagents when available, or record direct fallback perspective evidence.
+- Missing debate perspectives: collect them directly or through optional subagents
+  and record the actual method. Direct debate is not independent review; actual
+  required review judgments retain newly created fresh-context actors.
 - Missing run-state/trace/replay evidence: load
   `references/harness-runtime-artifacts.md` and follow its corrective action.
 - Pivot/restart trigger: load `references/harness-runtime-artifacts.md`, create

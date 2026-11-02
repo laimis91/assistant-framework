@@ -1,7 +1,7 @@
 # TDD Output Contract
 # Defines the canonical TDD cycle log used by delegated handoffs and completion.
 
-schema_version: "2.0"
+schema_version: "3.0"
 contract: output
 skill: assistant-tdd
 
@@ -12,8 +12,25 @@ artifacts:
     condition: always
     description: "Actual phase evidence for each started Red-Green-Refactor cycle; may remain partial between delegated owners"
     min_items: 1
-    validation: "One entry per started behavior cycle; every input behavior has an entry before TDD completion. During delegated workflow handoffs, a current in-progress entry may omit not-yet-started GREEN or REFACTOR phases, and a started phase may have zero command_results while awaiting its verification owner; preserve this partial entry without treating it as complete. TDD completion requires actual current command_results for RED, GREEN, and REFACTOR, at least one invocation per phase, and all intended pass guards. Each invocation retains literal argv/cwd and its observed result. For workflow-authorizing RED, exactly one current failed invocation binds the current test_file/test_name, a check_id in selected_check_ids intersect tdd_choice.applicable_check_ids, exact CheckSpec argv/cwd, and the matching meaningful_failure oracle before production edits. Other invocations remain honest and do not authorize edits. Standalone/no-decision TDD and non-authorizing invocations may omit check_id; never reconstruct or invent an ID, command, or cwd. Older cycle logs without invocation identity may remain historical evidence but cannot establish current selected-check closure."
+    validation: "One entry per started behavior cycle; every input behavior has an entry before TDD completion. During delegated workflow handoffs, a current in-progress entry may omit not-yet-started GREEN or REFACTOR phases, and a started phase may have zero command_results while awaiting its verification owner; preserve this partial entry without treating it as complete. TDD completion requires actual current command_results for RED and GREEN and executed REFACTOR or validated reuse_green, at least one invocation per executed phase; validated reuse_green references original GREEN instead of another REFACTOR run, and all intended pass guards. Each invocation retains literal argv/cwd and its observed result. For workflow-authorizing RED, exactly one current failed invocation binds the current test_file/test_name, a check_id in selected_check_ids intersect tdd_choice.applicable_check_ids, exact CheckSpec argv/cwd, and the matching meaningful_failure oracle before production edits. Other invocations remain honest and do not authorize edits. Standalone/no-decision TDD and non-authorizing invocations may omit check_id; never reconstruct or invent an ID, command, or cwd. Older cycle logs without invocation identity may remain historical evidence but cannot establish current selected-check closure."
     object_fields:
+      - name: schema_version
+        type: enum
+        required: conditional
+        condition: "the entry is created or updated under this v3 contract"
+        enum_values: ["3.0"]
+        description: "Cycle entry version read by the workflow task-packet admission helper; reuse_green is valid only for 3.0."
+        on_missing: infer
+        infer_from: "Absent schema_version means a historical v2 entry; never infer 3.0 for an entry this contract did not create or update."
+        validation: "New or updated entries record 3.0. An entry without schema_version is a historical v2 entry: it stays readable, its command_results need no invocation_ref, its REFACTOR disposition is executed, and it can never support reuse_green or current selected-check closure."
+      - name: reuse_identity_mode
+        type: enum
+        required: false
+        enum_values: [digest, detailed]
+        description: "reuse_green proof: digest (default) compares green.reuse_digest; detailed is a persisted-packet opt-in adding relevant_input_identity and an assessment."
+        on_missing: infer
+        infer_from: "Absent means digest."
+        validation: "Only 3.0 entries record it."
       - name: behavior
         type: string
         required: true
@@ -49,6 +66,13 @@ artifacts:
             description: "Actual RED phase invocations, represented separately for each test target or relevant check."
             validation: "Record each command actually run in this RED phase with its literal argv, explicit cwd, observed result, and freshness. A current selected CheckSpec ID is required when this invocation is claimed as evidence for that check; omit it for standalone TDD without a verification decision. For workflow-authorizing RED, exactly one current failed invocation carries the matching meaningful_failure oracle and binds its selected/applicable ID, exact argv/cwd, and test_file/test_name; other invocations remain honest."
             object_fields:
+              - name: invocation_ref
+                type: string
+                required: conditional
+                condition: "the enclosing cycle_log entry has schema_version 3.0 and this row is referenced by a phase-level invocation_ref or green_invocation_refs"
+                description: "Stable identity of this actual invocation; reuse never creates a command row."
+                on_missing: fail
+                validation: "Unique within the cycle entry and assigned only to a command that actually ran; never invent or copy one for a run that did not happen. Unreferenced rows and historical v2 rows may omit it and remain valid history."
               - name: target
                 type: string
                 required: true
@@ -102,6 +126,75 @@ artifacts:
           - name: production_file
             type: string
             required: true
+          - name: invocation_ref
+            type: string
+            required: conditional
+            condition: "schema_version == 3.0 and at least one GREEN command_results invocation is recorded"
+            description: "Phase-level reference to the actual GREEN invocation of the authorizing RED target."
+            on_missing: fail
+            validation: "Equals the invocation_ref of exactly one GREEN command_results row for the RED test target, passed when all_tests_pass is true. Never invent one; without it reuse_green is unavailable."
+          - name: reuse_digest
+            type: string
+            required: conditional
+            condition: "schema_version == 3.0 and refactor.verification_disposition == reuse_green"
+            description: "Lowercase `sha256:` then 64 lowercase hex: SHA-256 of bytewise-sorted sha256sum lines (hash, relative path) of scoped tracked and untracked non-ignored files GREEN checks read (git ls-files -co --exclude-standard); callers recompute identically."
+            on_missing: fail
+            validation: "No sentinel (unknown, n/a, none); never invented. reuse_green needs no post-GREEN edit and an equal independently resolved current digest; a missing or different one, or a failed GREEN, blocks reuse."
+          - name: relevant_input_identity
+            type: object
+            required: conditional
+            condition: "schema_version == 3.0 and reuse_identity_mode == detailed and refactor.verification_disposition == reuse_green"
+            description: "Detailed opt-in identity captured at the GREEN run."
+            on_missing: fail
+            validation: "Exactly the seven listed categories, each with the category_fields shape; configuration covers CheckSpec argv/cwd and environment excludes secrets. Reuse requires every category current and equal to the canonical assessment's GREEN and current identities. Unknown, stale or unchecked mutable inputs block reuse_green; choose executed and run the affected checks."
+            category_fields:
+              - name: identity
+                type: string
+                required: true
+                on_missing: fail
+                validation: "Observed digest or revision; never invented."
+              - name: freshness
+                type: enum
+                required: true
+                enum_values: [current, stale, unknown]
+                on_missing: fail
+                validation: "Only current supports reuse_green."
+            object_fields:
+              - name: source
+                type: object
+                required: true
+                on_missing: fail
+                fields_from: category_fields
+              - name: tests
+                type: object
+                required: true
+                on_missing: fail
+                fields_from: category_fields
+              - name: configuration
+                type: object
+                required: true
+                on_missing: fail
+                fields_from: category_fields
+              - name: dependencies
+                type: object
+                required: true
+                on_missing: fail
+                fields_from: category_fields
+              - name: toolchain
+                type: object
+                required: true
+                on_missing: fail
+                fields_from: category_fields
+              - name: environment
+                type: object
+                required: true
+                on_missing: fail
+                fields_from: category_fields
+              - name: external_inputs
+                type: object
+                required: true
+                on_missing: fail
+                fields_from: category_fields
           - name: command_results
             type: object[]
             required: true
@@ -109,6 +202,13 @@ artifacts:
             description: "Actual GREEN phase invocations, represented separately for each target, regression, or binding suite."
             validation: "Record only commands actually run in this GREEN phase with literal argv, explicit cwd, observed result, and freshness; an empty list means verification has not run yet and must not be interpreted as a pass. TDD completion requires at least one actual current invocation and every due guard passing. A current selected CheckSpec ID is required when this invocation is claimed as evidence for that check; omit it for standalone TDD without a verification decision."
             object_fields:
+              - name: invocation_ref
+                type: string
+                required: conditional
+                condition: "the enclosing cycle_log entry has schema_version 3.0 and this row is referenced by a phase-level invocation_ref or green_invocation_refs"
+                description: "Stable identity of this actual invocation; reuse never creates a command row."
+                on_missing: fail
+                validation: "Unique within the cycle entry and assigned only to a command that actually ran; never invent or copy one for a run that did not happen. Unreferenced rows and historical v2 rows may omit it and remain valid history."
               - name: target
                 type: string
                 required: true
@@ -152,19 +252,58 @@ artifacts:
         type: object
         required: conditional
         condition: "current GREEN all_tests_pass is true and the owning CodeWriter has assessed REFACTOR"
-        description: "REFACTOR phase: actual changes_made (or none needed) and any current verification invocations; an empty command_results list awaits its verification owner"
+        description: "REFACTOR assessment with actual executed verification or explicit validated GREEN reuse; no invented invocation or test count"
         object_fields:
+          - name: verification_disposition
+            type: enum
+            required: conditional
+            condition: "schema_version == 3.0"
+            enum_values: [executed, reuse_green]
+            description: "executed appends actual runs; reuse_green adds zero invocations/results/test counts"
+            on_missing: infer
+            infer_from: "Absent disposition means executed, including for historical v2 entries."
+            validation: "Infer executed when absent, including for historical v2 entries. reuse_green requires schema_version 3.0, a passing GREEN with green.reuse_digest, changes_made exactly none needed, an empty REFACTOR command_results list, and invocation_ref equal to green.invocation_ref; detailed reuse_identity_mode also requires green.relevant_input_identity and a sufficient canonical reuse assessment. Any actual refactor edit requires executed with the affected checks run."
+          - name: invocation_ref
+            type: string
+            required: conditional
+            condition: "schema_version == 3.0 and (verification_disposition == reuse_green or at least one REFACTOR command_results invocation is recorded)"
+            description: "Phase-level reference to the invocation that supports REFACTOR."
+            on_missing: fail
+            validation: "For reuse_green, equals green.invocation_ref and appears in green_invocation_refs when present; it identifies the original GREEN run, not a new one. For executed, equals the invocation_ref of the actual REFACTOR command_results row for the RED test target and differs from green.invocation_ref."
+          - name: green_invocation_refs
+            type: string[]
+            required: conditional
+            condition: "verification_disposition == reuse_green and reuse_identity_mode == detailed"
+            min_items: 1
+            description: "Retained original passing GREEN invocations; optional in digest mode"
+            on_missing: fail
+            validation: "When present in either mode, includes green.invocation_ref and resolves exactly to the original passed GREEN runs of the target and every due regression and binding check. Missing or unresolved references block reuse_green; run the affected checks."
+          - name: reuse_assessment_ref
+            type: string
+            required: conditional
+            condition: "verification_disposition == reuse_green and reuse_identity_mode == detailed"
+            description: "Detailed mode only: canonical verification assessment independently resolves original runs, full unchanged CheckSpec decision/argv/cwd/oracle, relevant source/tests/config/dependencies/toolchain/nonsecret environment and external freshness, no post-GREEN edits and no binding fresh-run mandate"
+            on_missing: fail
+            validation: "Resolves to a sufficient assessment for this packet whose GREEN and current input identities equal green.relevant_input_identity and which lists no post-GREEN changes and no fresh-run obligations. Missing or insufficient assessment blocks reuse_green; choose executed and run the affected checks."
           - name: changes_made
             type: string
             required: true
             description: "What was refactored, or 'none needed'"
+            validation: "reuse_green requires exactly none needed; any described edit requires executed disposition."
           - name: command_results
             type: object[]
             required: true
             min_items: 0
             description: "Actual REFACTOR phase invocations, represented separately for each target, regression, or binding suite."
-            validation: "Record only commands actually run in this REFACTOR phase with literal argv, explicit cwd, observed result, and freshness; an empty list means verification has not run yet and must not be interpreted as a pass. TDD completion requires at least one actual current invocation and every due guard passing. A current selected CheckSpec ID is required when this invocation is claimed as evidence for that check; omit it for standalone TDD without a verification decision."
+            validation: "Record only commands actually run in this REFACTOR phase with literal argv, explicit cwd, observed result, and freshness; an empty list means verification has not run yet for executed disposition; reuse_green requires an empty list and validated references to original passing GREEN, never a new pass. Executed completion requires at least one actual current invocation and every due guard passing. reuse_green requires changes_made=none needed and all due evidence current with no binding fresh-run conflict. A current selected CheckSpec ID is required when this invocation is claimed as evidence for that check; omit it for standalone TDD without a verification decision."
             object_fields:
+              - name: invocation_ref
+                type: string
+                required: conditional
+                condition: "the enclosing cycle_log entry has schema_version 3.0 and this row is referenced by a phase-level invocation_ref or green_invocation_refs"
+                description: "Stable identity of this actual invocation; reuse never creates a command row."
+                on_missing: fail
+                validation: "Unique within the cycle entry and assigned only to a command that actually ran; never invent or copy one for a run that did not happen. Unreferenced rows and historical v2 rows may omit it and remain valid history."
               - name: target
                 type: string
                 required: true
@@ -197,8 +336,8 @@ artifacts:
           - name: all_tests_pass
             type: boolean
             required: conditional
-            condition: "at least one REFACTOR command_results invocation is recorded"
-            validation: "Must be true only when the current RED test target, every due selected TDD check, each relevant due selected automated regression check, and each applicable due/executable binding suite have command_results with freshness=current and result=passed. For selected checks require exact check_id/argv/cwd; missing or mismatched identity, stale, failed, partial, or unavailable result blocks true. Include the target even in standalone TDD; no unselected suite is implied. Omit until a REFACTOR invocation is recorded."
+            condition: "at least one REFACTOR command_results invocation is recorded or verification_disposition == reuse_green"
+            validation: "For executed disposition: true only when the current RED test target, every due selected TDD check, each relevant due selected automated regression check, and each applicable due/executable binding suite have REFACTOR command_results with freshness=current and result=passed; omit while executed REFACTOR has no recorded invocation. For selected checks require exact check_id/argv/cwd; missing or mismatched identity, stale, failed, partial, or unavailable result blocks true. Include the target even in standalone TDD; no unselected suite is implied. For reuse_green: REFACTOR command_results stays empty, and true only when changes_made is none needed, green_invocation_refs, when present (required in detailed mode), resolve to the original passed GREEN runs of the target and every due guard, and the current digest equals reuse_digest; reuse records no new pass or test count."
 
   - name: coverage_summary
     type: object
@@ -214,7 +353,7 @@ artifacts:
       - name: total_tests_run
         type: int
         required: true
-        validation: "> 0 at completion; count actual selected TDD and binding-suite test executions"
+        validation: "> 0 at completion; count actual selected TDD and binding-suite test executions; reuse_green references add zero"
       - name: all_passing
         type: boolean
         required: true
@@ -296,7 +435,7 @@ artifacts:
 
 # Completeness check:
 # 1. Every input behavior has a corresponding cycle_log entry
-# 2. Every active cycle has a current failed RED invocation for the intended reason, a current passing GREEN result for that test, and current passing REFACTOR results for every due selected check and applicable regression/binding suite
+# 2. Every active cycle has a current failed RED invocation for the intended reason, a current passing GREEN result for that test, and either current passing executed REFACTOR results for every due selected check and applicable regression/binding suite or a validated v3 reuse_green that references the original passing GREEN runs with zero new invocations
 # 3. No production code exists without a preceding failing test
 # 4. coverage_summary.all_passing is true for selected TDD checks and binding suites, not an unselected full suite
 # 5. If architecture_test_obligations are carried, every unique obligation_id has exactly one architecture_obligation_coverage entry with evidence or an explicit blocker/unknown; no coverage id is unknown or duplicated

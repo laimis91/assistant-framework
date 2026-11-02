@@ -29,7 +29,11 @@ Return a concise synthesis, evidence, relevant alternatives/dissent, recommendat
 
 ## Independence and Delegation
 
-For Perspectives and high-stakes Stress Test, follow applicable delegation instructions. A direct user request or applicable AGENTS.md or active-skill instruction triggers the covered delegation without a second permission question. Respect explicit opt-outs. Sequential fallback needs explicit opt-out, a real spawn failure or supported configuration proof of unavailability, or an exact active blocking policy with no applicable trigger exception. Record actual delegated work or the fallback reason and evidence; do not imply that one agent's role-play is independent review. Delegation does not bypass sandbox, action/tool approval, external-write, install, destructive-operation, or secrets safeguards.
+Thinking perspectives are discretionary outside selected research-lens or formal
+review methods. Resolve architecture directly when sufficient; optional specialist
+execution may help. Independent high-risk challenge or acceptance judgment uses a
+newly created reviewer with fresh context. Sequential role-play is not independent
+evidence. Preserve sandbox, approvals, external-write, cost and secrets boundaries.
 
 ## Integrated and Structured Output
 

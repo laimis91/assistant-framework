@@ -208,7 +208,8 @@
         "The assistant-tdd skill instructions are active.",
         "A valid RED test has already failed for the intended missing behavior.",
         "The repository root is the current working directory (`.`). For RED, GREEN, and REFACTOR, record the focused target invocation first: argv `[\"ruby\", \"-Itest\", \"tests/eval_runner_test.rb\", \"--name\", \"test_reject_duplicate_case_ids\"]`, cwd `.`, target `tests/eval_runner_test.rb`, test file `tests/eval_runner_test.rb`, and test name `reject_duplicate_case_ids`. Additional honest command-result rows may follow.",
-        "Production implementation has not yet started."
+        "Production implementation has not yet started.",
+        "After GREEN passes, REFACTOR makes one behavior-neutral cleanup edit (extracting the duplicate-id check into a named helper), so the REFACTOR disposition is executed and its invocations run."
       ],
       "expected_behavior": [
         "Moves to GREEN only because RED evidence is present.",
@@ -216,14 +217,14 @@
         "Runs the previously failing test and confirms it now passes.",
         "Runs selected regression checks and binding project suites.",
         "Uses REFACTOR only for behavior-neutral cleanup.",
-        "Runs selected checks and binding regressions after REFACTOR and starts the next behavior with a new RED cycle."
+        "After an actual REFACTOR edit (executed disposition), runs selected checks and binding regressions; a no-change REFACTOR may instead record a validated reuse_green. Starts the next behavior with a new RED cycle."
       ],
       "pass_criteria": [
         "The response gates GREEN on prior RED evidence.",
         "The response limits implementation to the simplest passing code.",
         "The response runs targeted checks and selected regressions in GREEN.",
         "The response keeps REFACTOR behavior-neutral.",
-        "The response runs selected checks and binding regressions after REFACTOR."
+        "The response runs selected checks and binding regressions after any REFACTOR edit, or records a validated reuse_green for a no-change REFACTOR."
       ],
       "fail_signals": [
         "Adds extra behavior during GREEN.",

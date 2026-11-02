@@ -1,4 +1,4 @@
-# Applicability: current v4 structured consumers, persisted packets, handoffs,
+# Applicability: current v5 structured consumers, persisted packets, handoffs,
 # and the existing five-lens audit/eval fixture. Numeric tier/source-count rules
 # below are compatibility-fixture rules, not ordinary claim-confidence policy.
 # Human-only source research uses claim-specific evidence and concise output.
@@ -6,13 +6,23 @@
 # synthesis, separate peer review, material follow-ups, and honest limits.
 
 # Research Output Contract
-# Defines the retained structured v4 compatibility result.
+# Defines the current structured v5 result; historical v4 records stay
+# readable under their original labels.
 
-schema_version: "4.0"
+schema_version: "5.0"
 contract: output
 skill: assistant-research
 
 artifacts:
+  - name: producer_version
+    type: enum
+    required: conditional
+    condition: "research_method == five_lens_briefing"
+    enum_values: ["5.0"]
+    description: "Current producer version bound by independent dispatch authority; historical v4 is read under its original fixture/producer selector and never relabelled"
+    validation: "Payload declaration alone cannot establish current producer, context isolation or native dispatch truth."
+    on_fail: "Resolve current native producer authority or retain the record as historical/incomplete"
+
   - name: findings
     type: object[]
     required: true
@@ -174,7 +184,7 @@ artifacts:
         required: true
         description: "Every material follow-up prompted by this answer, contradiction, or gap, or one typed none_needed decision"
         validation: "Every material follow-up is retained exactly once with a question, answer_or_gap, sources_or_verified_urls, and evidence_status. An empty collection is invalid; use one none_needed decision only when no material follow-up exists, and none_needed cannot coexist with material follow-ups for the same trace."
-        on_fail: "Reject the malformed lens result and request same-assignment correction under the shared guard for the exact follow-up field; if it remains invalid, rerun the complete lens stage through evidenced fallback or block rather than inventing follow-up evidence."
+        on_fail: "Reject the malformed lens result and request same-assignment correction under the shared guard for the exact follow-up field; if it remains invalid, redispatch the complete lens stage to newly created separate actors or record the run blocked/incomplete rather than inventing follow-up evidence."
         min_items: 1
         object_fields:
           - name: decision
@@ -287,7 +297,7 @@ artifacts:
     required: conditional
     condition: "research_method == five_lens_briefing"
     description: "Independent ResearchPeerReviewer critique of the root-owned briefing before final presentation"
-    validation: "Includes execution mode and peer assignment binding. Truth table: DONE=accepted; DONE_WITH_CONCERNS=accepted_with_concerns or revise; NEEDS_CONTEXT/BLOCKED=blocked with open_questions and status detail, and cannot finalize. accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions plus complete orchestrator-owned closure. Usable statuses include critique/evidence; delegated mode records a distinct native peer reviewer identity and fallback mode records a fresh fallback pass without fabricated identity."
+    validation: "Includes execution mode and peer assignment binding. Truth table: DONE=accepted; DONE_WITH_CONCERNS=accepted_with_concerns or revise; NEEDS_CONTEXT/BLOCKED=blocked with open_questions and status detail, and cannot finalize. accepted and accepted_with_concerns require required_revisions=[]; revise requires one or more required_revisions plus complete orchestrator-owned closure. Usable statuses include critique/evidence; delegated mode records a distinct native peer reviewer identity; current v5 requires delegated mode. Historical v4 reader only: fallback mode records a fresh fallback pass without fabricated identity."
     on_fail: "Run the separate ResearchPeerReviewer step and revise or downgrade claims before finalizing."
     object_fields:
       - name: peer_review_execution_mode
@@ -391,24 +401,25 @@ artifacts:
     type: object
     required: conditional
     condition: "research_method == five_lens_briefing"
-    description: "FiveLensProcessEvidence proving independent lens dispatch or the constrained fallback path"
-    validation: "Records mode, exact LensKind coverage, deterministic frozen-packet proof, recomputed validated-result bindings, bounded resource usage, wave coverage, root synthesis ownership, peer-review identity, return validation, and any reduced-independence fallback basis."
-    on_fail: "Do not claim an independent briefing; restore missing process evidence, rerun the complete lens stage through evidenced fallback, or block."
+    description: "FiveLensProcessEvidence proving current v5 independent lens and peer dispatch, or a historical v4 record of the constrained fallback path"
+    validation: "Records mode, exact LensKind coverage, deterministic frozen-packet proof, recomputed validated-result bindings, bounded resource usage, wave coverage, root synthesis ownership, peer-review identity, and return validation. Current v5 completion requires delegated lens and peer modes. Historical v4 reader only: a reduced-independence fallback basis remains readable under its original verdict and cannot be relabelled v5."
+    on_fail: "Do not claim an independent briefing; restore missing process evidence, redispatch the complete lens stage to newly created separate actors, or record the run blocked/incomplete with an honest isolation gap."
     object_fields:
       - name: lens_execution_mode
         type: enum
         required: true
         enum_values: [delegated, sequential_fallback]
+        validation: "Current v5 completion requires delegated. sequential_fallback is readable only by the historical Research v4 reader and cannot be relabelled v5."
       - name: peer_review_execution_mode
         type: enum
         required: true
         enum_values: [delegated, sequential_fallback]
-        validation: "Exactly equals peer_review.peer_review_execution_mode. delegation_opted_out or policy_disallowed forces sequential_fallback."
+        validation: "Exactly equals peer_review.peer_review_execution_mode. Current v5 completion requires delegated. Historical v4 reader only: delegation_opted_out or policy_disallowed forced sequential_fallback."
       - name: subagent_policy_state
         type: enum
         required: true
         enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]
-        validation: "delegation_opted_out and policy_disallowed force peer_review_execution_mode=sequential_fallback with the matching admissible peer fallback basis; no peer subagent dispatch is allowed."
+        validation: "Current v5 completion requires delegation_triggered. subagents_unavailable or policy_disallowed means the five-lens run is blocked/incomplete with an honest isolation gap; an explicit user opt-out is recorded as a method change to source_research (policy not_required), so no five-lens completion is claimed; delegation_opted_out is a historical v4 label only. Historical v4 reader only: delegation_opted_out and policy_disallowed forced peer_review_execution_mode=sequential_fallback with the matching admissible peer fallback basis."
       - name: tier_resolution
         type: object
         required: true

@@ -1,6 +1,6 @@
 # Code Quality Review Checklist (Stage 2)
 
-Load this during Stage 2 of the review cycle. This is the code quality gate — it runs after the Spec Review confirms the implementation matches the plan. It does not replace Stage 3 QA Evaluation, which checks acceptance, Done Contract, verification evidence, scoped domain quality, score progression, and final result when QA is required.
+Load this during Stage 2 of the review cycle. This is the code quality gate of the final acceptance review, whose same batch also covers the spec obligations in `references/prompts/spec-review.md`. It does not replace Stage 3 QA Evaluation, which checks acceptance, Done Contract, verification evidence, scoped domain quality, score progression, and final result when QA is required.
 
 ## When to use
 
@@ -159,7 +159,7 @@ Where `<framework-tools>` is the installed tools directory (typically `~/{agent_
 
 ## Review discipline — receiving feedback
 
-When implementing fixes from the review (including self-review findings):
+When implementing fixes from the independent review (author self-checks may add findings but never substitute for it):
 
 ### Do
 - **Fix silently.** The code itself shows you heard the feedback. No commentary needed.

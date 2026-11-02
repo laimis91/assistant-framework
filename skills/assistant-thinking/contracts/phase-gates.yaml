@@ -27,8 +27,9 @@ gates:
         check: "Analysis depth matches the stakes level (low/medium/high)"
         on_fail: "Deepen the analysis for high-stakes problems or simplify for low-stakes"
       - id: A3
-        check: "For perspectives and high-stakes stress_test: subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, and conditional policy_blocking_source are resolved before any subagent spawn. A direct user, applicable AGENTS.md, or active skill instruction triggers delegation_triggered and dispatch without a separate permission question. Sequential fallback is recorded only for explicit opt-out, real unavailability or supported configuration proof, or policy-disallowed with an exact active blocking rule and no applicable trigger exception."
-        on_fail: "If an applicable trigger exists and no delegation_opted_out, subagents_unavailable, or policy_disallowed evidence applies, infer subagent_trigger_scope and dispatch required roles. Otherwise preserve and complete the evidenced sequential fallback state; do not overwrite explicit opt-out."
+        check: "Independent high-risk challenge uses a newly created fresh-context reviewer: every required independent challenge has that reviewer identity or is recorded incomplete; sequential role-play is not independent evidence, and no sequential_fallback perspective is recorded as independent evidence."
+        on_fail: "Dispatch a newly created fresh-context reviewer for the required independent challenge, or record the challenge incomplete with the actual isolation cause; relabel sequential perspectives as discretionary non-independent analysis. Preserve authority and safeguards."
+
       - id: A4
         check: "When architecture_design_mode is not_applicable no Architecture Decision Pack is manufactured; otherwise the analysis checks the supplied Pack's freshness, material questions, design-pressure checks, semantic type/primitive-exception boundaries, and quality-scenario evidence."
         on_fail: "Use the carried Pack as the decision record, ask or record every material unknown, check control/early exit, ownership/disposal, resource envelope, extension registration, and representative path as applicable, and require workload/budget/measurement/failure evidence before accepting a memory, performance, or extensibility claim."
