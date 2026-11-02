@@ -20,6 +20,13 @@ This is a set of prompts, not a requirement to add files or fields.
   completion evidence where required? Are missing loaded runtimes still blockers?
 - Are actual checks, evidence gaps, and exclusions reported without treating
   structural validity or phrase matches as proof of activation or improvement?
+- Do activation examples include two distinct positives and a nearby negative,
+  and does the description trigger on the right requests without contradicting
+  the body? Is each instruction testable by an eval?
+- Does the skill duplicate an authority another skill owns, or name judgment
+  guidance whose cue-to-method decisions lack an evidenced source?
+- Which checks did the validator not run (handoff fields, nested or conditional
+  `on_missing`), so a reviewer must check them by hand?
 
 For existing consumed schemas, preserve the producer format and update affected
 consumers together. Breaking required-field changes need versioning and a

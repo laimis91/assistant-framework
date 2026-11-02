@@ -10,7 +10,15 @@
   "activation_cases": [
     {"user_request": "Review the current uncommitted changes.", "should_activate": true},
     {"user_request": "Review and fix actionable findings in the current changes.", "should_activate": true},
-    {"user_request": "Summarize already approved review findings without inspecting code.", "should_activate": false}
+    {"user_request": "Summarize already approved review findings without inspecting code.", "should_activate": false},
+    {
+      "user_request": "Review this skill's contracts and activation examples.",
+      "should_activate": false
+    },
+    {
+      "user_request": "Review the changes in this C# pull request.",
+      "should_activate": true
+    }
   ],
   "recommended_use": [
     "Run each case with the assistant-review skill instructions loaded. Cases mapped by canonical_review_finding_rule_distillation_expectations explicitly consume its retained all-ID compatibility envelope; ordinary human reviews distill only evidenced recurring/high-impact gaps.",
@@ -1310,6 +1318,178 @@
       ],
       "false_positive_markers": [
         "rewrite the whole service",
+        "block merge because names are subjective",
+        "unrelated architectural rewrite"
+      ]
+    },
+    {
+      "id": "installer-rewrite-unbalanced-marker-deletes-user-content",
+      "title": "Installer rewrite deletes user content after an unbalanced start marker",
+      "category": "behavioral_contract_review",
+      "purpose": "Regression fixture (not proof of discrimination): checks that a small review of an installer that rewrites a user-owned file reports the user-state defect without depending on change_kind or a medium+ lens.",
+      "prompt": "Review this small installer change. It now also manages a user's global CLAUDE.md. Excerpt: `if grep -q \"$START_MARKER\" \"$FILE\"; then sed -i.bak \"/$START_MARKER/,/$END_MARKER/d\" \"$FILE\"; { echo \"$BLOCK\"; cat \"$FILE\"; } > \"$FILE.tmp\" && mv \"$FILE.tmp\" \"$FILE\"; fi`. Check it before merge.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
+        "The batch is small (scope_size small, two discovery passes: contract_and_test_oracle and runtime_lifecycle_and_failure_paths).",
+        "Do not run the installer; review statically.",
+        "The reviewed material is a shell installer that rewrites the user's global instruction file between installer-managed start and end marker lines.",
+        "A sibling installer for another platform exists in the same repo."
+      ],
+      "expected_behavior": [
+        "Infers behavioral_contract_review_required as true because a script rewrites user-owned files, whatever change_kind is inferred.",
+        "Applies the Behavioral Contract Review Checklist high-impact operation guards, including the user-owned file rewrite probes.",
+        "Probes unbalanced, nested, duplicate or prose-embedded markers statically.",
+        "Finds that a missing end marker makes the sed range delete user content to end of file.",
+        "Compares with the sibling PowerShell installer that already validates marker balance."
+      ],
+      "pass_criteria": [
+        "The response applies the Behavioral Contract Review Checklist.",
+        "The response finds the unbalanced start marker data-loss risk with the sed range delete.",
+        "The response compares with the sibling installer marker validation.",
+        "The response is a static review and does not run the installer.",
+        "Findings include Evidence, Impact, Recommendation, and Confidence."
+      ],
+      "fail_signals": [
+        "Treats the change as docs or config only.",
+        "Does not mention markers or the sed range delete.",
+        "Runs the installer against the real home directory.",
+        "Only lists checklist categories without the installer rewrite."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Behavioral Contract Review Checklist",
+          "user-owned",
+          "unbalanced",
+          "sed range",
+          "end of file",
+          "sibling",
+          "static",
+          "Evidence:",
+          "Impact:",
+          "Recommendation:",
+          "Confidence:"
+        ],
+        "forbidden_substrings": [
+          "installer rewrites are safe",
+          "no need to check user-owned files",
+          "marker handling is out of scope",
+          "file mode does not matter"
+        ]
+      },
+      "false_positive_budget": 1,
+      "seeded_defects": [
+        {
+          "id": "unbalanced-marker-sed-range-deletes-user-content",
+          "description": "A missing end marker makes the sed range delete everything after the start marker, including user content.",
+          "must_detect": true,
+          "detection_anchors": [
+            "unbalanced",
+            "sed range",
+            "end of file"
+          ],
+          "evidence_anchors": [
+            "start marker",
+            "end marker",
+            "user content",
+            "sibling"
+          ],
+          "acceptable_severities": [
+            "must-fix"
+          ],
+          "finding_markers": [
+            "unbalanced start marker makes the sed range delete user content to end of file"
+          ]
+        }
+      ],
+      "false_positive_markers": [
+        "rewrite the whole installer",
+        "block merge because names are subjective",
+        "unrelated architectural rewrite"
+      ]
+    },
+    {
+      "id": "installer-rewrite-widens-user-file-mode",
+      "title": "Installer rewrite widens a user's file mode",
+      "category": "behavioral_contract_review",
+      "purpose": "Regression fixture (not proof of discrimination): checks that a small review of an installer that rewrites a user-owned file reports the user-state defect without depending on change_kind or a medium+ lens.",
+      "prompt": "Review this small installer change. It rewrites a user's global CLAUDE.md. Excerpt: `{ echo \"$BLOCK\"; cat \"$FILE\"; } > \"$FILE.tmp\" && mv \"$FILE.tmp\" \"$FILE\"`. Check it before merge.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
+        "The batch is small (scope_size small, two discovery passes: contract_and_test_oracle and runtime_lifecycle_and_failure_paths).",
+        "Do not run the installer; review statically.",
+        "The reviewed material is a shell installer that rewrites the user's global instruction file between installer-managed start and end marker lines."
+      ],
+      "expected_behavior": [
+        "Infers behavioral_contract_review_required as true because a script rewrites user-owned files, whatever change_kind is inferred.",
+        "Applies the Behavioral Contract Review Checklist high-impact operation guards, including the user-owned file rewrite probes.",
+        "Probes file mode and ownership, and symlink or hard-link targets, statically.",
+        "Finds that the temporary file and move replace a private file with a more permissive mode.",
+        "Compares with how other rewrites in the repo preserve file mode, if any."
+      ],
+      "pass_criteria": [
+        "The response applies the Behavioral Contract Review Checklist.",
+        "The response finds that the rewrite replaces the original file mode with a more permissive default.",
+        "The response compares with the existing mode-preserving rewrite in the same installer.",
+        "The response is a static review and does not run the installer.",
+        "Findings include Evidence, Impact, Recommendation, and Confidence."
+      ],
+      "fail_signals": [
+        "Treats the change as docs or config only.",
+        "Does not mention file mode or permissions.",
+        "Runs the installer against the real home directory.",
+        "Only lists checklist categories without the installer rewrite."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Behavioral Contract Review Checklist",
+          "user-owned",
+          "file mode",
+          "permissions",
+          "mode",
+          "temporary file",
+          "preserves",
+          "static",
+          "Evidence:",
+          "Impact:",
+          "Recommendation:",
+          "Confidence:"
+        ],
+        "forbidden_substrings": [
+          "installer rewrites are safe",
+          "no need to check user-owned files",
+          "marker handling is out of scope",
+          "file mode does not matter"
+        ]
+      },
+      "false_positive_budget": 1,
+      "seeded_defects": [
+        {
+          "id": "temp-file-move-widens-file-mode",
+          "description": "A fresh temporary file moved over the original loses the original file mode and permissions, which can widen access to a user-authored private file.",
+          "must_detect": true,
+          "detection_anchors": [
+            "file mode",
+            "permissions",
+            "temporary file"
+          ],
+          "evidence_anchors": [
+            "temporary file",
+            "move",
+            "original"
+          ],
+          "acceptable_severities": [
+            "must-fix",
+            "should-fix"
+          ],
+          "finding_markers": [
+            "temp-file-and-move rewrite does not preserve the original file mode"
+          ]
+        }
+      ],
+      "false_positive_markers": [
+        "rewrite the whole installer",
         "block merge because names are subjective",
         "unrelated architectural rewrite"
       ]

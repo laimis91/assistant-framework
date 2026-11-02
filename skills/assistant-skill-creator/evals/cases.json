@@ -19,6 +19,10 @@
     {
       "user_request": "Run the existing skill without modifying its design.",
       "should_activate": false
+    },
+    {
+      "user_request": "Review this skill and tell me what is wrong with its contracts and activation examples.",
+      "should_activate": true
     }
   ],
   "recommended_use": [

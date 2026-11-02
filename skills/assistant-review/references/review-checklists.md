@@ -66,6 +66,7 @@ Use this checklist when reviewing code changes that affect public APIs, domain/b
 
 5. **High-impact operation guards**
    - For code that can affect money, auth, permissions, personal data, deletion, production deploys, safety, or irreversible actions, require appropriate guardrails: validation, explicit approval, dry-run, limits, audit logs, rollback/compensation, and failure-mode handling.
+   - Scripts or installers that rewrite, move or delete user-owned files outside the repo: probe statically first (execute only per [script-execution.md](script-execution.md)). Check unbalanced, nested, duplicate or prose-embedded markers (match the full delimited line), file mode/ownership, symlink/hard-link/junction targets (preserve or refuse, never silently replace), atomic write, idempotent re-run, dry-run, failure partway; compare with sibling implementations and how the repo does the same operation elsewhere.
 
 6. **Runtime surface sync**
    - Check code, tests, docs, config, migrations, generated clients, examples, CLI help, API schemas, deployment manifests, feature flags, telemetry, and runbooks when they can affect or describe runtime behavior.
@@ -137,3 +138,13 @@ For assigned_scope or coverage_obligations affecting lifecycle boundaries, use
 [lifecycle verification](lifecycle-verification.md) for precise cancellation,
 settlement and ownership observations. Synchronous/cosmetic changes alone do not
 load it; this is no new gate or universal test matrix.
+
+## Document Review Checklist (provisional)
+
+Use for a specification, plan, plan-versus-code comparison, ticket, refinement item or tests: instead of code sections for document-only material, in addition to triggered sections for plan-versus-code and tests.
+
+1. **Intent**: restate it. Each requirement, step or criterion must be singular, testable and traceable to it; flag unsourced claims.
+2. **Gaps**: conflicts, unstated assumptions, missing failure paths, dependencies, owners. Each plan step needs rollback and verification; run a pre-mortem ("it failed; why?").
+3. **Plan versus code**: trace both ways, step to code and tests. Unplanned behavior is scope creep or a missing requirement.
+4. **Ticket**: criteria are testable, dependencies linked, open questions listed. Proposed ticket text stays local; Jira write-back needs approval.
+5. **Tests**: could each fail for the right reason against a plausible wrong implementation?
