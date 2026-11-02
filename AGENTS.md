@@ -8,7 +8,7 @@ Start repository work at [docs/README.md](docs/README.md), then load the task-sp
 
 Assistant Framework is a framework repository, not an application. It installs skills, agents, rules, and tools for Claude Code, Codex, and Gemini CLI.
 
-Root `skills/assistant-*` directories are the editable source of truth. See `README.md` for architecture and platform details. Skills route natively from their `SKILL.md` name and description; instruction-only skills are valid. Subagent role definitions live in `agents/claude/*.md` and `agents/codex/*.toml`.
+Root `skills/assistant-*` directories are the editable source of truth. See `README.md` for architecture and platform details. Skills route from their `SKILL.md` name and description. Subagent roles live in `agents/claude/*.md` and `agents/codex/*.toml`.
 
 ## Workflow
 

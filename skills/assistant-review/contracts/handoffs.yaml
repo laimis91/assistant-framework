@@ -664,7 +664,7 @@ handoffs:
       - name: reuse_search_instruction
         type: string
         required: true
-        description: "Require a fresh independent capability search for rule-like changes and file/state-rewriting operations during review; carried Mapper/task-packet evidence is context only and cannot satisfy reuse_search."
+        description: "Require a fresh independent capability search for rule-like or file-rewriting changes during review; carried Mapper/task-packet evidence is context only and cannot satisfy reuse_search."
 
       - name: semantic_contract_review_required
         type: boolean
@@ -678,7 +678,7 @@ handoffs:
         required: false
         default: false
         description: "Whether Reviewer must apply the Behavioral Contract Review Checklist for behavior-bearing code changes"
-        notes: "Set true for public API, domain/business logic, persistence, auth/permissions, money, config/feature flag, external protocol/SDK, algorithm, infra/deploy, generated schema/client, similar runtime-behavior changes, or any script rewriting user-owned files outside the repo."
+        notes: "Set true for public API, domain/business logic, persistence, auth/permissions, money, config/feature flag, external protocol/SDK, algorithm, infra/deploy, generated schema/client, similar runtime-behavior changes, or scripts rewriting user files."
 
       - name: agentic_loop_safety_review_required
         type: boolean
@@ -1003,7 +1003,7 @@ handoffs:
           - name: high_impact_operation_guards
             type: string
             required: true
-            description: "Whether money/auth/data deletion/privacy/safety/production-impact paths and user-owned file rewrites (markers, mode, links, atomic write, idempotency, dry-run, failure partway) have appropriate guardrails or not applicable"
+            description: "Whether money/auth/data deletion/privacy/safety/production-impact paths and user-owned file rewrites (markers, mode, links) have appropriate guardrails or not applicable"
           - name: runtime_surface_sync
             type: string
             required: true
@@ -1110,7 +1110,7 @@ handoffs:
       - name: reuse_search
         type: object
         required: true
-        description: "Bounded existing-capability search and reuse decision for rule-like changes and file/state-rewriting operations; not_applicable records a concrete reason without search ceremony"
+        description: "Bounded existing-capability search and reuse decision for rule-like or file-rewriting changes; not_applicable records a concrete reason without search ceremony"
         validation: "When applicability=applicable, searches must be non-empty and candidates must be present or no_candidate_reason must be non-empty; decision and decision_rationale are required. An applicable review cannot return clean without this evidence."
         object_fields:
           - name: applicability
