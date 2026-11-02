@@ -1418,7 +1418,7 @@
         "The reviewed material is C# source (*.cs)."
       ],
       "expected_behavior": [
-        "Resolves references/csharp-review.md because the reviewed material includes C#.",
+        "The pass using reviewer_context resolves references/csharp-review.md because the reviewed material includes C#; a pass using lifecycle_reviewer_context does not load it (no budget), so the response still applies general async and disposal judgment there.",
         "Reports blocking on a task with Result as a deadlock and AggregateException risk.",
         "Reports async void outside an event handler as unobservable and untestable failure.",
         "Reports the HttpClient created per call and never disposed or reused."
