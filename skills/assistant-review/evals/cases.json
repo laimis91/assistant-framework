@@ -1396,9 +1396,6 @@
           ],
           "acceptable_severities": [
             "must-fix"
-          ],
-          "finding_markers": [
-            "unbalanced start marker makes the sed range delete user content to end of file"
           ]
         }
       ],
@@ -1457,24 +1454,33 @@
       "false_positive_budget": 1,
       "seeded_defects": [
         {
-          "id": "blocking-result-and-async-void",
-          "description": "Blocking on Result can deadlock, and async void hides the exception from callers.",
+          "id": "blocking-result-deadlock",
+          "description": "Blocking on a task's Result can deadlock under a synchronization context and wraps failures in AggregateException.",
           "must_detect": true,
           "detection_anchors": [
-            "Result",
-            "async void"
+            "Result"
           ],
           "evidence_anchors": [
-            "deadlock",
-            "event handler",
-            "Task"
+            "deadlock"
           ],
           "acceptable_severities": [
             "must-fix",
             "should-fix"
+          ]
+        },
+        {
+          "id": "async-void-hides-exception",
+          "description": "An async void method outside an event handler raises its exception on the synchronization context where callers cannot catch it.",
+          "must_detect": true,
+          "detection_anchors": [
+            "async void"
           ],
-          "finding_markers": [
-            "blocking on Result and async void"
+          "evidence_anchors": [
+            "event handler"
+          ],
+          "acceptable_severities": [
+            "must-fix",
+            "should-fix"
           ]
         }
       ],
@@ -1558,9 +1564,6 @@
           "acceptable_severities": [
             "must-fix",
             "should-fix"
-          ],
-          "finding_markers": [
-            "temp-file-and-move rewrite does not preserve the original file mode"
           ]
         }
       ],
