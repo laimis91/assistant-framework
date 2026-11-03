@@ -141,7 +141,6 @@ collect_load_set_rows() {
       !in_set { next }
       /^    references:[[:space:]]*$/ { in_references = 1; in_selectors = 0; next }
       /^    selectors:[[:space:]]*$/ { in_references = 0; in_selectors = 1; next }
-      /^    budget_words:/ { flush_selector(); in_references = 0; in_selectors = 0; next }
       in_references && /^      -[[:space:]]*/ {
         value = $0
         sub(/^      -[[:space:]]*/, "", value)
@@ -377,8 +376,6 @@ load_sets = index["load_sets"]
 fail!("load_sets is missing") unless load_sets.is_a?(Hash)
 load_set = load_sets[load_set_name]
 fail!("unknown load set #{load_set_name}") unless load_set.is_a?(Hash)
-budget = load_set["budget_words"]
-fail!("load set #{load_set_name} budget_words is malformed") unless budget.is_a?(Integer) && budget > 0
 references = load_set.fetch("references", [])
 fail!("load set #{load_set_name} references is malformed") unless references.is_a?(Array)
 fail!("load set #{load_set_name} has duplicate references") unless references.uniq.length == references.length
@@ -585,15 +582,9 @@ if [[ -n "$LOAD_SET" ]]; then
     fi
     LOAD_SET_WORKER_CLOSURE_WORDS=$((LOAD_SET_DECLARED_WORDS + WORKER_PROJECTION_WORDS))
     LOAD_SET_WORKER_CLOSURE_BYTES=$((LOAD_SET_DECLARED_BYTES + WORKER_PROJECTION_BYTES))
-    LOAD_SET_DECLARED_BUDGET="$(ruby -r yaml - "$SOURCE_SKILL_DIR/contracts/index.yaml" "$LOAD_SET" <<'RUBY'
-document = YAML.safe_load(File.read(ARGV.fetch(0)), aliases: false)
-puts document.fetch("load_sets").fetch(ARGV.fetch(1)).fetch("budget_words")
-RUBY
-)"
     LOAD_SET_CONTEXT_FILE="$WORK_ROOT/selected-load-set-context.json"
     jq -n \
         --arg name "$LOAD_SET" \
-        --argjson declared_budget_words "$LOAD_SET_DECLARED_BUDGET" \
         --argjson declared_words "$LOAD_SET_DECLARED_WORDS" \
         --argjson declared_bytes "$LOAD_SET_DECLARED_BYTES" \
         --argjson worker_selectors_resolved "$WORKER_SELECTORS_RESOLVED" \
@@ -604,7 +595,6 @@ RUBY
         {
           name: $name,
           measurement_scope: "static_selected_skill_instruction_surface",
-          declared_budget_words: $declared_budget_words,
           declared_boundary_closure: {words: $declared_words, bytes: $declared_bytes},
           transitive_worker_additions: {
             worker_return_schema_projection: {

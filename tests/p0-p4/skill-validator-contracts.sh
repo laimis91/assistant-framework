@@ -1044,7 +1044,6 @@ load_sets:
         section: fields
         key: name
         names: [request]
-    budget_words: 500
   completion:
     selectors:
       - id: fixture-completion-artifacts
@@ -1052,7 +1051,6 @@ load_sets:
         section: artifacts
         key: name
         names: [result]
-    budget_words: 500
 
 fallback:
   on_missing_selector: load_full_authoritative_file
@@ -1083,7 +1081,6 @@ authoritative_contracts:
 load_sets:
   entry:
     selectors: []
-    budget_words: 0
 
 fallback:
   on_missing_selector: ignore

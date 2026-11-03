@@ -81,8 +81,6 @@ dispatch_context_bundles:
       resolution: "Worker recursively loads named handoff return_fields (bounded keys); worker_return_schema equals schema identified by return_schema_ref before response; else NEEDS_CONTEXT, no partial result."
       recursive_shape: "Recursive required/conditional fields, types, enums, and cardinality."
       excludes: "No sibling/batch state."
-    budget_words: 5653
-    budget_validation: "SKILL plus index plus this selected bundle and its declared worst-case reference closure is strictly below 5653 words."
 
   - name: qa_evaluator_context
     phase: QA_EVALUATION_STEP

@@ -32,7 +32,6 @@ load_sets:
         section: invariants
         key: id
         names: [OWN1, OWN2, OWN3, POLICY1, POLICY2, EVIDENCE1, EVIDENCE2, LOAD1]
-    budget_words: 1500
   current_phase:
     selectors:
       - id: verification-current-phase
@@ -41,7 +40,6 @@ load_sets:
         key: phase
         name_from: active_verification_phase
         allowed_names: [CAPTURE, SELECT, ASSESS, RETURN]
-    budget_words: 1800
   lifecycle:
     references: [references/lifecycle-verification.md]
     selectors:
@@ -50,7 +48,6 @@ load_sets:
         section: fields
         key: name
         names: [work_scope]
-    budget_words: 1800
   selection:
     references: [references/selection.md]
     selectors:
@@ -69,7 +66,6 @@ load_sets:
         section: artifacts
         key: name
         names: [verification_decision]
-    budget_words: 4200
   assessment:
     references: [references/evidence-quality.md]
     selectors:
@@ -88,7 +84,6 @@ load_sets:
         section: artifacts
         key: name
         names: [evidence_assessment]
-    budget_words: 4200
   completion:
     selectors:
       - id: verification-completion-output
@@ -101,7 +96,6 @@ load_sets:
         section: gates
         key: phase
         names: [RETURN]
-    budget_words: 3000
   method_unit:
     references: [references/methods/unit.md]
     selectors:
@@ -110,7 +104,6 @@ load_sets:
         section: artifacts
         key: name
         names: [verification_decision]
-    budget_words: 1800
   method_integration:
     references: [references/methods/integration.md]
     selectors:
@@ -119,7 +112,6 @@ load_sets:
         section: artifacts
         key: name
         names: [verification_decision]
-    budget_words: 1800
   method_end_to_end:
     references: [references/methods/end-to-end.md]
     selectors:
@@ -128,7 +120,6 @@ load_sets:
         section: artifacts
         key: name
         names: [verification_decision]
-    budget_words: 2000
   method_artifact_validation:
     references: [references/methods/artifact-validation.md]
     selectors:
@@ -137,7 +128,6 @@ load_sets:
         section: artifacts
         key: name
         names: [verification_decision]
-    budget_words: 2000
   method_behavioral_evals:
     references: [references/methods/behavioral-evals.md]
     selectors:
@@ -146,7 +136,6 @@ load_sets:
         section: artifacts
         key: name
         names: [verification_decision]
-    budget_words: 2400
   method_property_and_mutation:
     references: [references/methods/property-and-mutation.md]
     selectors:
@@ -155,7 +144,6 @@ load_sets:
         section: artifacts
         key: name
         names: [verification_decision]
-    budget_words: 2000
   method_performance_and_resilience:
     references: [references/methods/performance-and-resilience.md]
     selectors:
@@ -164,7 +152,6 @@ load_sets:
         section: artifacts
         key: name
         names: [verification_decision]
-    budget_words: 2000
 
 fallback:
   on_missing_selector: load_full_authoritative_file

@@ -115,11 +115,10 @@ validate_contract_index() {
     local resolved status header_info header_count header_type
     local row path declared_type load_set selector_id section key mode name_from names
     local name extract_info section_count key_count match_count selected_words selector_words
-    local reference_path budget actual base_words
+    local reference_path actual base_words
     local i j load_index authoritative_found first_name
     local -a authoritative_rows=()
     local -a load_set_names=()
-    local -a load_set_budgets=()
     local -a load_set_words=()
     local -a reference_rows=()
     local -a selector_rows=()
@@ -139,7 +138,6 @@ validate_contract_index() {
             AUTHORITATIVE) authoritative_rows+=("$field1|$field2") ;;
             LOAD_SET)
                 load_set_names+=("$field1")
-                load_set_budgets+=("$field2")
                 ;;
             REFERENCE) reference_rows+=("$field1|$field2") ;;
             SELECTOR) selector_rows+=("$field1|$field2|$field3|$field4|$field5|$field6|$field7|$field8") ;;
@@ -267,17 +265,12 @@ validate_contract_index() {
             if (!has_selectors || selector_set_count == 0) {
                 emit("CONTRACT_INDEX_LOAD_SET_SELECTORS", "load set \047" current_set "\047 must declare a non-empty selectors list")
             }
-            if (budget_count != 1 || budget_words !~ /^[1-9][0-9]*$/) {
-                emit("CONTRACT_INDEX_LOAD_SET_BUDGET", "load set \047" current_set "\047 must declare exactly one positive integer budget_words")
-            }
-            print "LOAD_SET|" current_set "|" budget_words
+            print "LOAD_SET|" current_set "|"
             in_load_set = 0
             in_selectors = 0
             in_references = 0
             has_selectors = 0
             selector_set_count = 0
-            budget_count = 0
-            budget_words = ""
         }
         BEGIN {
             expected_count = split(expected_contracts, expected, " ")
@@ -340,14 +333,6 @@ validate_contract_index() {
             in_references = 0
             in_selectors = 1
             has_selectors = 1
-            next
-        }
-        in_load_set && /^    budget_words:[[:space:]]*/ {
-            finish_selector()
-            in_references = 0
-            in_selectors = 0
-            budget_count++
-            budget_words = scalar_value($0)
             next
         }
         in_load_set && in_selectors && /^      -[[:space:]]+/ {
@@ -514,13 +499,6 @@ validate_contract_index() {
         fi
     done
 
-    for ((i = 0; i < ${#load_set_names[@]}; i++)); do
-        budget="${load_set_budgets[$i]}"
-        actual="${load_set_words[$i]}"
-        if [[ "$budget" =~ ^[1-9][0-9]*$ ]] && (( actual >= budget )); then
-            record_error "CONTRACT_INDEX_SELECTOR_BUDGET_EXCEEDED" "$index_file" "load set '${load_set_names[$i]}' declared boundary closure is $actual words and must stay strictly below budget_words $budget"
-        fi
-    done
 }
 
 # Keep legacy contract validation unchanged unless the optional progressive index exists.

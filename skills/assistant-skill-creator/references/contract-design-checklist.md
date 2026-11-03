@@ -1,7 +1,11 @@
 # Skill Design Checklist
 
 Use the [design guide](skill-contract-design-guide.md) for the changed boundary.
-This is a set of prompts, not a requirement to add files or fields.
+This is a set of prompts, not a requirement to add files or fields. A plain skill
+(a `SKILL.md` with no `contracts/`, `evals/` or index) is reviewed from that file
+alone: skip questions about absent files, report them as not applicable, and do
+not flag a missing contract or eval as a defect. A file the `SKILL.md` itself
+tells the agent to load is a referenced dependency: report it missing.
 
 - Does the skill solve the requested job with concise, actionable instructions?
 - Are its name, description, metadata, dependencies, and invocation policy valid

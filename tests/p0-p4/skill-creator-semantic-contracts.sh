@@ -349,7 +349,7 @@ function exportBoundFixtureProjection(targetDir, runs) {
   const runner = path.join(repo, "tools/evals/run-skill-evals.sh");
   const graded = spawnSync("bash", [runner, "--responses", path.join(bundle, "responses"), "--skill", skillDir], {encoding: "utf8"});
   assert.equal(graded.status, 0, "projected bound creator fixtures failed registered grading: " + graded.stdout + graded.stderr);
-  assert.match(graded.stdout, /Summary: total=11 passed=11 failed=0/);
+  assert.match(graded.stdout, /Summary: total=12 passed=12 failed=0/);
   const outputControlId = "assess-existing-skill-without-authoring";
   const outputControlPath = path.join(responseDir, outputControlId + ".txt");
   const validOutputControl = JSON.parse(fs.readFileSync(outputControlPath, "utf8"));
@@ -435,7 +435,7 @@ function exportBoundFixtureProjection(targetDir, runs) {
   const canonicalBound = spawnSync("bash", bindingRunnerArgs([]), {encoding: "utf8"});
   assert.equal(canonicalBound.status, 0, "canonical null-bound fixture must grade all six cases with an independent manifest: "
     + canonicalBound.stdout + canonicalBound.stderr);
-  assert.match(canonicalBound.stdout, /Summary: total=11 passed=11 failed=0/);
+  assert.match(canonicalBound.stdout, /Summary: total=12 passed=12 failed=0/);
   process.stdout.write("ok - all six canonical creator cases pass through the selected run-binding manifest\n");
 
   const noManifest = spawnSync("bash", [runner, "--responses", path.join(bundle, "responses"), "--skill", "assistant-skill-creator"], {encoding: "utf8"});

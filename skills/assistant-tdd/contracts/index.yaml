@@ -18,7 +18,6 @@ load_sets:
         section: fields
         key: name
         names: [execution_lane, activation_reason, verification_decision, selected_check_ids, behaviors, debugging_evidence, architecture_test_obligations, test_framework, exceptions]
-    budget_words: 1500
   current_phase:
     selectors:
       - id: tdd-current-phase
@@ -32,7 +31,6 @@ load_sets:
         section: invariants
         key: id
         names: [INV1, INV2, INV3, INV4, INV5]
-    budget_words: 3500
   completion:
     selectors:
       - id: tdd-completion-artifact
@@ -41,7 +39,6 @@ load_sets:
         key: name
         name_from: applicable_completion_artifact
         allowed_names: [cycle_log, coverage_summary, architecture_obligation_coverage, task_journal_entry, ownership_stage_projection]
-    budget_words: 3500
 
 fallback:
   on_missing_selector: load_full_authoritative_file

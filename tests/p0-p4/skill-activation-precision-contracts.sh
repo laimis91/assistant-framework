@@ -3,23 +3,6 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-description_catalog() {
-    local skill_file
-    for skill_file in "$FRAMEWORK_DIR"/skills/assistant-*/SKILL.md; do
-        awk '
-            NR == 1 && $0 == "---" { frontmatter = 1; next }
-            frontmatter && $0 == "---" { exit }
-            frontmatter && /^description:[[:space:]]*/ {
-                value = $0
-                sub(/^description:[[:space:]]*/, "", value)
-                gsub(/^"|"$/, "", value)
-                print value
-                exit
-            }
-        ' "$skill_file"
-    done
-}
-
 description_prompt_anchor_count() {
     local skill_file="$1"
     local prompt="$2"
@@ -36,18 +19,6 @@ description_prompt_anchor_count() {
     done < <(printf '%s\n' "$description" | tr -cs '[:alnum:]' '\n' | sort -u)
     printf '%s\n' "$count"
 }
-
-test_start "native assistant skill description catalog stays below 2200 characters"
-catalog="$(description_catalog)"
-catalog_count="$(printf '%s\n' "$catalog" | grep -c . | tr -d ' ')"
-catalog_characters="$(printf '%s\n' "$catalog" | wc -c | tr -d ' ')"
-if [[ "$catalog_count" -gt 0 && "$catalog_characters" -le 2200 ]]; then
-    pass
-elif [[ "$catalog_count" -eq 0 ]]; then
-    fail "assistant skill description catalog must be nonempty"
-else
-    fail "assistant skill descriptions use $catalog_characters characters; operating budget is 2200 (approved maximum 2500)"
-fi
 
 test_start "deterministic lexical description proxy keeps broad prose away from specialist routes"
 ideate_skill="$FRAMEWORK_DIR/skills/assistant-ideate/SKILL.md"

@@ -18,7 +18,6 @@ load_sets:
         section: fields
         key: name
         names: [operation, skill_name, existing_skill_path, skill_purpose]
-    budget_words: 1500
   authoring_inputs:
     selectors:
       - id: skill-creator-authoring-fields
@@ -26,7 +25,6 @@ load_sets:
         section: fields
         key: name
         names: [skill_category, skill_value_kind, success_criteria, activation_examples, dependencies, policy_constraints]
-    budget_words: 1800
   assessment_inputs:
     selectors:
       - id: skill-creator-assessment-fields
@@ -34,7 +32,6 @@ load_sets:
         section: fields
         key: name
         names: [assessment_goal]
-    budget_words: 1400
   authoring_freshness:
     references:
       - references/upstream-guidance.md
@@ -44,7 +41,6 @@ load_sets:
         section: fields
         key: name
         names: [authoring_guidance_sources]
-    budget_words: 1800
   guidance_inputs:
     references:
       - references/upstream-guidance.md
@@ -54,7 +50,6 @@ load_sets:
         section: fields
         key: name
         names: [guidance_scope]
-    budget_words: 1800
   current_phase:
     selectors:
       - id: skill-creator-current-operation-phase
@@ -68,7 +63,6 @@ load_sets:
         section: invariants
         key: id
         names: [INV1, INV2, INV3, INV4]
-    budget_words: 5000
   contract_design:
     references:
       - references/skill-contract-design-guide.md
@@ -78,7 +72,6 @@ load_sets:
         section: fields
         key: name
         names: [skill_category, skill_value_kind, success_criteria]
-    budget_words: 6000
   expert_method_design:
     references:
       - references/expert-method-design.md
@@ -88,7 +81,6 @@ load_sets:
         section: fields
         key: name
         names: [skill_value_kind, success_criteria]
-    budget_words: 2400
   harness_design:
     references:
       - references/skill-contract-design-guide.md
@@ -99,7 +91,6 @@ load_sets:
         section: fields
         key: name
         names: [skill_category]
-    budget_words: 7200
   verified_distillation:
     references:
       - references/verified-skill-distillation.md
@@ -109,7 +100,6 @@ load_sets:
         section: fields
         key: name
         names: [existing_skill_path]
-    budget_words: 2500
   validation:
     references:
       - references/contract-design-checklist.md
@@ -119,7 +109,6 @@ load_sets:
         section: artifacts
         key: name
         names: [validation_summary]
-    budget_words: 2500
   behavioral_evaluation:
     references:
       - references/behavioral-evaluation.md
@@ -129,7 +118,6 @@ load_sets:
         section: artifacts
         key: name
         names: [operation_summary]
-    budget_words: 2100
   completion:
     selectors:
       - id: skill-creator-completion-artifacts
@@ -137,7 +125,6 @@ load_sets:
         section: artifacts
         key: name
         names: [operation_summary, skill_md, input_contract, output_contract, phase_gates_contract, handoffs_contract, validation_summary, policy_safety_summary, distillation_verification, upstream_guidance_assessment, verification_decision, evidence_assessment]
-    budget_words: 5000
 
 fallback:
   on_missing_selector: load_full_authoritative_file

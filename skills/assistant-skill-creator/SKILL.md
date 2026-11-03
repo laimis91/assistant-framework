@@ -1,6 +1,6 @@
 ---
 name: assistant-skill-creator
-description: "Create, update, assess, or review V1 skills, or check registered upstream guidance read-only. Use for skill contracts, compliance, or authoring."
+description: "Create, update, assess, or review skills (V1 or a plain SKILL.md), or check registered upstream guidance read-only. Use for skill contracts, compliance, or authoring."
 requires:
   - assistant-verification
 ---
@@ -28,8 +28,9 @@ changes the work and cannot be resolved from source or a safe default.
   Present new or materially changed design for approval before BUILD; a small,
   reversible update with explicit direction may proceed under that direction.
 - **assess:** inspect or review the named skill against the user's goal using
-  `references/contract-design-checklist.md`. Return findings, evidence, and gaps;
-  do not write skill files or require authoring artifacts.
+  `references/contract-design-checklist.md`. A plain skill without `contracts/`
+  or `evals/` is reviewed from its `SKILL.md` alone. Return findings, evidence,
+  and gaps; do not write skill files or require authoring artifacts.
 - **refresh_guidance:** run `scripts/check-upstream-guidance.py` for explicitly
   named registered sources read-only. Preserve actual status, identity/date,
   revision/digest, retrieval limits, affected consumers, and prior disposition.

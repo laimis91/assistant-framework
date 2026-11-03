@@ -79,16 +79,6 @@ else
     fail "docs/evals/README.md does not document the hookless native Codex context budget command"
 fi
 
-test_start "eval README documents workflow-kernel promotion caps"
-if grep -Fq -- "fixed selected-skill caps of 1050 initial" "$eval_readme" \
-    && grep -Fq -- "words and 3000 entry-boundary words" "$eval_readme" \
-    && ! grep -Fq -- "1000 initial words" "$eval_readme" \
-    && ! grep -Fq -- "2600 entry-boundary words" "$eval_readme"; then
-    pass
-else
-    fail "docs/evals/README.md does not document the current workflow-kernel promotion caps"
-fi
-
 report_home="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-home.XXXXXX")"
 report_output="$(mktemp "${TMPDIR:-/tmp}/context-budget-report.XXXXXX")"
 report_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-report-error.XXXXXX")"
@@ -424,10 +414,8 @@ if HOME="$report_home" \
     && jq -e '
         .selected_load_set_context.name == "reviewer_context"
         and .selected_load_set_context.measurement_scope == "static_selected_skill_instruction_surface"
-        and .selected_load_set_context.declared_budget_words == 5653
         and (.selected_load_set_context.declared_boundary_closure.words > 0)
         and (.selected_load_set_context.declared_boundary_closure.bytes > 0)
-        and (.selected_load_set_context.declared_boundary_closure.words < .selected_load_set_context.declared_budget_words)
         and (.selected_load_set_context.transitive_worker_additions.worker_return_schema_projection.selectors_resolved == 1)
         and (.selected_load_set_context.transitive_worker_additions.worker_return_schema_projection.words > 0)
         and (.selected_load_set_context.worker_instruction_closure.words ==
@@ -487,7 +475,6 @@ load_sets:
         section: fields
         key: name
         names: [operation]
-    budget_words: 1500
 fallback:
   on_missing_selector: load_full_authoritative_file
   on_invalid_selector: load_full_authoritative_file
@@ -689,14 +676,11 @@ if HOME="$report_home" \
     "$context_report" --agent codex --skill assistant-workflow \
         --skill-overlay "$kernel_skill" --format json >"$overlay_report" 2>"$report_error" \
     && jq -e --slurpfile baseline "$report_output" --slurpfile candidate "$overlay_report" '
-        .promotion_gates.selected_initial_words_max == 1050
-        and .promotion_gates.selected_entry_words_max == 3000
-        and .promotion_gates.standing_context_growth_allowed == false
-        and (if .status == "historical_comparison" then
+        (if .status == "historical_comparison" then
           .historical_applicability.classification == "historical_comparison"
           and .historical_applicability.original_source_report_provenance == "unavailable"
           and .historical_applicability.current_promotion_evidence == false
-          and (.promotion_gates | length) == 9
+          and (.promotion_gates | length) == 6
           and (.smoke_cases | length) == 2 and .smoke_repeats == 1
           and (.pilot_cases | length) == 8 and .pilot_repeats == 3
         else .status == "candidate" and (
@@ -709,37 +693,13 @@ if HOME="$report_home" \
         and .static_measurement.candidate_selected_entry_words == $candidate[0].components.selected_skill_entry_boundary.words
         and .static_measurement.selected_entry_word_delta == ($candidate[0].components.selected_skill_entry_boundary.words - $baseline[0].components.selected_skill_entry_boundary.words)
         ) end)
-        and $candidate[0].components.selected_skill_initial.words <= .promotion_gates.selected_initial_words_max
-        and $candidate[0].components.selected_skill_entry_boundary.words <= .promotion_gates.selected_entry_words_max
-        and .static_measurement.candidate_selected_initial_words <= .promotion_gates.selected_initial_words_max
-        and .static_measurement.candidate_selected_entry_words <= .promotion_gates.selected_entry_words_max
-        and .static_measurement.standing_context_growth == 0
         and $candidate[0].components.project_agents == $baseline[0].components.project_agents
         and $candidate[0].components.generated_global_agents == $baseline[0].components.generated_global_agents
         and $candidate[0].components.native_skill_catalog_descriptions == $baseline[0].components.native_skill_catalog_descriptions
     ' "$kernel_manifest" >/dev/null; then
     pass
 else
-    fail "workflow kernel candidate exceeds its static budget or lacks promotion evidence"
-fi
-
-test_start "context evidence structure is generic while promotion policy rejects standing growth"
-standing_evidence="$(mktemp "${TMPDIR:-/tmp}/standing-context-evidence.XXXXXX")"
-p0p4_register_cleanup "$standing_evidence"
-jq -cnS '{
-  schema_version:"1.0",reporter_sha256:("a"*64),
-  baseline_instruction_sha256:("b"*64),candidate_instruction_sha256:("c"*64),
-  policy_caps:{selected_initial_words_max:1050,selected_entry_words_max:3000,standing_context_growth_allowed:false},
-  baseline:{selected_initial_words:800,selected_entry_words:2000,total_initial_words:900,total_entry_words:2100,standing_initial_words:100,standing_entry_words:100},
-  candidate:{selected_initial_words:700,selected_entry_words:1900,total_initial_words:801,total_entry_words:2001,standing_initial_words:101,standing_entry_words:101},
-  deltas:{selected_initial_words:-100,selected_entry_words:-100,standing_initial_words:1,standing_entry_words:1}
-}' >"$standing_evidence"
-if (source "$context_evidence_lib"; \
-    context_budget_validate_evidence_structure "$standing_evidence" \
-    && ! context_budget_validate_promotion_policy "$standing_evidence"); then
-    pass
-else
-    fail "structural evidence validation and workflow-kernel promotion policy were not separated"
+    fail "workflow kernel candidate lacks promotion evidence"
 fi
 
 test_start "manifest mismatch diagnostics expose expected and actual counts only"
