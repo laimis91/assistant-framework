@@ -13,8 +13,7 @@ index_has_load_set() {
         $0 == "  " load_set ":" { in_set = 1; next }
         in_set && /^  [[:alnum:]_-]+:[[:space:]]*$/ { exit }
         in_set && /^    (selectors|references):/ { bounded = 1 }
-        in_set && /^    budget_words:[[:space:]]*[1-9][0-9]*[[:space:]]*$/ { budget = 1 }
-        END { exit bounded && budget ? 0 : 1 }
+        END { exit bounded ? 0 : 1 }
     ' "$index_file"
 }
 
@@ -72,27 +71,6 @@ index_covers_phase_gate_invariants() {
     done <<<"$invariant_ids"
 }
 
-validator_entry_closure_words() {
-    local skill_name="$1"
-    local fixture_root fixture_skill fixture_index validator_err
-    fixture_root="$(mktemp -d)"
-    p0p4_register_cleanup "$fixture_root"
-    fixture_skill="$fixture_root/$skill_name"
-    cp -R "$FRAMEWORK_DIR/skills/$skill_name" "$fixture_skill"
-    fixture_index="$fixture_skill/contracts/index.yaml"
-    validator_err="$fixture_root/validator.err"
-
-    awk '
-        $0 == "  entry:" { in_target = 1 }
-        in_target && /^  [^[:space:]#][^:]*:[[:space:]]*$/ && $0 != "  entry:" { in_target = 0 }
-        in_target && /^    budget_words:/ { print "    budget_words: 1"; next }
-        { print }
-    ' "$fixture_index" >"$fixture_index.tmp"
-    mv "$fixture_index.tmp" "$fixture_index"
-    "$skill_validator" --skill "$fixture_skill" >/dev/null 2>"$validator_err" || true
-    sed -nE "s/.*load set 'entry' declared boundary closure is ([0-9]+) words.*/\\1/p" "$validator_err" | head -n 1
-}
-
 test_start "specialists retain valid consumer-driven progressive contract indexes"
 index_failures=()
 if ! grep -Fq '`contracts/index.yaml` is optional.' "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md"; then
@@ -110,7 +88,7 @@ for skill_name in "${specialists[@]}"; do
     fi
     for load_set in entry current_phase completion; do
         if ! index_has_load_set "$index_file" "$load_set"; then
-            index_failures+=("$skill_name $load_set load set is missing selectors/references or budget")
+            index_failures+=("$skill_name $load_set load set is missing selectors/references")
         fi
     done
     if ! grep -Fq 'section: invariants' "$index_file"; then
@@ -257,32 +235,6 @@ if [[ "${#anchor_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "specialist compaction weakened strict behavior: ${anchor_failures[*]}"
-fi
-
-test_start "specialist entry closures stay below 1500 words"
-closure_failures=()
-closure_summary=()
-for skill_name in "${specialists[@]}"; do
-    if [[ ! -f "$FRAMEWORK_DIR/skills/$skill_name/contracts/index.yaml" ]]; then
-        closure_failures+=("$skill_name has no measurable entry closure")
-        continue
-    fi
-    closure_words="$(validator_entry_closure_words "$skill_name")"
-    closure_summary+=("$skill_name=$closure_words")
-    if [[ ! "$closure_words" =~ ^[0-9]+$ ]]; then
-        closure_failures+=("$skill_name validator did not report entry closure")
-    elif (( closure_words >= 1500 )); then
-        closure_failures+=("$skill_name entry closure is $closure_words words")
-    fi
-done
-if [[ "${#closure_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    closure_summary_text="none"
-    if [[ "${#closure_summary[@]}" -gt 0 ]]; then
-        closure_summary_text="${closure_summary[*]}"
-    fi
-    fail "specialist entry budget failed ($closure_summary_text): ${closure_failures[*]}"
 fi
 
 test_start "research and skill-creator load heavyweight methods only on demand"

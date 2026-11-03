@@ -433,7 +433,9 @@ Built in PRs 79 and 80 and the follow-up that carries this note: user-owned file
 Not built, with the reason:
 
 - **Typed evidence slot for discovery-run results.** A new `source_kind` touches the input, output and handoff contracts and every consumer, so it needs its own versioned change. Until then a discovery run is reported as an orchestrator-run probe (`references/script-execution.md`).
-- **Deeper per-artifact checklists.** The sources for specification, plan and Jira review are mostly "not retrieved" above, and the repository rule requires an evidenced method before expert-judgment guidance grows. The lifecycle set also has about 2 words of budget left.
-- **Company-skill V1-format question.** Needs the user's answer; the creator description still says V1 skills.
+- **Deeper per-artifact checklists.** The sources for specification, plan and Jira review are mostly "not retrieved" above, and the repository rule requires an evidenced method before expert-judgment guidance grows.
+- **Company-skill V1-format question.** Answered (most company skills are plain), built in PR 82: the creator reviews a plain `SKILL.md` alone.
 
-Known limit: a pass that resolves `lifecycle_reviewer_context` on C# material does not load `references/csharp-review.md` (no budget), so it relies on `lifecycle-verification.md` and general judgment. The C# eval states this.
+Known limit: a pass that resolves `lifecycle_reviewer_context` on C# material does not load `references/csharp-review.md`, so it relies on `lifecycle-verification.md` and general judgment. The C# eval states this.
+
+Word-count limits (load-set `budget_words`, the standing-guidance and first-review word ceilings, the specialist entry cap, and the eval-promotion word caps) were removed in PR 82. The budget reasoning in the sections above records the constraints that applied when the note was written.

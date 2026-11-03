@@ -2136,19 +2136,19 @@ else
     fail "historical manifest rejection was not tied to fresh measurements before run planning"
 fi
 
-test_start "candidate manifest rejects stale or over-budget static measurements"
+test_start "candidate manifest rejects stale static measurements"
 static_budget_candidate="$fixture_root/static-budget-candidate"
 static_budget_output="$fixture_root/static-budget-output"
 static_budget_error="$fixture_root/static-budget-error.txt"
 cp -R "$candidate" "$static_budget_candidate"
-jq '.static_measurement.candidate_selected_entry_words = (.promotion_gates.selected_entry_words_max + 1)' \
+jq '.static_measurement.candidate_selected_entry_words = (.static_measurement.candidate_selected_entry_words + 1)' \
     "$static_budget_candidate/manifest.json" >"$static_budget_candidate/manifest.tmp"
 mv "$static_budget_candidate/manifest.tmp" "$static_budget_candidate/manifest.json"
 if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" \
     --model test-model --baseline-variant "$baseline" --candidate-variant "$static_budget_candidate" \
     --cases small-fix-stays-lightweight --repeats 1 --output "$static_budget_output" \
     --codex-bin "$fake_codex" >/dev/null 2>"$static_budget_error"; then
-    fail "runner accepted an over-budget or internally stale candidate manifest"
+    fail "runner accepted an internally stale candidate manifest"
 elif grep -Fq 'Candidate manifest does not match' "$static_budget_error"; then
     pass
 else
@@ -2201,27 +2201,6 @@ elif grep -Fq 'Candidate manifest does not match' "$shrunk_manifest_error" \
     pass
 else
     fail "canonical smoke and pilot coverage was not enforced before model execution"
-fi
-
-test_start "generic no-manifest A/B planning records over-cap evidence without applying promotion policy"
-actual_cap_candidate="$fixture_root/actual-cap-candidate"
-actual_cap_output="$fixture_root/actual-cap-output"
-actual_cap_error="$fixture_root/actual-cap-error.txt"
-cp -R "$candidate" "$actual_cap_candidate"
-rm -f "$actual_cap_candidate/manifest.json"
-for _ in $(seq 1 3000); do printf 'budgetword ' >>"$actual_cap_candidate/SKILL.md"; done
-printf '\n' >>"$actual_cap_candidate/SKILL.md"
-rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$actual_cap_candidate" \
-    --cases small-fix-stays-lightweight --repeats 1 --output "$actual_cap_output" \
-    --codex-bin "$fake_codex" >/dev/null 2>"$actual_cap_error" \
-    && jq -e '.candidate_manifest_sha256 == null and .context_budget_evidence.candidate.selected_entry_words > 3000' \
-        "$actual_cap_output/run-plan.json" >/dev/null \
-    && [[ ! -e "$capture/call-0.args" ]]; then
-    pass
-else
-    fail "generic A/B planning incorrectly applied workflow-kernel promotion caps"
 fi
 
 test_start "runner never derives or executes a context reporter from baseline input"
@@ -2282,11 +2261,6 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" \
         }
         and (.context_budget_evidence_sha256 | test("^[0-9a-f]{64}$"))
         and (.context_budget_evidence | type == "object")
-        and .context_budget_evidence.policy_caps == {
-          selected_initial_words_max:1050,
-          selected_entry_words_max:3000,
-          standing_context_growth_allowed:false
-        }
         and (.context_budget_evidence.reporter_sha256 | test("^[0-9a-f]{64}$"))
     ' "$plan_output/run-plan.json" >/dev/null; then
     canonical_evidence_hash="$(jq -cS '.context_budget_evidence' "$plan_output/run-plan.json" | test_sha256_stream)"

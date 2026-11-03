@@ -3,8 +3,7 @@
 Load for a review that covers a behavior or cosmetic change, carries a change-impact
 artifact, or has a locality/shared/unresolved decision. Record compact
 applicability evidence for every behavior change. Keep this outside the fresh
-reviewer context bundle: the existing 5653-word reviewer-context budget remains
-unchanged.
+reviewer context bundle: the reviewer-context load set remains unchanged.
 
 Resolve the common checker from the loaded skill directory as
 `../../tools/change-impact/validate-change-impact.cjs`, quoted and invoked with

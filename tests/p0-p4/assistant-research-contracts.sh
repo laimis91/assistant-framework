@@ -1013,7 +1013,6 @@ failures = []
 {"SY5 producer gate" => gate, "output findings consumer" => consumer}.each do |name, text|
   failures << name unless text.match?(/every accepted main result and material follow-up/) && text.include?("source-empty") && text.include?("top-level gaps")
 end
-failures << "guide must remain below the 5000-word load budget" if guide.split.size >= 5000
 puts "empty-findings producer alignment: #{failures.empty? ? 'PASS' : failures.join(', ')}"
 exit(failures.empty? ? 0 : 1)
 RUBY

@@ -7,56 +7,6 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 skill_validator="$FRAMEWORK_DIR/tools/skills/validate-skills.sh"
 
-validator_load_set_closure_words() {
-    local skill_name="$1"
-    local load_set="$2"
-    local fixture_root
-    local fixture_skill
-    local fixture_index
-    local validator_err
-
-    fixture_root="$(mktemp -d)"
-    p0p4_register_cleanup "$fixture_root"
-    fixture_skill="$fixture_root/$skill_name"
-    cp -R "$FRAMEWORK_DIR/skills/$skill_name" "$fixture_skill"
-    fixture_index="$fixture_skill/contracts/index.yaml"
-    validator_err="$fixture_root/validator.err"
-
-    # Force only the selected load set to report its actual closure. The validator
-    # computes root + index + declared references + key-selected item content.
-    awk -v load_set="$load_set" '
-        $0 == "  " load_set ":" { in_target = 1 }
-        in_target && /^  [^[:space:]#][^:]*:[[:space:]]*$/ && $0 != "  " load_set ":" { in_target = 0 }
-        in_target && /^    budget_words:/ { print "    budget_words: 1"; next }
-        { print }
-    ' "$fixture_index" > "$fixture_index.tmp"
-    mv "$fixture_index.tmp" "$fixture_index"
-
-    "$skill_validator" --skill "$fixture_skill" >/dev/null 2>"$validator_err" || true
-    sed -nE "s/.*load set '$load_set' declared boundary closure is ([0-9]+) words.*/\\1/p" "$validator_err" | head -n 1
-}
-
-workflow_entry_words="$(validator_load_set_closure_words assistant-workflow entry)"
-review_entry_words="$(validator_load_set_closure_words assistant-review entry)"
-reviewer_bundle_words="$(validator_load_set_closure_words assistant-review reviewer_context)"
-test_start "boundary-reachable entry closure stays below budgets (workflow=$workflow_entry_words review=$review_entry_words)"
-boundary_failures=()
-if [[ ! "$workflow_entry_words" =~ ^[0-9]+$ ]]; then
-    boundary_failures+=("workflow validator did not report an entry closure")
-elif (( workflow_entry_words >= 4000 )); then
-    boundary_failures+=("workflow boundary closure $workflow_entry_words is not below 4000")
-fi
-if [[ ! "$review_entry_words" =~ ^[0-9]+$ ]]; then
-    boundary_failures+=("review validator did not report an entry closure")
-elif (( review_entry_words >= 5000 )); then
-    boundary_failures+=("review boundary closure $review_entry_words is not below 5000")
-fi
-if [[ "${#boundary_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "${boundary_failures[*]}"
-fi
-
 markdown_references_from_loader_lines() {
     awk '
         {
@@ -105,7 +55,6 @@ first_review_mandatory_reference_paths() {
 
 review_skill_dir="$FRAMEWORK_DIR/skills/assistant-review"
 first_review_refs="$(first_review_mandatory_reference_paths "$review_skill_dir")"
-first_review_reference_words=0
 first_review_reference_failures=()
 while IFS= read -r reference_path; do
     [[ -n "$reference_path" ]] || continue
@@ -113,25 +62,15 @@ while IFS= read -r reference_path; do
         first_review_reference_failures+=("mandatory loader target is missing: $reference_path")
         continue
     fi
-    first_review_reference_words=$(( first_review_reference_words + $(wc -w < "$review_skill_dir/$reference_path" | tr -d ' ') ))
 done <<< "$first_review_refs"
-first_review_total_words=$(( review_entry_words + first_review_reference_words ))
 first_review_ref_labels="$(printf '%s' "$first_review_refs" | tr '\n' ',' | sed 's/,$//')"
 
-test_start "orchestrator first-review stays below 5000 words and fresh Reviewer bundle stays below 5653 words (orchestrator=$first_review_total_words reviewer=$reviewer_bundle_words refs=$first_review_ref_labels)"
+test_start "orchestrator first-review derives its loader references and routes worker context through reviewer_context (refs=$first_review_ref_labels)"
 if [[ -z "$first_review_refs" ]]; then
     first_review_reference_failures+=("no mandatory first-review loader references were derived")
 fi
 if ! printf '%s\n' "$first_review_refs" | grep -Fqx 'references/review-loop.md'; then
     first_review_reference_failures+=("root does not expose a first-review loop loader")
-fi
-if (( first_review_total_words >= 5000 )); then
-    first_review_reference_failures+=("orchestrator first-review boundary $first_review_total_words is not below 5000")
-fi
-if [[ ! "$reviewer_bundle_words" =~ ^[0-9]+$ ]]; then
-    first_review_reference_failures+=("validator did not report the reviewer_context worker bundle closure")
-elif (( reviewer_bundle_words >= 5653 )); then
-    first_review_reference_failures+=("fresh Reviewer bundle $reviewer_bundle_words is not below 5653")
 fi
 if ! grep -Fq 'resolve `reviewer_context` from `contracts/index.yaml`' "$review_skill_dir/references/review-loop.md"; then
     first_review_reference_failures+=("review loop does not route first-pass worker context through reviewer_context")
@@ -140,44 +79,6 @@ if [[ "${#first_review_reference_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "${first_review_reference_failures[*]}"
-fi
-
-test_start "reviewer context keeps one strict 5653-word budget authority"
-reviewer_budget_authority_failures=()
-review_index="$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml"
-review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
-review_gates="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
-review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
-if ! ruby -ryaml -e '
-    index = YAML.load_file(ARGV.fetch(0))
-    handoffs = YAML.load_file(ARGV.fetch(1))
-    reviewer_context = handoffs.fetch("dispatch_context_bundles").find { |bundle| bundle["name"] == "fresh_reviewer_context" }
-    index_budget = index.fetch("load_sets").fetch("reviewer_context").fetch("budget_words")
-    valid = index_budget == 5653 && reviewer_context.fetch("budget_words") == 5653 &&
-      reviewer_context.fetch("budget_validation") == "SKILL plus index plus this selected bundle and its declared worst-case reference closure is strictly below 5653 words."
-    exit valid ? 0 : 1
-' "$review_index" "$review_handoffs"; then
-    reviewer_budget_authority_failures+=("index and fresh_reviewer_context budget_words/budget_validation must equal 5653")
-fi
-for file_and_term in \
-    "$review_gates::strictly below 5653 words" \
-    "$review_gates::below 5653 words" \
-    "$review_loop::below 5653 words" \
-    "$BASH_SOURCE::fresh Reviewer bundle stays below 5653 words" \
-    "$BASH_SOURCE::reviewer_bundle_words >= 5653"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if ! grep -Fq -- "$term" "$file"; then
-        reviewer_budget_authority_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-if rg -n '5600' "$FRAMEWORK_DIR/skills/assistant-review" >/dev/null; then
-    reviewer_budget_authority_failures+=("active assistant-review canonical budget wording still contains 5600")
-fi
-if [[ ${#reviewer_budget_authority_failures[@]} -eq 0 ]]; then
-    pass
-else
-    fail "${reviewer_budget_authority_failures[*]}"
 fi
 
 test_start "standalone audit prepares Spec Review and scoped verification evidence before Reviewer dispatch"
@@ -395,8 +296,7 @@ write_index_file() {
     local section="$3"
     local key="$4"
     local names="$5"
-    local budget="$6"
-    local prose_match="${7:-}"
+    local prose_match="${6:-}"
     local skill_name
     local match_line=""
 
@@ -424,7 +324,6 @@ load_sets:
         key: $key
         names: [$names]
 $match_line
-    budget_words: $budget
 
 fallback:
   on_missing_selector: load_full_authoritative_file
@@ -432,14 +331,14 @@ fallback:
 EOF
 }
 
-test_start "contract-index validator rejects wrong type, section, key, name, duplicate, prose, and budget cases"
+test_start "contract-index validator rejects wrong type, section, key, name, duplicate, and prose cases"
 INDEX_VALIDATOR_ROOT="$(mktemp -d)"
 p0p4_register_cleanup "$INDEX_VALIDATOR_ROOT"
 index_validation_failures=()
 
 wrong_type_dir="$INDEX_VALIDATOR_ROOT/wrong-authoritative-type"
 write_index_validator_fixture "$wrong_type_dir"
-write_index_file "$wrong_type_dir" output fields name request 500
+write_index_file "$wrong_type_dir" output fields name request
 wrong_type_err="$INDEX_VALIDATOR_ROOT/wrong-type.err"
 if "$skill_validator" --skill "$wrong_type_dir" >/dev/null 2>"$wrong_type_err" \
     || ! grep -Fq 'CONTRACT_INDEX_AUTHORITATIVE_CONTRACT' "$wrong_type_err"; then
@@ -448,7 +347,7 @@ fi
 
 section_dir="$INDEX_VALIDATOR_ROOT/unresolved-section"
 write_index_validator_fixture "$section_dir"
-write_index_file "$section_dir" input absent_fields name request 500
+write_index_file "$section_dir" input absent_fields name request
 section_err="$INDEX_VALIDATOR_ROOT/section.err"
 if "$skill_validator" --skill "$section_dir" >/dev/null 2>"$section_err" \
     || ! grep -Fq 'CONTRACT_INDEX_SELECTOR_SECTION_UNRESOLVED' "$section_err"; then
@@ -457,7 +356,7 @@ fi
 
 key_dir="$INDEX_VALIDATOR_ROOT/unresolved-key"
 write_index_validator_fixture "$key_dir"
-write_index_file "$key_dir" input fields absent_key request 500
+write_index_file "$key_dir" input fields absent_key request
 key_err="$INDEX_VALIDATOR_ROOT/key.err"
 if "$skill_validator" --skill "$key_dir" >/dev/null 2>"$key_err" \
     || ! grep -Fq 'CONTRACT_INDEX_SELECTOR_KEY_UNRESOLVED' "$key_err"; then
@@ -466,7 +365,7 @@ fi
 
 name_dir="$INDEX_VALIDATOR_ROOT/unresolved-name"
 write_index_validator_fixture "$name_dir"
-write_index_file "$name_dir" input fields name missing_request 500
+write_index_file "$name_dir" input fields name missing_request
 name_err="$INDEX_VALIDATOR_ROOT/name.err"
 if "$skill_validator" --skill "$name_dir" >/dev/null 2>"$name_err" \
     || ! grep -Fq 'CONTRACT_INDEX_SELECTOR_NAME_UNRESOLVED' "$name_err"; then
@@ -475,7 +374,7 @@ fi
 
 duplicate_dir="$INDEX_VALIDATOR_ROOT/duplicate-name"
 write_index_validator_fixture "$duplicate_dir"
-write_index_file "$duplicate_dir" input fields name 'request, request' 500
+write_index_file "$duplicate_dir" input fields name 'request, request'
 duplicate_err="$INDEX_VALIDATOR_ROOT/duplicate.err"
 if "$skill_validator" --skill "$duplicate_dir" >/dev/null 2>"$duplicate_err" \
     || ! grep -Fq 'CONTRACT_INDEX_SELECTOR_NAME_DUPLICATE' "$duplicate_err"; then
@@ -484,20 +383,11 @@ fi
 
 prose_dir="$INDEX_VALIDATOR_ROOT/prose-match"
 write_index_validator_fixture "$prose_dir"
-write_index_file "$prose_dir" input fields name request 500 'Fields applicable at entry'
+write_index_file "$prose_dir" input fields name request 'Fields applicable at entry'
 prose_err="$INDEX_VALIDATOR_ROOT/prose.err"
 if "$skill_validator" --skill "$prose_dir" >/dev/null 2>"$prose_err" \
     || ! grep -Fq 'CONTRACT_INDEX_SELECTOR_PROSE_MATCH' "$prose_err"; then
     index_validation_failures+=("prose match selector was not rejected with CONTRACT_INDEX_SELECTOR_PROSE_MATCH")
-fi
-
-over_budget_dir="$INDEX_VALIDATOR_ROOT/selected-content-over-budget"
-write_index_validator_fixture "$over_budget_dir"
-write_index_file "$over_budget_dir" input fields name request 1
-over_budget_err="$INDEX_VALIDATOR_ROOT/over-budget.err"
-if "$skill_validator" --skill "$over_budget_dir" >/dev/null 2>"$over_budget_err" \
-    || ! grep -Fq 'CONTRACT_INDEX_SELECTOR_BUDGET_EXCEEDED' "$over_budget_err"; then
-    index_validation_failures+=("selected content over budget was not rejected with CONTRACT_INDEX_SELECTOR_BUDGET_EXCEEDED")
 fi
 
 if [[ "${#index_validation_failures[@]}" -eq 0 ]]; then

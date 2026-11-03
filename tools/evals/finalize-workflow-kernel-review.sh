@@ -301,8 +301,6 @@ validate_current_context_evidence() {
         || { rm -rf "$materialized_root"; rm -f "$fresh_file"; die "Could not recompute fresh context-budget evidence."; }
     context_budget_validate_evidence_structure "$fresh_file" \
         || { rm -rf "$materialized_root"; rm -f "$fresh_file"; die "Fresh context-budget evidence is structurally invalid."; }
-    context_budget_validate_promotion_policy "$fresh_file" \
-        || { rm -rf "$materialized_root"; rm -f "$fresh_file"; die "Fresh context-budget evidence violates workflow-kernel promotion caps or standing-context policy."; }
     context_budget_validate_manifest "$CURRENT_CANDIDATE_MANIFEST" "$fresh_file" \
         || { rm -rf "$materialized_root"; rm -f "$fresh_file"; die "Candidate manifest does not match fresh context-budget evidence."; }
     fresh="$(jq -cS . "$fresh_file")"

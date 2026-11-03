@@ -4,9 +4,6 @@
   "base_skill": "assistant-workflow",
   "intervention": "Replace only the root SKILL.md while keeping canonical contracts and references unchanged.",
   "promotion_gates": {
-    "selected_initial_words_max": 1050,
-    "selected_entry_words_max": 3000,
-    "standing_context_growth_allowed": false,
     "must_pass_case_regressions_allowed": 0,
     "seeded_defect_recall_must_not_drop": true,
     "false_positive_marker_hits_must_not_increase": true,

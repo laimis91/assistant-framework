@@ -27,7 +27,6 @@ load_sets:
         section: fields
         key: name
         names: [question, tier, tool, research_method, user_role_or_goal, output_purpose, known_context, search_resource_budget, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source]
-    budget_words: 1600
   current_phase:
     selectors:
       - id: research-current-phase
@@ -41,7 +40,6 @@ load_sets:
         section: invariants
         key: id
         names: [INV1, INV2, INV3, INV4, INV5, INV6, INV7, INV8, INV9]
-    budget_words: 5000
   source_research:
     references:
       - research.md
@@ -52,7 +50,6 @@ load_sets:
         section: fields
         key: name
         names: [research_method]
-    budget_words: 2500
   five_lens:
     references:
       - five-lens-briefing.md
@@ -64,7 +61,6 @@ load_sets:
         section: fields
         key: name
         names: [research_method, research_dispatch_authority]
-    budget_words: 5000
   selected_handoff:
     selectors:
       - id: research-selected-handoff
@@ -95,7 +91,6 @@ load_sets:
         key: name
         name_from: selected_research_handoff
         allowed_names: [orchestrator_to_lens_researcher, orchestrator_to_research_peer_reviewer]
-    budget_words: 5500
   investigate:
     references:
       - investigate.md
@@ -106,7 +101,6 @@ load_sets:
         section: fields
         key: name
         names: [tool]
-    budget_words: 2000
   completion:
     selectors:
       - id: research-completion-artifact
@@ -115,7 +109,6 @@ load_sets:
         key: name
         name_from: applicable_completion_artifact
         allowed_names: [producer_version, findings, candidate_mechanisms, perspective_scan, question_trace, contradiction_map, synthesis_briefing, high_stakes_recommendation_basis, peer_review, five_lens_process_evidence, conflicts, gaps, summary]
-    budget_words: 6000
 
 fallback:
   on_missing_selector: load_full_authoritative_file

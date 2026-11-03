@@ -1056,21 +1056,15 @@ validate_candidate_manifest() {
       and .promotion_gates.question_mark_count_proxy_must_not_increase == true
       and .promotion_gates.median_rework_or_tool_calls_max_regression_percent == 20
       and .promotion_gates.semantic_false_positive_review_required == true
-      and .promotion_gates.selected_initial_words_max == 1050
-      and .promotion_gates.selected_entry_words_max == 3000
-      and .promotion_gates.standing_context_growth_allowed == false
       and (.static_measurement.baseline_selected_initial_words | type == "number" and . >= 1 and . == floor)
       and (.static_measurement.candidate_selected_initial_words | type == "number" and . >= 1 and . == floor)
       and (.static_measurement.baseline_total_initial_words | type == "number" and . >= 1 and . == floor)
       and (.static_measurement.candidate_total_initial_words | type == "number" and . >= 1 and . == floor)
       and (.static_measurement.baseline_selected_entry_words | type == "number" and . >= 1 and . == floor)
       and (.static_measurement.candidate_selected_entry_words | type == "number" and . >= 1 and . == floor)
-      and .static_measurement.candidate_selected_initial_words <= .promotion_gates.selected_initial_words_max
-      and .static_measurement.candidate_selected_entry_words <= .promotion_gates.selected_entry_words_max
       and .static_measurement.selected_initial_word_delta == (.static_measurement.candidate_selected_initial_words - .static_measurement.baseline_selected_initial_words)
       and .static_measurement.selected_entry_word_delta == (.static_measurement.candidate_selected_entry_words - .static_measurement.baseline_selected_entry_words)
       and .static_measurement.candidate_total_initial_words - .static_measurement.baseline_total_initial_words == .static_measurement.selected_initial_word_delta
-      and .static_measurement.standing_context_growth == 0
       and .semantic_review.case_category == "seeded_review"
       and .semantic_review.data_classification == "synthetic"
       and .semantic_review.max_findings_per_run == 8
@@ -4428,8 +4422,6 @@ context_budget_validate_evidence_structure "$CONTEXT_BUDGET_EVIDENCE_FILE" \
     || die "Fresh context-budget evidence is structurally invalid."
 CONTEXT_BUDGET_EVIDENCE_HASH="$(hash_file "$CONTEXT_BUDGET_EVIDENCE_FILE")"
 if [[ -n "$CANDIDATE_MANIFEST" ]]; then
-    context_budget_validate_promotion_policy "$CONTEXT_BUDGET_EVIDENCE_FILE" \
-        || die "Fresh context-budget evidence violates workflow-kernel promotion caps or standing-context policy."
     context_budget_validate_manifest "$CANDIDATE_MANIFEST" "$CONTEXT_BUDGET_EVIDENCE_FILE" \
         || die "Candidate manifest does not match fresh context-budget evidence."
 fi

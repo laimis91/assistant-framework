@@ -96,8 +96,7 @@ trusted repository; variant inputs can never supply executable tooling. It uses
 count-only `context_budget_evidence` object plus its SHA-256. It binds the
 reporter and both materialized instruction hashes. Generic manifest-free A/B
 plans retain structural counts without applying workflow-kernel policy.
-Manifest-backed promotion enforces fixed selected-skill caps of 1050 initial
-words and 3000 entry-boundary words, zero standing-context growth, and the
+Manifest-backed promotion enforces the
 hardcoded two-case smoke and eight-case/three-repeat pilot. Internally consistent
 but false or loosened manifests fail closed. The evidence contains no
 instruction bodies or absolute paths.

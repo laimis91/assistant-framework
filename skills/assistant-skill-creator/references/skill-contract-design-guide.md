@@ -119,11 +119,11 @@ justify deleting the safety or behavior it described from the instructions.
 useful to a real consumer. When present, declare `schema_version`,
 `contract: index`, `skill`, and the actual `authoritative_contracts`. Include
 supplied and explicitly referenced canonical files, rather than category quotas.
-Use selector-bounded `load_sets` with positive `budget_words`. Select entry
+Use selector-bounded `load_sets`. Select entry
 inputs, current gates, handoffs, or completion fields by explicit keys and names.
 Both missing and invalid selectors use `load_full_authoritative_file`; never
 silently skip the canonical file. Paths stay inside the skill root, including
-through symlinks. Declared files, selector addresses, references, and word budgets
+through symlinks. Declared files, selector addresses, and references
 must resolve. Static closure reports exclude runtime context.
 
 ### Semantic boundaries and workflow safety

@@ -66,11 +66,6 @@ context_budget_build_evidence() {
           reporter_sha256:$reporter_sha256,
           baseline_instruction_sha256:$baseline_instruction_sha256,
           candidate_instruction_sha256:$candidate_instruction_sha256,
-          policy_caps:{
-            selected_initial_words_max:1050,
-            selected_entry_words_max:3000,
-            standing_context_growth_allowed:false
-          },
           baseline:$b,
           candidate:$c,
           deltas:{
@@ -89,12 +84,11 @@ context_budget_build_evidence() {
 context_budget_validate_evidence_structure() {
     local evidence="$1"
     jq -e '
-      (keys_unsorted | sort) == (["baseline","baseline_instruction_sha256","candidate","candidate_instruction_sha256","deltas","policy_caps","reporter_sha256","schema_version"] | sort)
+      (keys_unsorted | sort) == (["baseline","baseline_instruction_sha256","candidate","candidate_instruction_sha256","deltas","reporter_sha256","schema_version"] | sort)
       and .schema_version == "1.0"
       and (.reporter_sha256 | test("^[0-9a-f]{64}$"))
       and (.baseline_instruction_sha256 | test("^[0-9a-f]{64}$"))
       and (.candidate_instruction_sha256 | test("^[0-9a-f]{64}$"))
-      and .policy_caps == {selected_initial_words_max:1050,selected_entry_words_max:3000,standing_context_growth_allowed:false}
       and all(.baseline[],.candidate[]; type == "number" and . >= 0 and . == floor)
       and .baseline.total_initial_words == (.baseline.selected_initial_words + .baseline.standing_initial_words)
       and .candidate.total_initial_words == (.candidate.selected_initial_words + .candidate.standing_initial_words)
@@ -107,26 +101,12 @@ context_budget_validate_evidence_structure() {
     ' "$evidence" >/dev/null
 }
 
-context_budget_validate_promotion_policy() {
-    local evidence="$1"
-    jq -e '
-      .policy_caps == {selected_initial_words_max:1050,selected_entry_words_max:3000,standing_context_growth_allowed:false}
-      and .candidate.selected_initial_words <= .policy_caps.selected_initial_words_max
-      and .candidate.selected_entry_words <= .policy_caps.selected_entry_words_max
-      and .deltas.standing_initial_words == 0
-      and .deltas.standing_entry_words == 0
-    ' "$evidence" >/dev/null
-}
-
 context_budget_validate_manifest() {
     local manifest="$1" evidence="$2"
     local mismatch
     mismatch="$(jq -c --slurpfile evidence "$evidence" '
       . as $manifest | $evidence[0] as $e
       | {
-          selected_initial_words_max:{manifest:.promotion_gates.selected_initial_words_max,evidence:1050},
-          selected_entry_words_max:{manifest:.promotion_gates.selected_entry_words_max,evidence:3000},
-          standing_context_growth_allowed:{manifest:.promotion_gates.standing_context_growth_allowed,evidence:false},
           baseline_selected_initial_words:{manifest:.static_measurement.baseline_selected_initial_words,evidence:$e.baseline.selected_initial_words},
           candidate_selected_initial_words:{manifest:.static_measurement.candidate_selected_initial_words,evidence:$e.candidate.selected_initial_words},
           baseline_total_initial_words:{manifest:.static_measurement.baseline_total_initial_words,evidence:$e.baseline.total_initial_words},

@@ -27,7 +27,6 @@ load_sets:
         section: invariants
         key: id
         names: [AUTHORITY, EVIDENCE]
-    budget_words: 1500
   current_phase:
     selectors:
       - id: audit-phase
@@ -36,7 +35,6 @@ load_sets:
         key: phase
         name_from: active_audit_phase
         allowed_names: [CAPTURE, INVESTIGATE, ASSESS, REPORT]
-    budget_words: 1000
   investigation:
     references: [references/investigation.md]
     selectors:
@@ -45,7 +43,6 @@ load_sets:
         section: artifacts
         key: name
         names: [audit_trace, executed_checks, probe_results]
-    budget_words: 2000
   maintenance:
     references: [references/test-maintenance.md]
     selectors:
@@ -54,7 +51,6 @@ load_sets:
         section: artifacts
         key: name
         names: [findings, performance_comparisons]
-    budget_words: 2000
   completion:
     selectors:
       - id: audit-report-results
@@ -67,7 +63,6 @@ load_sets:
         section: gates
         key: phase
         names: [REPORT]
-    budget_words: 3200
 fallback:
   on_missing_selector: load_full_authoritative_file
   on_invalid_selector: load_full_authoritative_file

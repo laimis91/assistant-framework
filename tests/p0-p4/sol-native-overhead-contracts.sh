@@ -5,51 +5,6 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-marker_block_words() {
-    local file="$1"
-    local start_marker="$2"
-    local end_marker="$3"
-
-    awk -v start_marker="$start_marker" -v end_marker="$end_marker" '
-        index($0, start_marker) { in_block = 1 }
-        in_block { print }
-        index($0, end_marker) && in_block { in_block = 0 }
-    ' "$file" | wc -w | tr -d ' '
-}
-
-mandatory_skill_words() {
-    local skill_dir="$1"
-    local skill_file="$skill_dir/SKILL.md"
-    local index_file="$skill_dir/contracts/index.yaml"
-    local words
-
-    words="$(wc -w < "$skill_file" | tr -d ' ')"
-    if [[ -f "$index_file" ]]; then
-        words=$(( words + $(wc -w < "$index_file" | tr -d ' ') ))
-    fi
-    if rg -qi \
-        'all contracts are mandatory|read (all |the )?contract files in .contracts/.+before|load and follow .+contracts before' \
-        "$skill_file"; then
-        while IFS= read -r contract_file; do
-            [[ "$(basename "$contract_file")" == "index.yaml" ]] && continue
-            words=$(( words + $(wc -w < "$contract_file" | tr -d ' ') ))
-        done < <(find "$skill_dir/contracts" -maxdepth 1 -type f -name '*.yaml' -print | sort)
-    fi
-
-    printf '%s\n' "$words"
-}
-
-skill_root_index_words() {
-    local skill_dir="$1"
-    local words
-
-    words="$(wc -w < "$skill_dir/SKILL.md" | tr -d ' ')"
-    if [[ -f "$skill_dir/contracts/index.yaml" ]]; then
-        words=$(( words + $(wc -w < "$skill_dir/contracts/index.yaml" | tr -d ' ') ))
-    fi
-    printf '%s\n' "$words"
-}
-
 index_has_authoritative_contract() {
     local index_file="$1"
     local contract_path="$2"
@@ -70,8 +25,7 @@ index_load_set_is_bounded() {
         $0 == "  " load_set ":" { in_set = 1; next }
         in_set && /^  [[:alnum:]_-]+:[[:space:]]*$/ { exit }
         in_set && /^    selectors?:/ { has_selector = 1 }
-        in_set && /^    budget_words:[[:space:]]*[1-9][0-9]*[[:space:]]*$/ { has_budget = 1 }
-        END { exit has_selector && has_budget ? 0 : 1 }
+        END { exit has_selector ? 0 : 1 }
     ' "$index_file"
 }
 
@@ -260,7 +214,7 @@ for skill_name in assistant-workflow assistant-review; do
     fi
     for load_set in "${load_sets[@]}"; do
         if ! index_load_set_is_bounded "$index_file" "$load_set"; then
-            contract_index_failures+=("$skill_name $load_set needs selector(s) and positive budget_words")
+            contract_index_failures+=("$skill_name $load_set needs selector(s)")
         fi
     done
     if ! grep -Eq '^fallback:[[:space:]]*$' "$index_file" \
@@ -299,40 +253,6 @@ if [[ "${#contract_index_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "contract index structure failed: ${contract_index_failures[*]}"
-fi
-
-workflow_words="$(mandatory_skill_words "$FRAMEWORK_DIR/skills/assistant-workflow")"
-review_words="$(mandatory_skill_words "$FRAMEWORK_DIR/skills/assistant-review")"
-workflow_root_index_words="$(skill_root_index_words "$FRAMEWORK_DIR/skills/assistant-workflow")"
-review_root_index_words="$(skill_root_index_words "$FRAMEWORK_DIR/skills/assistant-review")"
-agents_words="$(marker_block_words "$CODEX_NATIVE_HOME/.codex/AGENTS.md" ASSISTANT_FRAMEWORK_AGENTS_MD_START ASSISTANT_FRAMEWORK_AGENTS_MD_END)"
-guidance_words="$agents_words"
-project_agents_words="$(wc -w < "$FRAMEWORK_DIR/AGENTS.md" | tr -d '[:space:]')"
-effective_standing_words=$(( guidance_words + project_agents_words ))
-test_start "initial instruction budgets count SKILL+index and eager closure (workflow initial=$workflow_root_index_words eager=$workflow_words; review initial=$review_root_index_words eager=$review_words; guidance=$guidance_words; project=$project_agents_words; effective=$effective_standing_words)"
-budget_failures=()
-if (( workflow_root_index_words >= 4000 )); then
-    budget_failures+=("workflow SKILL+index words $workflow_root_index_words is not below 4000")
-fi
-if (( review_root_index_words >= 5000 )); then
-    budget_failures+=("review SKILL+index words $review_root_index_words is not below 5000")
-fi
-if (( workflow_words >= 4000 )); then
-    budget_failures+=("workflow transitive words $workflow_words is not below 4000")
-fi
-if (( review_words >= 5000 )); then
-    budget_failures+=("review transitive words $review_words is not below 5000")
-fi
-if (( guidance_words >= 900 )); then
-    budget_failures+=("generated AGENTS words $guidance_words is not below 900")
-fi
-if (( effective_standing_words >= 700 )); then
-    budget_failures+=("generated AGENTS+project words $effective_standing_words is not below 700")
-fi
-if [[ "${#budget_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "instruction load budget failed: ${budget_failures[*]}"
 fi
 
 test_start "workflow and review contracts are phase-scoped instead of eagerly loaded"

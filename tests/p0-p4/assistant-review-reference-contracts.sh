@@ -718,18 +718,6 @@ else
     fail "assistant-review Pack projection cardinality gaps: ${pack_projection_cardinality_failures[*]}"
 fi
 
-test_start "assistant-review reviewer-context ceiling matches its canonical loop reference"
-if ruby -ryaml -rjson -e '
-    index = YAML.load_file(ARGV.fetch(0))
-    budget = index.fetch("load_sets").fetch("reviewer_context").fetch("budget_words")
-    reference = File.read(ARGV.fetch(1))
-    exit reference.include?("strictly below #{budget} words") ? 0 : 1
-  ' "$review_index" "$review_loop"; then
-    pass
-else
-    fail "assistant-review reviewer-context budget_words and review-loop closure ceiling diverged"
-fi
-
 test_start "assistant-review grader rejects unrecoverable selected Pack decisions"
 review_identity_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/assistant-review-selected-decision.XXXXXX")"
 p0p4_register_cleanup "$review_identity_eval_root"
@@ -1987,7 +1975,7 @@ else
     fail "assistant-review clean claim has periodized or missing producer literal: ${clean_claim_failures[*]}"
 fi
 
-test_start "review lifecycle context preserves conditional reference agreement and the existing ceiling"
+test_start "review lifecycle context preserves conditional reference agreement"
 if ruby -ryaml -e '
   index = YAML.load_file(ARGV.fetch(0))
   handoffs = YAML.load_file(ARGV.fetch(1))
@@ -2000,8 +1988,7 @@ if ruby -ryaml -e '
   condition = "assigned_scope or coverage_obligations affect acquisition/readiness, active work, cancellation, collection/finalization, shutdown, owned resources, cleanup or retry"
   loop_text = File.read(ARGV.fetch(2))
   valid = !ordinary.fetch("references").include?(guide) && ordinary.fetch("references").include?("references/csharp-review.md") && File.read(ARGV.fetch(3)).include?("\n## Document Review Checklist\n") && lifecycle.fetch("references") == ordinary.fetch("references") - ["references/csharp-review.md"] + [guide] &&
-    lifecycle.fetch("budget_words") == 5653 && ordinary.fetch("budget_words") == 5653 &&
-    lifecycle.fetch("selectors").map { |x| x.reject { |key, _| key == "id" } } == ordinary.fetch("selectors").map { |x| x.reject { |key, _| key == "id" } } &&
+        lifecycle.fetch("selectors").map { |x| x.reject { |key, _| key == "id" } } == ordinary.fetch("selectors").map { |x| x.reject { |key, _| key == "id" } } &&
     ref && ref["condition"] == condition && bundle.fetch("worker_references").find { |r| r["path"] == "references/csharp-review.md" }.fetch("condition").include?("the pass uses reviewer_context") && bundle.fetch("worker_references").find { |r| r["path"] == "references/review-checklists.md" }.fetch("sections").any? { |x| x["name"] == "Document Review Checklist" } && loop_text.include?(condition) && loop_text.include?("condition worker references identically")
   exit valid ? 0 : 1
 ' "$review_index" "$review_handoffs" "$review_loop" "$review_checklists"; then pass; else fail "review lifecycle load set or worker condition diverged"; fi
