@@ -425,3 +425,15 @@ Deferred by the user's decision: game, UI and presentation checklists. Also defe
 - Ownership (later the same day): skill review is done by `assistant-skill-creator`;
   specification, plan, C#, test, Jira ticket and refinement review are done by `assistant-review`.
   The user gave ownership only; how each is built is proposed.
+
+## Implementation status (2026-11-03)
+
+Built in PRs 79 and 80 and the follow-up that carries this note: user-owned file rewrite probes (widened `behavioral_contract_review_required`, Behavioral checklist probe, reuse-search wording), a compact Document Review Checklist, a C# reference loaded only in `reviewer_context`, the skill-review route in `assistant-skill-creator` (assess), the fixture-only script-execution reference (a reference file; the `SKILL.md` edit in item 6 was not made, for budget reasons), and eval cases for each except the fixture-only execution exception. A document-only review needs no new `change_kind` value: `docs` already exists, and the standalone Spec Review gate already checks the user's request and review scope, so the eval `document-review-applies-spec-review-and-document-checklist` pins that behavior.
+
+Not built, with the reason:
+
+- **Typed evidence slot for discovery-run results.** A new `source_kind` touches the input, output and handoff contracts and every consumer, so it needs its own versioned change. Until then a discovery run is reported as an orchestrator-run probe (`references/script-execution.md`).
+- **Deeper per-artifact checklists.** The sources for specification, plan and Jira review are mostly "not retrieved" above, and the repository rule requires an evidenced method before expert-judgment guidance grows. The lifecycle set also has about 2 words of budget left.
+- **Company-skill V1-format question.** Needs the user's answer; the creator description still says V1 skills.
+
+Known limit: a pass that resolves `lifecycle_reviewer_context` on C# material does not load `references/csharp-review.md` (no budget), so it relies on `lifecycle-verification.md` and general judgment. The C# eval states this.

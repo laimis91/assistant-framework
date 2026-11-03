@@ -2,7 +2,7 @@
 
 Default: review scripts statically. Audit stays read-only, so it stays static. Reviewer
 passes never execute; the orchestrator runs any execution. This reference states the
-user-approved exception to "installs retain explicit approval" in `SKILL.md` for fixture
+user-approved exception to "External operations retain approval" in `SKILL.md` for fixture
 runs only; everything else keeps that approval.
 
 Run a changed script without further approval only when all hold:

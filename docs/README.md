@@ -30,6 +30,15 @@ Skill-local contracts own exact serialized rules. Link to them rather than copyi
 
 Development plans, implementation sequences, journals and per-run evidence belong in local ignored task state, normally `.codex/`. The legacy `docs/plans/` directory is ignored for existing local work. Commit durable specifications under `docs/specs/`, together with selected provenance needed to understand them. Never promote a plan to a specification merely by renaming it. Reusable plan templates and synthetic test fixtures remain maintained framework source, rather than development plans for this repository.
 
+## Research notes
+
+Research and proposals that inform later work. They are not implemented behavior; verify against source before relying on them.
+
+| Document | Status and when to read |
+|---|---|
+| [Skill activation research, 2026-11-02](research/skill-activation-research-2026-11-02.md) | Proposal; only the installer Skills-bullet wording is implemented. Read before rewriting skill descriptions, adding activation evals or changing skill-routing instructions. |
+| [Review techniques catalog, 2026-10-28](research/review-techniques-catalog-2026-10-28.md) | Research input for `assistant-review` references. Read when extending review coverage. |
+
 ## Historical material
 
 These files retain dated context, not current capability, policy, approval or roadmap authority. Read them only for a relevant historical question.
