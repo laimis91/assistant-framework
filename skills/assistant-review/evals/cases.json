@@ -1396,14 +1396,96 @@
           ],
           "acceptable_severities": [
             "must-fix"
-          ],
-          "finding_markers": [
-            "unbalanced start marker makes the sed range delete user content to end of file"
           ]
         }
       ],
       "false_positive_markers": [
         "rewrite the whole installer",
+        "block merge because names are subjective",
+        "unrelated architectural rewrite"
+      ]
+    },
+    {
+      "id": "csharp-review-loads-csharp-reference-and-finds-async-defects",
+      "title": "C# change review applies the C# reference",
+      "category": "csharp_review",
+      "purpose": "Regression fixture (not proof of discrimination): checks that a review of a C# change from another developer loads the C# reference and reports blocking async and disposal defects.",
+      "prompt": "Review this small C# change from another developer. Excerpt: `public string Load(string id) { var client = new HttpClient(); return GetAsync(client, id).Result; } private async void Refresh() { await Task.Delay(10); throw new InvalidOperationException(); }`. Check it before merge.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
+        "The batch is small (scope_size small, two discovery passes: contract_and_test_oracle and runtime_lifecycle_and_failure_paths).",
+        "The reviewed material is C# source (*.cs)."
+      ],
+      "expected_behavior": [
+        "The pass using reviewer_context resolves references/csharp-review.md because the reviewed material includes C#; a pass using lifecycle_reviewer_context does not load it (no budget), so the response still applies general async and disposal judgment there.",
+        "Reports blocking on a task with Result as a deadlock and AggregateException risk.",
+        "Reports async void outside an event handler as unobservable and untestable failure.",
+        "Reports the HttpClient created per call and never disposed or reused."
+      ],
+      "pass_criteria": [
+        "The response cites the C# review reference or its disposal and async checks.",
+        "The response reports the blocking Result call and the async void method as defects.",
+        "The response reports the undisposed HttpClient.",
+        "Findings include Evidence, Impact, Recommendation, and Confidence."
+      ],
+      "fail_signals": [
+        "Treats the change as style only.",
+        "Does not mention async void or blocking on Result.",
+        "Only lists checklist categories without the code excerpt."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "async void",
+          "Result",
+          "deadlock",
+          "dispos",
+          "Evidence:",
+          "Impact:",
+          "Recommendation:",
+          "Confidence:"
+        ],
+        "forbidden_substrings": [
+          "async void is fine",
+          "blocking on Result is safe",
+          "no disposal concerns"
+        ]
+      },
+      "false_positive_budget": 1,
+      "seeded_defects": [
+        {
+          "id": "blocking-result-deadlock",
+          "description": "Blocking on a task's Result can deadlock under a synchronization context and wraps failures in AggregateException.",
+          "must_detect": true,
+          "detection_anchors": [
+            "Result"
+          ],
+          "evidence_anchors": [
+            "deadlock"
+          ],
+          "acceptable_severities": [
+            "must-fix",
+            "should-fix"
+          ]
+        },
+        {
+          "id": "async-void-hides-exception",
+          "description": "An async void method outside an event handler raises its exception on the synchronization context where callers cannot catch it.",
+          "must_detect": true,
+          "detection_anchors": [
+            "async void"
+          ],
+          "evidence_anchors": [
+            "event handler"
+          ],
+          "acceptable_severities": [
+            "must-fix",
+            "should-fix"
+          ]
+        }
+      ],
+      "false_positive_markers": [
+        "rewrite the whole class",
         "block merge because names are subjective",
         "unrelated architectural rewrite"
       ]
@@ -1482,9 +1564,6 @@
           "acceptable_severities": [
             "must-fix",
             "should-fix"
-          ],
-          "finding_markers": [
-            "temp-file-and-move rewrite does not preserve the original file mode"
           ]
         }
       ],

@@ -61,10 +61,15 @@ dispatch_context_bundles:
             condition: "agentic_loop_safety_review_required is true"
           - name: Architecture Decision Pack Review Checklist
             condition: "architecture_decision_pack_review_required is true"
+          - name: Document Review Checklist
+            condition: "material is a specification, plan, ticket or tests"
         exclusion: "Triggered only."
       - path: references/review-rubric.md
         sections: [all]
         condition: "medium/large scope or rubric_required"
+      - path: references/csharp-review.md
+        sections: [all]
+        condition: "reviewed material includes C# and the pass uses reviewer_context"
       - path: references/lifecycle-verification.md
         sections: [all]
         condition: "assigned_scope or coverage_obligations affect acquisition/readiness, active work, cancellation, collection/finalization, shutdown, owned resources, cleanup or retry"
