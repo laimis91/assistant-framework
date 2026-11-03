@@ -2,13 +2,13 @@
 
 ## Documentation maintenance
 
-Start repository work at [docs/README.md](docs/README.md), then load the task-specific guide, relevant [specification](docs/specs/README.md) and owning source. For features and relevant bug fixes, update affected durable specs and canonical guides in the same change, or report a concrete reason they remain accurate. Before handoff, check changed claims against source, verify changed links, and name the documentation updated. Add new durable documents to the owning index with explicit status. Keep development plans, task journals and per-run evidence in local Git-ignored state; commit durable requirements under `docs/specs/`. Historical plans and proposals do not establish implemented behavior.
+Start repository work at [docs/README.md](docs/README.md), then load the task guide, relevant [specification](docs/specs/README.md) and owning source. For features and relevant bug fixes, update affected durable specs and guides in the same change, or report why they remain accurate. Before handoff, check changed claims against source, verify changed links, and name the documentation updated. Index new durable documents with explicit status. Keep development plans, task journals and per-run evidence in local Git-ignored state; commit durable requirements under `docs/specs/`. Historical plans and proposals do not establish implemented behavior.
 
 ## Repository
 
-Assistant Framework is a framework repository, not an application. It installs skills, agents, rules, and tools for Claude Code, Codex, and Gemini CLI.
+Assistant Framework is a framework repository, not an application; it installs skills, agents, rules, and tools for Claude Code, Codex, and Gemini CLI.
 
-Root `skills/assistant-*` directories are the editable source of truth. See `README.md` for architecture and platform details. Skills route from their `SKILL.md` name and description. Subagent roles live in `agents/claude/*.md` and `agents/codex/*.toml`.
+Root `skills/assistant-*` directories are the editable source of truth. See `README.md` for architecture. Subagent roles live in `agents/claude/*.md` and `agents/codex/*.toml`.
 
 ## Workflow
 
@@ -16,7 +16,7 @@ Root `skills/assistant-*` directories are the editable source of truth. See `REA
 - Formal plan/code/closure/acceptance reviews use newly created independent agents with fresh context (Codex `fork_turns=none`); selected research lenses retain sibling-blind isolation.
 
 - Keep behavior-driving skill prose, contracts, evals, tests, and documentation aligned.
-- Before changing skills, read `docs/skill-contract-design-guide.md`; keep detailed contract rules there.
+- Before changing skills, read `docs/skill-contract-design-guide.md`, which holds detailed contract rules.
 - Run focused checks first, then the aggregate verification appropriate to the changed surface.
 - When proposing verification, identify the remaining acceptance claims, reusable evidence, and smallest checks needed.
 - Read `tools/progress/operating-guidance.md` for every activity, including when no skill matches.

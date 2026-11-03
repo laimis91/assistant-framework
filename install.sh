@@ -1107,7 +1107,7 @@ Read \`tools/progress/operating-guidance.md\` under $AGENTS_MD_GUIDANCE_HOME as 
 
 - When a skill's description matches the request, read its \`SKILL.md\` and follow it through to its handoff, loading only the references and contracts the current phase needs.
 - For ordinary repository changes, use assistant-workflow when that skill is installed; use assistant-clarify for unclear or tangled intent.
-- Do not skip a matched skill's gates, verification, or review to save time.
+- Do not skip a matched skill's gates, verification, or review to save time or because work is small. Direct implementation means no delegation, not no skill.
 
 ## Involving the user
 
