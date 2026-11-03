@@ -69,7 +69,7 @@ dispatch_context_bundles:
         condition: "medium/large scope or rubric_required"
       - path: references/csharp-review.md
         sections: [all]
-        condition: "reviewed material includes C# and the pass uses reviewer_context"
+        condition: "reviewed material includes C#"
       - path: references/lifecycle-verification.md
         sections: [all]
         condition: "assigned_scope or coverage_obligations affect acquisition/readiness, active work, cancellation, collection/finalization, shutdown, owned resources, cleanup or retry"

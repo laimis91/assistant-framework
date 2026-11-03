@@ -436,6 +436,6 @@ Not built, with the reason:
 - **Deeper per-artifact checklists.** The sources for specification, plan and Jira review are mostly "not retrieved" above, and the repository rule requires an evidenced method before expert-judgment guidance grows.
 - **Company-skill V1-format question.** Answered (most company skills are plain), built in PR 82: the creator reviews a plain `SKILL.md` alone.
 
-Known limit: a pass that resolves `lifecycle_reviewer_context` on C# material does not load `references/csharp-review.md`, so it relies on `lifecycle-verification.md` and general judgment. The C# eval states this.
+Resolved after the size limits were removed: `lifecycle_reviewer_context` now also loads `references/csharp-review.md` for C# material.
 
 Word-count limits (load-set `budget_words`, the standing-guidance and first-review word ceilings, the specialist entry cap, and the eval-promotion word caps) were removed in PR 82. The budget reasoning in the sections above records the constraints that applied when the note was written.
