@@ -1,6 +1,6 @@
 ---
 name: assistant-skill-creator
-description: "Create, update, or review skills (V1 or plain SKILL.md), or check registered upstream guidance read-only. Use for skill contracts, compliance, or authoring."
+description: "Create, update, assess, or review skills (V1 or a plain SKILL.md), or check registered upstream guidance read-only. Use for skill contracts, compliance, or authoring."
 requires:
   - assistant-verification
 ---
