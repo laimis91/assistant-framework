@@ -23,6 +23,10 @@
     {
       "user_request": "Review this skill and tell me what is wrong with its contracts and activation examples.",
       "should_activate": true
+    },
+    {
+      "user_request": "Review this company skill folder (just a SKILL.md) and tell me what is weak about its description and instructions.",
+      "should_activate": true
     }
   ],
   "recommended_use": [
@@ -844,6 +848,96 @@
           "comparison_required": false,
           "run_binding": null
         }
+      }
+    },
+    {
+      "id": "assess-plain-skill-skips-absent-contract-checks",
+      "title": "Assess a plain SKILL.md without V1-only checks",
+      "category": "plain_skill_assessment",
+      "purpose": "Regression fixture (not proof of discrimination): checks that a review of a plain skill with no contracts or evals judges the SKILL.md and does not report absent V1 files as defects.",
+      "prompt": "Review the company skill at ./invoice-helper (only a SKILL.md: frontmatter plus instructions). Description: 'Helps with invoices.' Body: 'Process invoices. Be careful.' Tell me what is wrong with it. Do not change it.",
+      "setup_context": [
+        "The assistant-skill-creator instructions are active.",
+        "The target has only SKILL.md; there is no contracts/, evals/ or index.",
+        "The user requests a read-only review."
+      ],
+      "expected_behavior": [
+        "Routes to assess and reads SKILL.md alone, reporting contract, handoff, on_missing, load-set and eval questions as not applicable.",
+        "Reports the vague description that gives no trigger or boundary and the unactionable body.",
+        "Does not report missing contracts or evals as defects and writes no files."
+      ],
+      "pass_criteria": [
+        "Findings are about the description and instructions.",
+        "Absent V1 files are reported as not applicable."
+      ],
+      "fail_signals": [
+        "Flags missing contracts, evals or on_missing actions as defects.",
+        "Writes or edits skill files."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "not applicable",
+          "description"
+        ],
+        "forbidden_substrings": [
+          "missing contracts is a defect",
+          "I created",
+          "I edited SKILL.md"
+        ],
+        "structured_json_assertions": [
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "operation_summary"
+            ]
+          },
+          {
+            "operator": "object_keys_exact",
+            "path": [
+              "evidence_assessment"
+            ],
+            "fields": [
+              "status",
+              "scope_and_evidence_refs",
+              "gaps_and_limitations",
+              "next_action"
+            ]
+          },
+          {
+            "operator": "one_of",
+            "path": [
+              "evidence_assessment",
+              "status"
+            ],
+            "expected_values": [
+              "planned",
+              "sufficient",
+              "insufficient",
+              "blocked"
+            ]
+          },
+          {
+            "operator": "array_type",
+            "path": [
+              "evidence_assessment",
+              "scope_and_evidence_refs"
+            ]
+          },
+          {
+            "operator": "array_type",
+            "path": [
+              "evidence_assessment",
+              "gaps_and_limitations"
+            ]
+          },
+          {
+            "operator": "nonempty_string",
+            "path": [
+              "evidence_assessment",
+              "next_action"
+            ]
+          }
+        ]
       }
     }
   ]

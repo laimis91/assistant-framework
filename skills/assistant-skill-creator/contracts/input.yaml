@@ -29,7 +29,7 @@ fields:
     required: conditional
     condition: "operation in [update, assess]"
     description: "Path to the existing skill to update or assess"
-    validation: "Resolve the named target before proposing changes; derive its current name, metadata, dependencies, description, and evals from the files"
+    validation: "Resolve the named target before proposing changes; derive its current name, metadata, dependencies, description, and any evals from the files"
     on_missing: ask
     ask_prompt: "Which existing skill should I inspect or update?"
 

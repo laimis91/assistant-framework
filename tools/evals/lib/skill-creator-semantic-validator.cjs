@@ -13,7 +13,8 @@ const outputOnlyCaseIds = [
   "skill-creator-requires-verified-distillation",
   "skill-contract-design-preserves-semantic-interface-types",
   "skill-save-requires-verified-distillation",
-  "loop-process-skill-applies-harness-patterns"
+  "loop-process-skill-applies-harness-patterns",
+  "assess-plain-skill-skips-absent-contract-checks"
 ];
 const nonblank = value => typeof value === "string" && value.trim().length > 0;
 const exactKeys = (value, keys) => value && typeof value === "object" && !Array.isArray(value)
