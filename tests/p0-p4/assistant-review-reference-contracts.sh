@@ -1987,9 +1987,9 @@ if ruby -ryaml -e '
   ref = bundle.fetch("worker_references").find { |r| r["path"] == guide }
   condition = "assigned_scope or coverage_obligations affect acquisition/readiness, active work, cancellation, collection/finalization, shutdown, owned resources, cleanup or retry"
   loop_text = File.read(ARGV.fetch(2))
-  valid = !ordinary.fetch("references").include?(guide) && ordinary.fetch("references").include?("references/csharp-review.md") && File.read(ARGV.fetch(3)).include?("\n## Document Review Checklist\n") && lifecycle.fetch("references") == ordinary.fetch("references") - ["references/csharp-review.md"] + [guide] &&
+  valid = !ordinary.fetch("references").include?(guide) && ordinary.fetch("references").include?("references/csharp-review.md") && File.read(ARGV.fetch(3)).include?("\n## Document Review Checklist\n") && lifecycle.fetch("references") == ordinary.fetch("references") + [guide] &&
         lifecycle.fetch("selectors").map { |x| x.reject { |key, _| key == "id" } } == ordinary.fetch("selectors").map { |x| x.reject { |key, _| key == "id" } } &&
-    ref && ref["condition"] == condition && bundle.fetch("worker_references").find { |r| r["path"] == "references/csharp-review.md" }.fetch("condition").include?("the pass uses reviewer_context") && bundle.fetch("worker_references").find { |r| r["path"] == "references/review-checklists.md" }.fetch("sections").any? { |x| x["name"] == "Document Review Checklist" } && loop_text.include?(condition) && loop_text.include?("condition worker references identically")
+    ref && ref["condition"] == condition && bundle.fetch("worker_references").find { |r| r["path"] == "references/csharp-review.md" }.fetch("condition") == "reviewed material includes C#" && bundle.fetch("worker_references").find { |r| r["path"] == "references/review-checklists.md" }.fetch("sections").any? { |x| x["name"] == "Document Review Checklist" } && loop_text.include?(condition) && loop_text.include?("condition worker references identically")
   exit valid ? 0 : 1
 ' "$review_index" "$review_handoffs" "$review_loop" "$review_checklists"; then pass; else fail "review lifecycle load set or worker condition diverged"; fi
 
