@@ -291,6 +291,15 @@ model, so each batch needs authorization for its exact call count and cost. They
 need a macOS keychain item for the service `deepseek-api-key` and a config
 directory at `~/.claude-deepseek`.
 
+`suite.py validate` rejects cases that contain identifying paths, secrets or
+the running user's home path. It does not match a bare username, which can be an
+ordinary word such as `root`. To reject names as well, set
+`SKILL_ACTIVATION_PRIVATE_TERMS` to a comma-separated list:
+
+```bash
+SKILL_ACTIVATION_PRIVATE_TERMS="name,handle" tools/evals/skill-activation/suite.py validate
+```
+
 Generate an arm. `--stubs 40` gives the crowded listing condition, and
 `--descriptions FILE` applies a candidate to the generated copy only:
 

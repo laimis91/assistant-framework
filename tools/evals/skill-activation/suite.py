@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import itertools
 import json
+import os
 import re
 import shutil
 import sys
@@ -40,8 +41,24 @@ PHASED_SKILLS = {
     "assistant-workflow": DIMENSIONS["phase"],
     "assistant-skill-creator": ("new", "approval", "mid_build", "review_feedback", "compaction"),
 }
-PRIVATE_TEXT = re.compile(
-    rf"/Users/|/home/[a-z]|gmail\.com|sk-[A-Za-z0-9]{{8}}|ghp_[A-Za-z0-9]{{8}}|BEGIN [A-Z ]*PRIVATE KEY|\b{re.escape(Path.home().name)}\b", re.IGNORECASE)
+PRIVATE_TERMS_ENV = "SKILL_ACTIVATION_PRIVATE_TERMS"
+
+
+def private_text(home=None, terms=None):
+    """Match identifying paths and secrets, the running user's home path, and any comma-separated terms the caller names.
+
+    A bare username is not matched by default: it can be an ordinary word, such as root or runner.
+    """
+    home = str(Path.home() if home is None else home).rstrip("/")
+    terms = os.environ.get(PRIVATE_TERMS_ENV, "") if terms is None else terms
+    parts = [r"/Users/|/home/[a-z]|gmail\.com|(?<![\w-])sk-[A-Za-z0-9]{8}|ghp_[A-Za-z0-9]{8}|BEGIN [A-Z ]*PRIVATE KEY"]
+    if home:
+        parts.append(rf"{re.escape(home)}(?![\w.-])")
+    parts += [rf"(?<!\w){re.escape(term.strip())}(?!\w)" for term in terms.split(",") if term.strip()]
+    return re.compile("|".join(parts), re.IGNORECASE)
+
+
+PRIVATE_TEXT = private_text()
 LIMITS = {"max_turns": 8, "timeout_seconds": 300, "allowed_tools": ["Read", "Glob", "Grep", "Skill", "Agent", "TodoWrite", "Edit", "Write"]}
 SESSION = "11111111-1111-4111-8111-111111111111"
 STAMP = "2026-11-03T10:00:00.000Z"

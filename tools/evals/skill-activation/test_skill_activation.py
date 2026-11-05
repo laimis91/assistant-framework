@@ -520,6 +520,18 @@ class Suite(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(facts["uncovered_pairs"], 0)
 
+    def test_committed_suite_is_valid_when_the_home_name_is_an_ordinary_word(self):
+        for home in ("/root", "/home/runner"):
+            with self.subTest(home=home), mock.patch.object(suite, "PRIVATE_TEXT", suite.private_text(home, "")):
+                self.assertEqual(suite.validate_all()[0], [])
+
+    def test_private_text_matches_the_home_path_and_named_terms_only(self):
+        pattern = suite.private_text("/root", "alice, Example Corp, @bob")
+        for text in ("see /root/.ssh", "cd /root", "ask Alice", "from example corp", "ping @bob now", "/Users/x", "key sk-abcdefgh1234"):
+            self.assertTrue(pattern.search(text), text)
+        for text in ("find the root cause", "/rootfs/bin", "alicetown", "the test runner", "a risk-assessment step"):
+            self.assertIsNone(pattern.search(text), text)
+
     def test_routing_data_matches_the_spec_table(self):
         routing = suite.load_routing()
         self.assertEqual(suite.routing_problems(routing), [])
