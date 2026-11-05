@@ -1,6 +1,6 @@
 ---
 name: assistant-skill-creator
-description: "Create, update, assess, or review skills (V1 or a plain SKILL.md), or check registered upstream guidance read-only. Use for skill contracts, compliance, or authoring."
+description: "Creates, updates, assesses, or reviews skills (V1 or a plain SKILL.md), or checks registered upstream guidance read-only. Use for skill contracts, compliance, or authoring, and before any edit to a SKILL.md, activation case, or skill eval. Delivering a skill change in a repository also needs assistant-workflow and assistant-verification."
 requires:
   - assistant-verification
 ---
@@ -84,6 +84,11 @@ For actual controller/review/QA loops, load `harness_design` and
 secrets, logs, and stale facts. Otherwise return a revision checklist.
 
 ## Validate and return
+
+When a skill change is delivered in a repository, this skill owns the skill's
+content, contracts and guide parity, and assistant-workflow owns the plan,
+approvals, verification, review and handoff. Load both before the first edit, in
+either order; neither replaces the other's gates.
 
 Follow the guide's metadata rules. Omitted update dependencies preserve canonical
 `requires`; explicit dependencies (including empty) replace/remove them. New

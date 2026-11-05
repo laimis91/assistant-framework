@@ -1,6 +1,6 @@
 ---
 name: assistant-security
-description: "Analyze threats, vulnerabilities, dependencies, and attack surfaces. Use for explicit security work or changes to auth, input, or sensitive data."
+description: "Analyzes threats, vulnerabilities, dependencies, and attack surfaces. Use for security work, and before changing auth, external input, secrets, sensitive data, persistence, network or shell calls, dependencies or config, or external integrations."
 ---
 
 # Analyze Security Risks

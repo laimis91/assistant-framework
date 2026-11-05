@@ -1,6 +1,6 @@
 ---
 name: assistant-research
-description: "Gather and synthesize source-backed information. Use for explicit research, topic investigation, current evidence, or requests to compare options."
+description: "Gathers and synthesizes source-backed information. Use for research, topic investigation, current evidence, or requests to compare options."
 ---
 
 # Research

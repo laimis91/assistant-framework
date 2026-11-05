@@ -1,0 +1,39 @@
+{
+  "_comment": "The routing oracle from docs/specs/skill-activation.md as data. A test keeps it equal to the spec's table.",
+  "body_directs": {
+    "assistant-workflow": ["assistant-review", "assistant-verification", "assistant-tdd", "assistant-clarify", "assistant-debugging", "assistant-security"],
+    "assistant-debugging": ["assistant-review", "assistant-verification", "assistant-tdd"],
+    "assistant-skill-creator": ["assistant-verification"]
+  },
+  "rows": {
+    "implement": {"situation": "Feature, fix, refactor or migration, including right after plan approval", "required": ["assistant-workflow", "assistant-verification"], "optional": ["assistant-tdd"], "forbidden": []},
+    "prepare": {"situation": "Technical preparation without implementing, including Architecture Pack preparation", "required": ["assistant-workflow"], "optional": ["assistant-verification", "assistant-thinking"], "forbidden": []},
+    "resume": {"situation": "Resume of task state, backlog item, or intended-change idea", "required": ["assistant-workflow"], "optional": ["assistant-clarify"], "forbidden": []},
+    "tdd": {"situation": "Tests-first request, project TDD rule, or workflow-selected TDD check", "required": ["assistant-tdd"], "optional": ["assistant-workflow", "assistant-verification"], "forbidden": []},
+    "debug_diagnose": {"situation": "Failure with an unknown cause, diagnosis only", "required": ["assistant-debugging"], "optional": [], "forbidden": []},
+    "debug_fix": {"situation": "Failure with an unknown cause, fix authorized", "required": ["assistant-debugging", "assistant-verification"], "optional": ["assistant-workflow", "assistant-tdd"], "forbidden": []},
+    "ci_known": {"situation": "CI fix or review comment with a known cause", "required": ["assistant-workflow", "assistant-verification"], "optional": [], "forbidden": []},
+    "create_pr": {"situation": "\"create pr\" with changes that never went through workflow", "required": ["assistant-workflow"], "optional": ["assistant-review", "assistant-verification"], "forbidden": []},
+    "skill_change": {"situation": "Change to `skills/**`, contracts or skill evals in this repository", "required": ["assistant-workflow", "assistant-skill-creator", "assistant-verification"], "optional": ["assistant-review"], "forbidden": []},
+    "skill_standalone": {"situation": "Create or update a standalone skill outside this repository's delivery", "required": ["assistant-skill-creator"], "optional": ["assistant-verification"], "forbidden": []},
+    "skill_assess": {"situation": "Assess or review a skill", "required": ["assistant-skill-creator"], "optional": [], "forbidden": ["assistant-review"]},
+    "skill_review_fix": {"situation": "Review and fix a skill in this repository", "required": ["assistant-skill-creator", "assistant-workflow", "assistant-verification"], "optional": [], "forbidden": []},
+    "skill_diff_review": {"situation": "Formal review of a delivered diff that touches skills", "required": ["assistant-review"], "optional": ["assistant-skill-creator"], "forbidden": []},
+    "skill_upstream": {"situation": "Check of registered upstream skill guidance", "required": ["assistant-skill-creator"], "optional": [], "forbidden": []},
+    "review": {"situation": "Review of code, spec, plan, tests, documents, Jira ticket or refinement material", "required": ["assistant-review"], "optional": [], "forbidden": ["assistant-skill-creator"]},
+    "verify": {"situation": "Selecting checks or judging evidence, as its own request", "required": ["assistant-verification"], "optional": [], "forbidden": ["assistant-tdd"]},
+    "ci_audit": {"situation": "Weak, slow or false-passing CI and tests", "required": ["assistant-ci-audit"], "optional": [], "forbidden": ["assistant-debugging"]},
+    "research": {"situation": "Source-backed research or option comparison", "required": ["assistant-research"], "optional": [], "forbidden": []},
+    "security_change": {"situation": "Change touching auth, external input, secrets, sensitive data, persistence, network or shell calls, dependencies or config, or external integrations", "required": ["assistant-workflow", "assistant-verification", "assistant-security"], "optional": ["assistant-tdd"], "forbidden": []},
+    "security_audit": {"situation": "Threat model, vulnerability audit, dependency audit or attack-surface analysis", "required": ["assistant-security"], "optional": [], "forbidden": []},
+    "clarify": {"situation": "Request whose intent is still unresolved after inspection", "required": ["assistant-clarify"], "optional": [], "forbidden": []},
+    "thinking": {"situation": "Architecture trade-off or stress test", "required": ["assistant-thinking"], "optional": [], "forbidden": []},
+    "ideate": {"situation": "Generating and ranking options", "required": ["assistant-ideate"], "optional": [], "forbidden": []},
+    "docs": {"situation": "Documentation work", "required": ["assistant-docs"], "optional": ["assistant-workflow"], "forbidden": []},
+    "diagrams": {"situation": "Diagram request", "required": ["assistant-diagrams"], "optional": ["assistant-workflow"], "forbidden": []},
+    "onboard": {"situation": "Unfamiliar codebase", "required": ["assistant-onboard"], "optional": [], "forbidden": []},
+    "telos": {"situation": "Purpose, mission or goals", "required": ["assistant-telos"], "optional": [], "forbidden": []},
+    "none": {"situation": "Narrow question, or running an existing test command", "required": [], "optional": [], "forbidden": "*"},
+    "typo": {"situation": "One-word typo", "required": [], "optional": ["assistant-workflow"], "forbidden": []}
+  }
+}

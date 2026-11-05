@@ -36,7 +36,7 @@ Research and proposals that inform later work. They are not implemented behavior
 
 | Document | Status and when to read |
 |---|---|
-| [Skill activation research, 2026-11-02](research/skill-activation-research-2026-11-02.md) | Proposal; only the installer Skills-bullet wording is implemented. Read before rewriting skill descriptions, adding activation evals or changing skill-routing instructions. |
+| [Skill activation research, 2026-11-02](research/skill-activation-research-2026-11-02.md) | Research note; the adopted requirements and measured results are in the [specification](specs/skill-activation.md). Read before rewriting skill descriptions, adding activation evals or changing skill-routing instructions. |
 | [Review techniques catalog, 2026-10-28](research/review-techniques-catalog-2026-10-28.md) | Research input for `assistant-review` references. Read when extending review coverage. |
 
 ## Historical material

@@ -4,6 +4,8 @@ Date: 2026-11-02. Status: **research and proposal; one wording change implemente
 session, a read of the repository's skill descriptions and eval fixtures, and a small amount of web research. Nothing
 here establishes implemented behavior or a measured benefit; see [Limits](#limits).
 
+Requirements derived from this note live in the [skill activation specification](../specs/skill-activation.md). Where the two differ, the specification is current. It corrects two points below: "explicit" was added deliberately by PR #40, so it is not a blanket removal (section 6), and a one-word typo is not a settled no-skill case (section 5).
+
 Motivating case: the local session titled "Review process improvements" (work on PRs 77, 79 and 80). The assistant
 skipped several skills that apply to the repository's work.
 
@@ -205,7 +207,7 @@ P0-P5 and both PRs belonged under `assistant-workflow` with `assistant-skill-cre
 - The transcript was read through user turns, Skill and Agent calls, and two Q&A exchanges, not in full.
 - Activation figures come from one informal test and one secondary write-up. No test was run here.
 - No description was rewritten, no eval was run, and no skill description was rewritten.
-- Whether Claude Code truncates or budgets long skill descriptions in the listing was not checked.
+- Claude Code's listing limits were not checked when this note was written; the specification records them.
 - Hook behavior in the desktop app and in headless mode was not tested.
 
 ## Suggested order for implementation

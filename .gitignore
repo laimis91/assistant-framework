@@ -13,5 +13,8 @@ Assistant2/
 # codex journal
 .codex/
 
+# Python bytecode
+__pycache__/
+
 # Local development plans and execution evidence; durable specs live in docs/specs.
 /docs/plans/

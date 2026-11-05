@@ -53,6 +53,9 @@ jobs:
           P0P4_EXCLUDED_SUITES: skill-eval-contracts.sh progressive-discovery-contracts.sh workflow-architecture-completion-contracts.sh codex-behavioral-eval-contracts.sh
         run: ./tests/test-p0-p4-contracts.sh
 
+      - name: Run skill-activation tool tests
+        run: ./tests/test-skill-activation-tools.sh
+
       - name: Validate skills
         run: tools/skills/validate-skills.sh
 

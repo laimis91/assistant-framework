@@ -61,6 +61,16 @@ one normalized-disjoint nearby negative. Schema `1.0` custom/local fixtures may
 omit them; validate them when present and reject other schema versions. Derive
 adequate examples from an existing description and evals before asking for gaps.
 
+A skill's body loads only after activation, so native activation depends on its
+description. State what the skill does and when to use it, in third person, with
+the key use case first, and keep every trigger in `description`. Add state and
+target cues where work is easy to miss, such as review-comment, CI-fix or
+skill-file work. Change a guard word such as "explicit" per skill with a recorded
+reason, not across the board. Before changing a first-class description, read
+`docs/specs/skill-activation.md`: an existing clause or positive activation case
+stays mapped to the new description, and any removal needs an approved reason.
+Offline checks do not show that a description activates.
+
 ## Optional contracts
 
 Supplied contracts remain authoritative at their actual boundary. Load only the

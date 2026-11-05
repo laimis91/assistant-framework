@@ -280,3 +280,48 @@ catch the planted issue?" instead of only "did the response mention the expected
 headings?" Together they are the current Level 4 per-skill conformance
 foundation for first-class assistant skills, with local-only skill experiments
 remaining opt-in through `--include-local`.
+
+## Native activation trials
+
+`tools/evals/skill-activation/` measures whether a description activates its skill
+before work starts, in stateful single-agent trials. Cases are in its `cases/`
+directory, generated plugins and results stay in `.codex/skill-activation/`, and
+`docs/specs/skill-activation.md` owns the rules and gates. Real trials call a
+model, so each batch needs authorization for its exact call count and cost. They
+need a macOS keychain item for the service `deepseek-api-key` and a config
+directory at `~/.claude-deepseek`.
+
+Generate an arm. `--stubs 40` gives the crowded listing condition, and
+`--descriptions FILE` applies a candidate to the generated copy only:
+
+```bash
+tools/evals/skill-activation/generate_plugin.py --output .codex/skill-activation/plugins/current
+```
+
+See the plan. With `--authorized-calls 0` the runner prints the plan, refuses and
+exits 2, so it makes no call:
+
+```bash
+tools/evals/skill-activation/run_trials.py --batch dev-1 --arm current --set development --host-version 2.1.317 --repeats 3 --max-cost-usd 60 --authorized-calls 0
+```
+
+Run it. `--authorized-calls` must equal the plan's `calls`, and `--host-version`
+keeps every arm of a comparison on one installed host:
+
+```bash
+tools/evals/skill-activation/run_trials.py --batch dev-1 --arm current --set development --host-version 2.1.317 --repeats 3 --max-cost-usd 60 --authorized-calls 181 --run
+```
+
+Report. Existing `activation_cases` use `--set activation` with two baselines and
+a candidate, and the report then lists regressions:
+
+```bash
+tools/evals/skill-activation/report.py .codex/skill-activation/results/dev-1/results.jsonl
+```
+
+```bash
+tools/evals/skill-activation/report.py .codex/skill-activation/results/act-*/results.jsonl --baselines current,current-b --candidate c1
+```
+
+`tests/test-skill-activation-tools.sh` tests the generator, scorer, runner and
+report offline. It does not show that a description activates in a real model.
