@@ -6,6 +6,7 @@ Use specifications for durable requirements and design rationale. Current execut
 |---|---|---|
 | Canonical task packets | [Design baseline](conditional-task-packets/specification.md), [integration rationale](conditional-task-packets/main-integration-amendment.md), [preparation](conditional-task-packets/preparation.json), [source manifest](conditional-task-packets/source-manifest.json) | Historical preparation. Current protocol: [Workflow](../../skills/assistant-workflow/SKILL.md), its contracts and admission helper. |
 | Candidate search | [Requirements](candidate-search.md) | Historical requirements, with optional tooling proposals. Current owners are linked in the specification. |
+| Skill activation | [Requirements](skill-activation.md), [research](../research/skill-activation-research-2026-11-02.md) | Implemented for `deepseek-flash`, with candidate c1 adopted in `skills/`; see its Current state. Read before changing skill descriptions, activation evals or skill-routing instructions. Owners are named in the specification. |
 | Skill creator upstream sources | [Source manifest](assistant-skill-creator-refresh/source-manifest.json) | Frozen provenance from 2026-10-13, not a current freshness attestation. Current owner: [skill creator](../../skills/assistant-skill-creator/SKILL.md). |
 
 ## Maintaining specifications

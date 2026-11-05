@@ -1,6 +1,6 @@
 ---
 name: assistant-ci-audit
-description: "Audit CI and test suites for false passes, discovery gaps, stale fixtures, brittle or duplicate tests, and cost."
+description: "Audits CI and test suites for false passes, discovery gaps, stale fixtures, brittle or duplicate tests, and cost. Use when a suite is weak, slow, or hard to trust; not for fixing one failing test or CI run."
 ---
 
 # CI and Test Maintenance Audit

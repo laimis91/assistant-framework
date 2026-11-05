@@ -1,6 +1,6 @@
 ---
 name: assistant-review
-description: "Review code, fix actionable findings, and run one fresh re-review. Use for explicit code review or the workflow Review phase; QA runs only when required."
+description: "Reviews code and diffs, specs, plans, tests, documents, Jira tickets, and refinement material, fixes actionable findings, and runs one fresh re-review, or reports only in audit mode. Use for code review, C# pull requests, readiness checks on such material, and the workflow Review phase; QA runs only when required. Assessing a skill itself belongs to assistant-skill-creator; formal review of a delivered diff stays here."
 ---
 
 # Review

@@ -1,6 +1,6 @@
 ---
 name: assistant-verification
-description: "Analyze proportionate testing, validation, or evaluation for a change, or assess whether existing evidence is sufficient across code, skills, plugins, and non-code artifacts."
+description: "Analyzes and selects proportionate testing, validation, or evaluation for a change, or assesses whether existing evidence is sufficient across code, skills, plugins, and non-code artifacts. Use on request, and before the first edit of any non-trivial feature, fix, refactor, migration, or skill change, including after plan approval, review feedback, CI failures, or resuming, even when assistant-workflow or assistant-debugging has already loaded. Not for running an existing test command or tests-first requests (assistant-tdd)."
 ---
 
 # Verification Selection And Evidence Assessment

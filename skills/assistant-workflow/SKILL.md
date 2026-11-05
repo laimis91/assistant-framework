@@ -1,6 +1,6 @@
 ---
 name: assistant-workflow
-description: "Prepare, plan, build, or resume repository task state: feature/epic/story technical preparation, implementation, fixes, migrations, refactors, artifacts, backlog items, and intended-change ideas."
+description: "Runs repository changes end to end: prepare, plan, build, or resume repository task state for feature/epic/story technical preparation (including Architecture Packs), implementation, fixes, migrations, refactors, artifacts, backlog items, and intended-change ideas. Use before the first edit, commit, or PR on any turn that changes code, tests, specs, or skill files, even a terse one: plan approval, post-compaction continuation, review comments or findings, CI fixes, unprocessed work ready for a PR. Pairs with assistant-verification before editing."
 requires:
   - assistant-review
   - assistant-verification
@@ -98,6 +98,10 @@ or user request. Other updates use concise natural language.
 - Load [candidate search](references/candidate-search.md) for real alternatives,
   optimization uncertainty, repeated failure, or a requested pivot; load
   [harness control](references/harness-controller.md) only after its trigger.
+- For an edit to any file under a skill, including its contracts and evals, load
+  both this workflow and assistant-skill-creator before the first edit, in either
+  order. Skill-creator owns the skill's content, contracts and guide parity; this
+  workflow keeps the plan, approvals, verification, review and handoff.
 - Load assistant-security for auth, external input, secrets, persistence,
   network/shell calls, dependency/config changes, or external integrations.
 - Load [AI usage policy](references/ai-usage-policy.md) for external services,

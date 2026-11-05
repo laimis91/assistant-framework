@@ -8,6 +8,7 @@ Choose the guide for the evidence you need; load fixture payloads only for the s
 | Evaluate clarification from retained evidence | [Clarification evidence](clarification-evidence.md) | `tools/evals/lib/clarification-evidence.cjs` and frozen clarification oracle |
 | Import traces, run an authorized Codex comparison, or measure source context | [Codex trials](codex-trials.md) | Codex adapter, promotion finalizer and context-budget reporter |
 | Validate skill fixtures, activation observations and structured operators | [Per-skill fixtures](skill-fixtures.md) | `tools/evals/run-skill-evals.sh` and `tools/evals/lib/skill-eval-fixtures.sh` |
+| Measure native skill activation before work starts | [Per-skill fixtures](skill-fixtures.md#native-activation-trials) | `tools/evals/skill-activation/` |
 | Maintain research validator protections | [Research obligations](research-semantic-obligations.md) | Research semantic validator and its direct controls |
 
 Commands assume the source repository unless their guide explicitly describes an installed route. The installer copies this directory, including sibling guides and fixtures, to the provider's `docs/evals/`. Source-only helpers retain that limit. For Windows Codex, use configured `CODEX_HOME` for installed docs/tools as described in the skill contract guide.
