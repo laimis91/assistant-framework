@@ -22,6 +22,7 @@ Load only the mode reference needed:
 | Release notes | `changelog.md` |
 | Upgrade or migration guide | `migration.md` |
 | Code explanation | `explainer.md` |
+| Revise or edit existing prose | `editing-checklist.md` |
 
 - Back concrete claims with inspected sources. Do not invent features, issue numbers, versions, metrics, roadmap status, or examples. Use real examples or label illustrative ones. Mark unresolved claims for review, including placeholder or unverified text, instead of presenting them as fact.
 - Check changed claims against current source and verify documented commands or links when practical. Do not add an unrelated repository-wide freshness audit.

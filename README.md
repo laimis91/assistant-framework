@@ -257,7 +257,7 @@ Evidence-bounded code review: trivial/small light review uses one fresh pass plu
 Triggers on: review, fresh review, code review, review this, check the code
 
 ### assistant-docs
-Documentation generation and maintenance: API docs, architecture overview, README, changelog, migration guide, and code explanation. Checks source accuracy within the requested scope.
+Documentation generation and maintenance: API docs, architecture overview, README, changelog, migration guide, and code explanation. Checks source accuracy within the requested scope. Prose edits follow an editing checklist that preserves meaning, technical terms and the existing voice.
 
 Triggers on: document, write docs, update readme, changelog, API docs, architecture doc
 
@@ -525,6 +525,7 @@ skills/
     api-docs.md                    <- API surface documentation
     architecture.md                <- System overview generation
     readme-gen.md                  <- README generation from code analysis
+    editing-checklist.md           <- Prose editing: meaning, terms and voice preserved
     changelog.md                   <- Release notes from git history
     migration.md                   <- Breaking change migration guides
     explainer.md                   <- Code explanation for learning

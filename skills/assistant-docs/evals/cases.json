@@ -612,6 +612,43 @@
           "has been verified on Windows"
         ]
       }
+    },
+    {
+      "id": "docs-editing-preserves-meaning-and-terms",
+      "title": "Prose edit preserves meaning and technical terms",
+      "category": "prose_editing",
+      "purpose": "Checks that editing existing prose removes unsupported significance claims while preserving meaning, accurate technical terms and the document's voice, and shows the change as a diff.",
+      "prompt": "Tighten this README paragraph: \"The sync command plays a pivotal role in the evolving landscape of our tooling. It is idempotent, so running it twice leaves the target unchanged.\"",
+      "setup_context": [
+        "The assistant-docs skill instructions are active.",
+        "The README uses a plain, second-person technical tone.",
+        "The sync command is idempotent according to its tests."
+      ],
+      "expected_behavior": [
+        "Removes the unsupported significance claim about a pivotal role in an evolving landscape.",
+        "Keeps the accurate technical term idempotent and the stated behaviour.",
+        "Matches the README's existing plain technical tone.",
+        "Shows the change as a diff or changed paragraph."
+      ],
+      "pass_criteria": [
+        "The revised text keeps idempotent and its meaning.",
+        "The significance claim is removed.",
+        "The change is shown as a diff or changed section."
+      ],
+      "fail_signals": [
+        "The revised text, outside removed-line diff markers, still says pivotal role or another unsupported significance claim.",
+        "Replaces idempotent with a looser word such as repeatable and changes the meaning.",
+        "Rejects or rewrites the paragraph solely because it contains a listed word."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "idempotent"
+        ],
+        "forbidden_substrings": [
+          "rejected because it contains the word",
+          "it is now repeatable"
+        ]
+      }
     }
   ]
 }

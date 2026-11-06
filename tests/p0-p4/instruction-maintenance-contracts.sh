@@ -97,4 +97,34 @@ else
     fail "$(IFS='; '; echo "${onboard_failures[*]}")"
 fi
 
+test_start "docs checklist has no blacklist gate and cites request alignment"
+docs_root="$FRAMEWORK_DIR/skills/assistant-docs/SKILL.md"
+docs_checklist="$FRAMEWORK_DIR/skills/assistant-docs/editing-checklist.md"
+docs_checklist_failures=()
+if [[ ! -f "$docs_checklist" ]]; then
+    docs_checklist_failures+=("skills/assistant-docs/editing-checklist.md missing")
+else
+    if ! grep -Eq '^\| Revise or edit existing prose \| `editing-checklist\.md` \|$' "$docs_root"; then
+        docs_checklist_failures+=("Docs mode table does not route prose editing to editing-checklist.md")
+    fi
+    if ! grep -Fq 'operating-guidance.md#request-alignment' "$docs_checklist"; then
+        docs_checklist_failures+=("editing-checklist.md does not cite request alignment")
+    fi
+    for lead in '**Requested outcome**' '**Direct answer**' '**Material support**' '**Coverage check**' '**Relevance check**'; do
+        if grep -Fq -- "$lead" "$docs_checklist"; then
+            docs_checklist_failures+=("editing-checklist.md restates $lead")
+        fi
+    done
+    for gate in 'must not contain' 'banned words' 'banned word' 'forbidden words'; do
+        if p0p4_contains_text_ci "$docs_checklist" "$gate"; then
+            docs_checklist_failures+=("editing-checklist.md has a word-blacklist gate: $gate")
+        fi
+    done
+fi
+if [[ "${#docs_checklist_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "$(IFS='; '; echo "${docs_checklist_failures[*]}")"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"
