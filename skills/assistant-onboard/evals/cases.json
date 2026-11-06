@@ -172,6 +172,47 @@
           "no unknowns without inspection"
         ]
       }
+    },
+    {
+      "id": "onboard-size-inventory-uses-local-tools",
+      "title": "Size inventory uses local tools and stays an orientation fact",
+      "category": "systematic_onboarding",
+      "purpose": "Checks that a size or language inventory uses git-tracked files and counters already on PATH, excludes dependency and generated directories, and treats counts as orientation facts rather than quality.",
+      "prompt": "How big is this repository and which languages does it use? Give me line counts per language.",
+      "setup_context": [
+        "The assistant-onboard skill instructions are active.",
+        "The repository is a Git checkout with node_modules/, dist/ and vendor/ directories.",
+        "No code counter such as scc, tokei or cloc is installed on PATH.",
+        "The user has not authorized installing tools."
+      ],
+      "expected_behavior": [
+        "Enumerates files with git ls-files so ignored files are excluded.",
+        "Excludes dependency, build, vendored and generated directories explicitly.",
+        "Falls back to grouping git ls-files output by extension because no counter is on PATH, and installs nothing.",
+        "Reports Markdown and instruction files separately from code.",
+        "States that the counts are orientation facts, not a quality judgement."
+      ],
+      "pass_criteria": [
+        "Uses git ls-files.",
+        "Installs nothing and asks before any installation.",
+        "Separates documentation or instruction files from code.",
+        "Does not present size as quality."
+      ],
+      "fail_signals": [
+        "Recommends installing a package, including with --break-system-packages.",
+        "Treats a file or line count as a quality judgement.",
+        "Counts node_modules, dist or vendor content as project code.",
+        "Claims full coverage from a sample."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "git ls-files"
+        ],
+        "forbidden_substrings": [
+          "counted node_modules as project code",
+          "higher quality because it has more lines"
+        ]
+      }
     }
   ]
 }

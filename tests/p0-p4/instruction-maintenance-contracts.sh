@@ -69,4 +69,32 @@ else
     fail "$(IFS='; '; echo "${guard_link_failures[*]}")"
 fi
 
+test_start "onboard recipe installs nothing and scores nothing"
+onboard_root="$FRAMEWORK_DIR/skills/assistant-onboard/SKILL.md"
+onboard_inventory="$FRAMEWORK_DIR/skills/assistant-onboard/inventory.md"
+onboard_failures=()
+if [[ ! -f "$onboard_inventory" ]]; then
+    onboard_failures+=("skills/assistant-onboard/inventory.md missing")
+else
+    if ! grep -Eq '\(inventory\.md\)' "$onboard_root" || ! p0p4_contains_text_ci "$onboard_root" 'Load [inventory.md](inventory.md) only when'; then
+        onboard_failures+=("SKILL.md does not load inventory.md conditionally")
+    fi
+    if ! grep -Fq 'git ls-files' "$onboard_inventory"; then
+        onboard_failures+=("inventory.md does not enumerate with git ls-files")
+    fi
+    for installer_command in 'pip install' '--break-system-packages' 'npm install' 'brew install'; do
+        if grep -Fq -- "$installer_command" "$onboard_inventory"; then
+            onboard_failures+=("inventory.md names installer command: $installer_command")
+        fi
+    done
+    if ! p0p4_contains_text_ci "$onboard_inventory" 'counts are orientation facts, not quality'; then
+        onboard_failures+=("inventory.md does not state that counts are not quality")
+    fi
+fi
+if [[ "${#onboard_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "$(IFS='; '; echo "${onboard_failures[*]}")"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -267,7 +267,7 @@ Creates, updates, or assesses concise skills. Adds contracts when an actual cons
 Triggers on: create skill, new skill, add contracts, skill contracts, scaffold skill
 
 ### assistant-onboard
-Maps a codebase to the requested depth: entry points, responsibilities, commands, conventions, relevant risks, and coverage gaps. Persists orientation only when authorized.
+Maps a codebase to the requested depth: entry points, responsibilities, commands, conventions, relevant risks, and coverage gaps. An optional size/language inventory uses `git ls-files` and counters already installed, and reports counts as orientation facts, not quality. Persists orientation only when authorized.
 
 Triggers on: learn this codebase, onboard, get familiar with, map this project
 
@@ -534,6 +534,7 @@ skills/
 
   assistant-onboard/
     SKILL.md                       <- Scoped codebase orientation
+    inventory.md                   <- Optional size/language inventory with local tools
 
   assistant-ideate/
     SKILL.md                       <- Diverge-converge-refine pipeline
