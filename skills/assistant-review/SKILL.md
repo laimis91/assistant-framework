@@ -91,12 +91,13 @@ authorized fixes and validation, then fresh round 2. Round 3+ requires changed
 files, unresolved findings, validation failure, regression/drift, or changed
 hypothesis; score alone is insufficient.
 Load [score-tracking.md](references/score-tracking.md) only at a structured
-boundary, where Review contracts load the `current_round` EXIT gate or the
-`completion` `rubric_summary` artifact: workflow-composed review, a task journal
-or persisted result, a QA consumer, or a requested serialized result. A
-standalone review returned only to the user is not a structured boundary; it
-reports findings, coverage and limits, with reviewer rubric dimensions as
-returned and no score progression or drift labels.
+boundary for score bookkeeping, where Review contracts load the `current_round`
+EXIT gate or the `completion` `rubric_summary` artifact: workflow-composed
+review, a task journal or persisted result, a QA consumer, or a requested
+serialized result. A standalone review returned only to the user is not a
+structured boundary for score bookkeeping: it still loads its handoff and
+`return_validation` selectors, and reports findings, coverage and limits, with
+reviewer rubric dimensions as returned and no score progression or drift labels.
 Require a recorded pivot/restart decision before another pass only for evidenced
 shared semantic guard stagnation or an applicable material change. Scores alone
 never require a decision, evaluator reset or pause.
@@ -115,9 +116,9 @@ Missing work/findings remains `HAS_REMAINING_ITEMS`.
 
 Report scope, findings/fixes, verification and limits. No findings means
 "No material findings within the reviewed scope and available evidence";
-`CLEAN` is an enum, not proof. At structured boundaries, retain
-`contracts/output.yaml`, canonical reviewed scope, batch/round evidence, required
-checks and QA. `CLEAN`/`ISSUES_FIXED` require complete current coverage and no
+`CLEAN` is an enum, not proof. Retain canonical reviewed scope, batch/round
+evidence, required checks and QA; at structured boundaries also retain
+`contracts/output.yaml`. `CLEAN`/`ISSUES_FIXED` require complete current coverage and no
 remaining must-fix/should-fix items; failed/blocked passes never qualify.
 Omit empty checklists and internal protocol from human summaries.
 

@@ -209,8 +209,7 @@
           "git ls-files"
         ],
         "forbidden_substrings": [
-          "counted node_modules as project code",
-          "higher quality because it has more lines"
+          "Successfully installed"
         ]
       }
     }

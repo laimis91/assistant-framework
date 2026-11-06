@@ -2021,8 +2021,9 @@ score_boundary_failures=()
 review_skill="$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"
 score_tracking_line="$(grep -F 'references/score-tracking.md' "$review_skill" || true)"
 if [[ -z "$score_tracking_line" ]] \
-    || ! p0p4_contains_text "$review_skill" 'structured boundary' \
-    || ! p0p4_contains_text "$review_skill" 'A standalone review returned only to the user is not a structured boundary'; then
+    || [[ "$score_tracking_line" != *'only at a structured'* ]] \
+    || ! p0p4_contains_text "$review_skill" 'only at a structured boundary for score bookkeeping' \
+    || ! p0p4_contains_text "$review_skill" 'A standalone review returned only to the user is not a structured boundary for score bookkeeping'; then
     score_boundary_failures+=("assistant-review loads score bookkeeping unconditionally")
 fi
 if grep -Fq 'Medium+ score diagnostics use' "$review_skill"; then
@@ -2044,7 +2045,10 @@ for contract in index input output handoffs phase-gates; do
         score_boundary_failures+=("contracts/$contract.yaml no longer declares schema 10.0")
     fi
 done
-if jq -e '.cases[] | select(.id == "medium-review-requires-rubric") | .expected_behavior[] | select(contains("Includes score progression"))' \
+if ! jq -e '.cases[] | select(.id == "medium-review-requires-rubric")' \
+    "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >/dev/null; then
+    score_boundary_failures+=("medium-review-requires-rubric case is missing")
+elif jq -e '.cases[] | select(.id == "medium-review-requires-rubric") | .expected_behavior[] | select(contains("Includes score progression"))' \
     "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >/dev/null; then
     score_boundary_failures+=("medium-review-requires-rubric still expects score progression for a standalone review")
 fi

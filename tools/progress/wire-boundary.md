@@ -136,7 +136,7 @@ history tail and retain policy sources and unresolved oscillation identities.
 
 ## Migration
 
-Workflow v16, review v10 and five-lens research v5 consume this policy.
+Workflow v16, review v10 and five-lens research v5 consume the common stagnation policy.
 Historical records retain their original protocol labels; persisted migration
 and reconstruction details follow in this section.
 
