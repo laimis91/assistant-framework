@@ -100,7 +100,7 @@ never require a decision, evaluator reset or pause.
 For review_subject plan or acceptance, load request_plan (`request_plan_reconciliation`).
 One fresh `plan_coverage_and_feasibility` plan-review pass checks original requirements, decisions,
 feasibility/order, oracles, completion allocation and avoidable work. Corrections receive fresh closure review before
-approval; already-running approved plans retain authority. Final acceptance review solely owns request/plan/delivery reconciliation, including task-wide
+approval; already-running approved plans retain authority. Final acceptance review solely owns request/plan/delivery reconciliation, using the common guide's [coverage check](../../tools/progress/operating-guidance.md#request-alignment), including task-wide
 work and spec obligations: missing criteria, extra scope, changed-files or verification mismatch.
 Missing work/findings remains `HAS_REMAINING_ITEMS`.
 

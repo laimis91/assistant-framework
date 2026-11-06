@@ -1073,6 +1073,49 @@
           "confidence without evidence"
         ]
       }
+    },
+    {
+      "id": "research-answers-each-requested-outcome-first",
+      "title": "Research answers each requested outcome first",
+      "category": "request_alignment",
+      "purpose": "Checks that research output leads with a locatable direct answer per requested outcome, keeps broad investigation as labelled additional findings where material, and keeps limitations next to the claims they qualify.",
+      "prompt": "Compare three caching options for our build pipeline (local disk cache, shared remote cache, no cache). For each option give me the benefit, the cost, and then a recommendation.",
+      "setup_context": [
+        "The assistant-research skill instructions are active.",
+        "The requested outcomes are each option's benefit, each option's cost, and one recommendation.",
+        "Sources discuss cache-coordination overhead at length; it changes the remote-cache recommendation only for small teams.",
+        "No measured build-time savings for this pipeline are supplied; published figures come from other projects."
+      ],
+      "expected_behavior": [
+        "Presents one row or section per option with its benefit and cost before the supporting analysis.",
+        "States a recommendation as a direct answer.",
+        "Still investigates coordination overhead and reports it as an additional finding where it changes the recommendation.",
+        "Keeps the limitation that no measured savings exist for this pipeline next to any savings claim.",
+        "Keeps claim-level citations next to the claims they support."
+      ],
+      "pass_criteria": [
+        "Each option's benefit and cost can be found without reading unrelated sections.",
+        "A recommendation is stated.",
+        "The overhead finding is retained where it changes the recommendation and is labelled as additional or supporting.",
+        "Savings are not presented as measured for this pipeline."
+      ],
+      "fail_signals": [
+        "Leads with the overhead analysis and gives no locatable per-option answer.",
+        "Drops the overhead investigation because it was not requested, so the recommendation loses its cost rationale.",
+        "Drops the limitation that no measured savings are available.",
+        "Presents savings as measured for this pipeline when the prompt supplies no measurement."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "recommendation",
+          "benefit",
+          "cost"
+        ],
+        "forbidden_substrings": [
+          "overhead is out of scope",
+          "we measured a saving of"
+        ]
+      }
     }
   ]
 }

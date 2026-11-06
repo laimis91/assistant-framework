@@ -37813,6 +37813,123 @@
           }
         ]
       }
+    },
+    {
+      "id": "handoff-answers-other-callers-question",
+      "title": "Handoff answers the other-callers question",
+      "category": "request_alignment",
+      "purpose": "Checks that the Workflow handoff gives a direct answer, with evidence, to each question the user asked, not only the change description.",
+      "prompt": "Fix the null check in parseOrder and tell me whether other callers have the same bug.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "parseOrder dereferences order.customer without a null check; a regression test reproduces the failure.",
+        "One other caller, importLegacyOrders, passes the same unchecked value; a third caller validates it first.",
+        "The fix and its test pass."
+      ],
+      "expected_behavior": [
+        "States the fix and its verification.",
+        "Gives a direct answer that one other caller, importLegacyOrders, has the same exposure, with file evidence.",
+        "Notes that the third caller is not affected and why.",
+        "Does not expand the fix to other callers without saying it is a proposal or asking."
+      ],
+      "pass_criteria": [
+        "The handoff answers the other-callers question directly with evidence.",
+        "The fix and its verification are reported."
+      ],
+      "fail_signals": [
+        "The handoff describes the fix and test results only.",
+        "The other-callers answer is buried in analysis or must be inferred.",
+        "Other callers are silently changed as if requested."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "importLegacyOrders",
+          "null check"
+        ],
+        "forbidden_substrings": [
+          "no other callers were checked",
+          "other callers are out of scope"
+        ]
+      }
+    },
+    {
+      "id": "ticket-criteria-cover-requested-behaviours",
+      "title": "Ticket criteria cover every requested behaviour",
+      "category": "request_alignment",
+      "purpose": "Checks that ticket acceptance criteria cover each requested behaviour and that an unrequested item is marked as a proposal, not a criterion.",
+      "prompt": "Draft a Jira ticket from this brief: users can export reports as CSV, the export respects the current filters, and large exports are emailed instead of downloaded. Do not change the PDF export.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active and the request is ticket preparation only.",
+        "The three requested behaviours are CSV export, filter-respecting export and emailed large exports; PDF export is explicitly excluded.",
+        "An export audit log would be useful but was not requested."
+      ],
+      "expected_behavior": [
+        "Writes acceptance criteria covering CSV export, filter-respecting export and emailed large exports.",
+        "States the PDF exclusion.",
+        "Marks the audit log as a proposal, not an acceptance criterion.",
+        "Does not write to Jira without approval."
+      ],
+      "pass_criteria": [
+        "Each of the three requested behaviours has an acceptance criterion.",
+        "The unrequested audit log is not an acceptance criterion."
+      ],
+      "fail_signals": [
+        "One requested behaviour has no acceptance criterion.",
+        "The audit log appears as an acceptance criterion.",
+        "The PDF exclusion is dropped."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "CSV",
+          "filter",
+          "email",
+          "PDF",
+          "proposal"
+        ],
+        "forbidden_substrings": [
+          "Acceptance criterion: audit log",
+          "ticket created in Jira"
+        ]
+      }
+    },
+    {
+      "id": "spec-coverage-check-adds-missing-open-question",
+      "title": "Spec coverage check adds a missing open question",
+      "category": "request_alignment",
+      "purpose": "Checks that a specification answers each open question the request raised or lists it as an unresolved decision after the coverage check.",
+      "prompt": "Write a short spec for adding per-tenant rate limits. Settle whether limits apply to internal service accounts, and whether exceeded requests are queued or rejected. Existing API clients must keep working.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active and the request is preparation only.",
+        "The request raises two open questions: internal service accounts, and queue versus reject.",
+        "A first draft covered queue versus reject and the compatibility constraint but omitted the service-account question."
+      ],
+      "expected_behavior": [
+        "Answers the service-account question or lists it as an unresolved decision with what is needed to decide.",
+        "Answers queue versus reject or lists it as unresolved.",
+        "Keeps the existing-client compatibility constraint.",
+        "Does not answer a different question in place of a requested one."
+      ],
+      "pass_criteria": [
+        "Both open questions appear as answers or unresolved decisions.",
+        "The compatibility constraint is retained."
+      ],
+      "fail_signals": [
+        "The spec is delivered without the service-account question.",
+        "An open question is replaced by an answer to a different question.",
+        "The compatibility constraint is dropped."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "service account",
+          "queue",
+          "reject",
+          "compatib"
+        ],
+        "forbidden_substrings": [
+          "the service-account question is out of scope",
+          "no open questions remain"
+        ]
+      }
     }
   ],
   "canonical_feature_preparation_result_expectations": {

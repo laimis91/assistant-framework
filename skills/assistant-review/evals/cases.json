@@ -2506,6 +2506,42 @@
         "rewrite the whole plan",
         "block refinement because wording is subjective"
       ]
+    },
+    {
+      "id": "document-review-flags-missing-requested-outcome",
+      "title": "Document review flags a missing requested outcome",
+      "category": "request_alignment",
+      "purpose": "Checks that a document review that already applies reports a requested outcome with no direct answer as a finding citing the coverage check, without adding a second checklist.",
+      "prompt": "Review this migration plan against the request before I approve it.",
+      "setup_context": [
+        "The assistant-review skill instructions are active and the material is a plan, so the Document Review Checklist applies.",
+        "The request asked for a schema change, a backfill of existing rows and a rollback path.",
+        "The plan covers the schema change and rollback path but omits the backfill of existing rows."
+      ],
+      "expected_behavior": [
+        "Reports the missing backfill step as a finding that cites the coverage check.",
+        "Keeps the finding traceable to the original request.",
+        "Does not invent a second checklist or restate request-alignment definitions."
+      ],
+      "pass_criteria": [
+        "A finding names the omitted backfill of existing rows.",
+        "The finding cites the coverage check or the missing requested outcome."
+      ],
+      "fail_signals": [
+        "The plan is approved with the backfill missing.",
+        "The review adds a separate request-alignment checklist.",
+        "The omission is mentioned only as a style note, not as a finding."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "backfill",
+          "coverage"
+        ],
+        "forbidden_substrings": [
+          "The plan has no findings",
+          "APPROVED without findings"
+        ]
+      }
     }
   ]
 }

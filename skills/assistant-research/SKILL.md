@@ -27,6 +27,18 @@ to decision risk; stop searching when further work cannot materially help within
    and conflicts, not source counts; copies add no independent support. Report
    material conflicts and gaps; omit empty sections.
 
+Apply [request alignment](../../tools/progress/operating-guidance.md#request-alignment) to
+research answers: organize them around the requested outcomes, leading with the
+requested conclusions or recommendations, one row or section per outcome unless
+the user or target format requires another structure. Citations, evidence
+quality, conflicts and gaps from step 4 stay attached to the answers they
+qualify; broader context and labelled additional findings go in supporting
+sections. For example, a comparison asking each option's benefit and cost plus a
+recommendation gets a per-option benefit/cost/recommendation table, with
+overhead analysis kept as an additional finding where it changes a
+recommendation. Five-lens synthesis keeps its structure; this governs the human
+presentation only.
+
 Finance, legal, medical, safety-critical and other high-impact recommendations
 need educational due diligence with risks/context limits. A stronger recommendation
 needs verified decision-critical sources and explicit relevant user context;

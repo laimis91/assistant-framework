@@ -1,6 +1,6 @@
 # S01 — Request alignment and focused delivery
 
-Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Not implemented.
+Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented on branch `fvi/s01-request-alignment` (merge commit recorded when merged); matched evaluation pending user authorization.
 Source: report sections "Recommended direction", "Status against main", "High priority: broad analysis, focused answers" (sdlc-review, claude-design, combined method), §4 order 1, §6 rows 13 and 25; slice map row S01.
 
 ## Problem and intended outcome

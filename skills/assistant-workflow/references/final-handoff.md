@@ -6,6 +6,8 @@ after validation and review. Review provides its result/evidence but does not
 create this artifact. Keep it concise, but include enough evidence for another
 developer to understand the design and test the result without reading the full
 session.
+When the request asked questions beyond the change, section 1 opens with their
+direct answers and evidence.
 
 ## Required sections
 

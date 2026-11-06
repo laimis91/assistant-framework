@@ -51,6 +51,7 @@ under common operating conditions:
 - QA loop behavior with conditional domain rubrics
 - pivot/restart decisions for stagnation and Code Writer blockers
 - shared review/QA guard with productive ordinals beyond ten
+- direct answers per requested outcome with material support (`request_alignment`)
 
 ## Observed execution-pattern evidence
 

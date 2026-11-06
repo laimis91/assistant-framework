@@ -17,6 +17,34 @@ decision. Do not repeatedly request equivalent approval for productive authorize
 work. Finish when the intended outcome has credible evidence; report material
 limits honestly.
 
+## Request alignment
+
+- **Requested outcome**: a decision, deliverable, answer or acceptance item that
+  the request, or an approved plan or ticket it points to, explicitly or
+  necessarily asks for.
+- **Direct answer**: a statement that resolves a requested outcome, possibly
+  qualified ("cannot be determined because X; next step Y"). Analysis without
+  the stated answer does not count.
+- **Material support**: evidence, risks, counterevidence, uncertainty and limits
+  that could change an answer, its rationale or the reader's next action.
+- **Coverage check**: compare the complete draft with the original request before
+  delivery; flag any requested outcome without a direct answer, any changed
+  meaning, and any unrequested scope presented as requested.
+- **Relevance check**: each major section answers a requested outcome or carries
+  its material support; move other content to a supporting section or remove it.
+
+Identify the requested outcomes from the request and the material it points to
+before substantive investigation; this is internal, and the clarification rule
+above still decides whether to ask. Investigate as broadly as useful. Present a
+direct answer per requested outcome first, with material support beside the claim
+it supports, and report material findings outside the requested outcomes labelled
+as additional findings. Before delivery run both checks and repair: add the
+missing direct answer, restore changed meaning, label or remove unrequested scope,
+move or remove tangents. Report an unanswerable outcome as unanswered, with reason
+and next step. Coverage and relevance edits never remove material support. Show
+the check only when a gap remains; it adds no ledger, template, heading quota or
+length target.
+
 ## One guard for repeated work
 
 Use one task-level outcome/guard identity across Build, review, QA, debugging,
