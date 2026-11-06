@@ -165,7 +165,7 @@ if HOME="$report_home" \
         --format json \
         >"$report_output" 2>"$report_error" \
     && jq -e '
-        .schema_version == "2.0"
+        .schema_version == "3.0"
         and .agent == "codex"
         and .skill == "assistant-workflow"
         and (.inventory_mode == "isolated_install" or .inventory_mode == "source_equivalent")
@@ -191,6 +191,7 @@ if HOME="$report_home" \
     && jq -e --slurpfile canonical "$report_output" '
         .components.project_agents.words == $canonical[0].components.project_agents.words
         and .components.generated_global_agents.words == $canonical[0].components.generated_global_agents.words
+        and .components.common_operating_guidance.words == $canonical[0].components.common_operating_guidance.words
         and .components.native_skill_catalog_descriptions.words == $canonical[0].components.native_skill_catalog_descriptions.words
         and .components.selected_skill_initial.words == $canonical[0].components.selected_skill_initial.words
         and .components.selected_skill_entry_boundary.words == $canonical[0].components.selected_skill_entry_boundary.words
@@ -225,7 +226,7 @@ if HOME="$no_index_report_home" \
         --format json \
         </dev/null >"$no_index_report_output" 2>"$no_index_report_error" \
     && jq -e '
-        .schema_version == "2.0"
+        .schema_version == "3.0"
         and .agent == "codex"
         and .skill == "assistant-clarify"
         and .inventory_mode == "isolated_install"
@@ -237,6 +238,8 @@ if HOME="$no_index_report_home" \
           .components.project_agents.bytes,
           .components.generated_global_agents.words,
           .components.generated_global_agents.bytes,
+          .components.common_operating_guidance.words,
+          .components.common_operating_guidance.bytes,
           .components.native_skill_catalog_descriptions.words,
           .components.native_skill_catalog_descriptions.bytes,
           .components.native_skill_catalog_descriptions.characters,
@@ -267,6 +270,8 @@ if jq -e '
       .components.project_agents.bytes,
       .components.generated_global_agents.words,
       .components.generated_global_agents.bytes,
+      .components.common_operating_guidance.words,
+      .components.common_operating_guidance.bytes,
       .components.native_skill_catalog_descriptions.words,
       .components.native_skill_catalog_descriptions.bytes,
       .components.native_skill_catalog_descriptions.characters,
@@ -287,10 +292,12 @@ if jq -e '
     def standing_words:
       .components.project_agents.words
       + .components.generated_global_agents.words
+      + .components.common_operating_guidance.words
       + .components.native_skill_catalog_descriptions.words;
     def standing_bytes:
       .components.project_agents.bytes
       + .components.generated_global_agents.bytes
+      + .components.common_operating_guidance.bytes
       + .components.native_skill_catalog_descriptions.bytes;
     .totals.initial_words == (standing_words + .components.selected_skill_initial.words)
     and .totals.initial_bytes == (standing_bytes + .components.selected_skill_initial.bytes)
@@ -302,6 +309,43 @@ if jq -e '
     pass
 else
     fail "context report initial/entry totals do not equal their component sums"
+fi
+
+test_start "context report measures the installed common operating guidance"
+common_guide_source_bytes="$(wc -c <"$FRAMEWORK_DIR/tools/progress/operating-guidance.md" | tr -d '[:space:]')"
+if jq -e --argjson source_bytes "$common_guide_source_bytes" '
+    .components.common_operating_guidance.bytes == $source_bytes
+    and .components.common_operating_guidance.words > 0
+    and .totals.initial_words == (
+      .components.project_agents.words
+      + .components.generated_global_agents.words
+      + .components.common_operating_guidance.words
+      + .components.native_skill_catalog_descriptions.words
+      + .components.selected_skill_initial.words)
+  ' "$report_output" >/dev/null; then
+    pass
+else
+    fail "context report does not measure the installed common operating guidance or omits it from totals"
+fi
+
+test_start "context reporter rejects a baseline from another report schema"
+schema_two_baseline="$(mktemp "${TMPDIR:-/tmp}/context-budget-schema-two.XXXXXX")"
+p0p4_register_cleanup "$schema_two_baseline"
+if [[ -s "$report_output" ]] \
+    && jq '.schema_version = "2.0" | del(.components.common_operating_guidance)' \
+        "$report_output" >"$schema_two_baseline" \
+    && ! HOME="$report_home" \
+        "$context_report" \
+            --agent codex \
+            --skill assistant-workflow \
+            --format json \
+            --baseline "$schema_two_baseline" \
+            >"$failure_output" 2>"$failure_error" \
+    && [[ ! -s "$failure_output" ]] \
+    && grep -Fq -- "baseline schema 2.0 is not comparable with 3.0" "$failure_error"; then
+    pass
+else
+    fail "context reporter accepted or unclearly rejected a schema 2.0 baseline"
 fi
 
 test_start "context reporter rejects the retired hook profile option"
@@ -695,6 +739,7 @@ if HOME="$report_home" \
         ) end)
         and $candidate[0].components.project_agents == $baseline[0].components.project_agents
         and $candidate[0].components.generated_global_agents == $baseline[0].components.generated_global_agents
+        and $candidate[0].components.common_operating_guidance == $baseline[0].components.common_operating_guidance
         and $candidate[0].components.native_skill_catalog_descriptions == $baseline[0].components.native_skill_catalog_descriptions
     ' "$kernel_manifest" >/dev/null; then
     pass
@@ -780,6 +825,7 @@ jq -n \
       components:{
         project_agents:{words:254,bytes:2186},
         generated_global_agents:{words:267,bytes:1900},
+        common_operating_guidance:{words:1153,bytes:9000},
         native_skill_catalog_descriptions:{
           words:286,
           bytes:2101,
@@ -789,13 +835,13 @@ jq -n \
         selected_skill_entry_boundary:{words:\$selected_entry}
       },
       totals:{
-        initial_words:(\$selected_initial + 807),
-        entry_boundary_words:(\$selected_entry + 807)
+        initial_words:(\$selected_initial + 1960),
+        entry_boundary_words:(\$selected_entry + 1960)
       }
     }'
 EOF
 chmod +x "$component_reporter"
-expected_components='{"baseline":{"project_agents":{"words":254,"bytes":2186},"generated_global_agents":{"words":267,"bytes":1900},"native_skill_catalog_descriptions":{"words":286,"bytes":2101,"characters":2101}},"candidate_matches_baseline":true}'
+expected_components='{"baseline":{"project_agents":{"words":254,"bytes":2186},"generated_global_agents":{"words":267,"bytes":1900},"common_operating_guidance":{"words":1153,"bytes":9000},"native_skill_catalog_descriptions":{"words":286,"bytes":2101,"characters":2101}},"candidate_matches_baseline":true}'
 if (source "$context_evidence_lib"; \
     hash_file() { printf '%064d\n' 0; }; \
     context_budget_build_evidence \

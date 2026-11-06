@@ -452,15 +452,23 @@ not instruction text. Installation failures stop the report instead of emitting
 partial or zero-filled inventory. `project_agents` measures the repository
 `AGENTS.md`.
 `generated_global_agents` measures its installer-owned marker block.
+`common_operating_guidance` measures the installed
+`tools/progress/operating-guidance.md`, which the managed block and every skill
+root load.
 `native_skill_catalog_descriptions`
-measures the first-class `assistant-*` description catalog. The selected
+measures the first-class `assistant-*` description catalog. These four standing
+components count toward both totals. The selected
 skill's initial boundary is `SKILL.md` plus `contracts/index.yaml` when present;
 its entry boundary adds references declared for the `entry` load set and only
-the contract items selected there. Schema 2.0 reports only native instruction
-components; totals exclude retired lifecycle registrations and their output.
+the contract items selected there. References that a skill loads only by prose
+condition are outside both boundaries. Schema 3.0 reports only native
+instruction components; totals exclude retired lifecycle registrations and
+their output.
 
 Pass a prior JSON report with `--baseline FILE` to add current-minus-baseline
 absolute and percentage deltas. A zero baseline produces a `null` percentage.
+The baseline must be a schema 3.0 report: schema 2.0 totals omit the common
+guide, so the reporter rejects them as not comparable.
 The report never includes prompt bodies, instruction bodies, responses,
 credentials, or environment values.
 
