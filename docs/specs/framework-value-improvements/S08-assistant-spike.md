@@ -1,0 +1,142 @@
+# S08 — Disposable feasibility experiments (assistant-spike)
+
+Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Not implemented.
+Source: report §2 "Recommend: assistant-spike" (docs/research/assistant-framework-value-assessment-2026-10-26.md:159-173), §6 row 10 (same file:278), order 5 (same file:215); slice map row S08 (docs/plans/framework-value-improvements/specification-index.md, "Full specification set").
+
+## Problem and intended outcome
+
+The framework has no method for answering "can approach X actually do Y here?" by running a small disposable experiment. Workflow Candidate Search scores alternatives before code exists and never executes anything (skills/assistant-workflow/references/candidate-search.md:81-115). Workflow's existing `spike` task type has a one-line gate pack, "Explore feasibility; no unsupported claims" (skills/assistant-workflow/references/triage-rubric.md:135-136), with no experiment, control or verdict method. The intended result is a new instruction-only skill, `assistant-spike`, that answers one observable feasibility question with the smallest isolated disposable probe and a control or limit, returns **validated**, **partial** or **invalidated** with evidence, limits and the consequence for a real build, and hands Workflow a finding that never authorizes production changes.
+
+## Requirements
+
+### Method
+
+- **R-S08-1.** Before building anything, the skill states the question, the constraints, the decisive observation that would answer it, and the failure condition that would invalidate it.
+- **R-S08-2.** The skill first checks whether source inspection, documentation already in the repository, or existing test output answers the question. When it does, it answers from that evidence, says no experiment was needed, and builds no probe.
+- **R-S08-3.** When execution adds evidence, the skill builds the smallest isolated disposable probe and tests the riskiest assumption first, the one most likely to invalidate the idea.
+- **R-S08-4.** The skill runs the decisive case and at least one relevant control or limit (for example a known-good baseline, the boundary input, or the stated load), and reports which it ran.
+- **R-S08-5.** The result is exactly one of **validated** (the decisive observation occurred, with evidence), **partial** (it holds only under named conditions), or **invalidated** (the failure condition occurred or the decisive observation did not, with the reason). Each verdict carries the evidence (commands run and observations), its limits, and the consequence for a real build.
+- **R-S08-6.** One question is the default. The skill splits work into more questions only when the user's idea cannot be answered by one decisive observation; it has no fixed question count and no compulsory interview or alignment pause.
+- **R-S08-7.** The skill never claims production readiness. A validated probe shows feasibility under the tested conditions only.
+
+### Boundaries
+
+- **R-S08-8.** "Disposable" or "throwaway" never waives existing cost, permission, sensitive-data, external-service, package-install or plan-approval boundaries. Installs, network or external API calls, credentials, real user data and anything on the confirmation list in skills/assistant-workflow/references/ai-usage-policy.md:87-92 keep their existing confirmation; production systems stay off limits (same file:94-95).
+  - **Scratch writes and runs.** That confirmation list includes "Writing or modifying files" (ai-usage-policy.md:88) and "Running scripts that modify system state" (:91) and has no exception for scratch, temporary or Git-ignored directories; only reads, searches, build and test commands and read-only Git are allowed without asking (:81-85). Writing probe files and running the probe therefore need confirmation even when confined to a scratch or ignored directory. The spike asks **once**, before building, for the probe plan: the exact probe directory, which is always a fresh subdirectory that does not yet exist (R-S08-9), the files it will create there, and the exact commands it will run, including the final command that deletes the probe directory (R-S08-9) unless the plan states the probe will be kept. The approval binds the directory and the commands: it covers any file written inside the approved probe directory, including files not named in the plan, because probes iterate; those commands; and that cleanup. It does not cover a write outside that directory or any unlisted command, and installs, network or external calls, credentials and real user data still ask separately as above. A change to the directory or commands needs a new approval. This one approval is the skill's own chat confirmation only. Host permission prompts and Codex execution-policy prompts (for example the `rm -rf` prompt rule in codex-rules/workflow.rules:56-61) still apply to the approved commands; answering them is not a second ask by the skill, and the skill never treats them as redundant. The skill never chooses or rewrites a command, including the cleanup command, so that it avoids an execution-policy rule or host permission prompt (for example `find -delete`, a script, or another deletion form instead of `rm -rf`). An answer settled by R-S08-2 (no probe) needs no confirmation.
+- **R-S08-9.** Probes live outside tracked source: in the session's temporary or scratch directory, or in a location inside the project that is confirmed Git-ignored. Choosing that location does not remove the confirmation in R-S08-8; the location is part of the probe plan the user approves. **The probe directory is always a new, dedicated subdirectory** of that scratch or ignored root, named for this spike (for example `<scratch or ignored root>/spike-<id>/`), that does not exist when the plan is written. Immediately before the first write the skill checks that the path still does not exist; if it does, it writes nothing and asks again with a new name. A pre-existing directory, such as the scratch root itself, `.codex/` or any other directory holding local task state, is never the probe directory, even if it is empty or Git-ignored. The approved cleanup command deletes only that subdirectory and nothing outside it. The skill does not create a tracked `spikes/` directory, does not commit probe code, records where the probe lives, and reports at the end whether it was deleted or kept. Deletion runs only as the cleanup command listed in the approved probe plan (R-S08-8), so the skill does not ask for chat confirmation a second time; any host permission or Codex execution-policy prompt that command triggers still applies (R-S08-8); keeping the probe instead is stated in the plan, or, if the user asks to keep it later, reported as kept.
+- **R-S08-10.** A spike never edits the project's production source, tests or configuration. If the question can only be answered by changing tracked files, the skill stops and hands off to Workflow (R-S08-12) instead.
+- **R-S08-11.** When a spike runs inside a Workflow task whose boundary excludes execution (`prepare_only`, or progressive discovery), it runs only with the user's explicit authorization for that execution; otherwise it reports the question and the probe it would run.
+
+### Handoff
+
+- **R-S08-12.** When the user wants to proceed to a real build, the handoff to `assistant-workflow` is plain prose carrying: the question, the verdict, the evidence and its conditions, the limits, the consequence for the real build, and the probe location and disposal state. It states that it authorizes no production change. Workflow treats the finding as discovered context and constraints; its own scope, verification selection and plan approval apply unchanged.
+- **R-S08-13.** No new contract, field, ledger or schema is added. The finding enters Workflow through existing inputs: `constraints` (skills/assistant-workflow/contracts/input.yaml:121-127) and, when Candidate Search runs, `candidate_search_constraints`, whose entries may come from "discovered project constraints" (input.yaml:404-410).
+
+### Boundary with Candidate Search
+
+- **R-S08-14.** Activation: `assistant-spike` activates for an observable feasibility question to be settled by running something. Candidate Search stays a Workflow Plan-phase method for choosing among alternatives by a pre-code rubric (candidate-search.md:7-19, 81-100) and is never activated by this skill. A request to "compare A and B" that is settled by reading or by scoring trade-offs stays with Research, Thinking or Candidate Search; it becomes a spike only when a decisive observation must be produced by execution.
+- **R-S08-15.** Handoff between them: when a Candidate Search candidate's feasibility rests on an unverified assumption, Workflow may run a spike on that assumption; the verdict is evidence for the candidate's Feasibility score and enters as a constraint (R-S08-13). A spike verdict never selects a candidate, changes an approved plan, or bypasses the plan-deviation procedure (candidate-search.md:117-129).
+
+### Activation and distribution
+
+- **R-S08-16.** The `description` states what the skill does and when to use it, third person, key use first, following docs/specs/skill-activation.md R-DESC-1 and R-DESC-2. The length limit is the existing repository constraint that R-DESC-1 refers to and `tools/skills/validate-skills.sh` already enforces (tools/skills/lib/validate-frontmatter.sh:50, :506-507); this slice adds no size budget of its own. It contains no top-level `effort` or `triggers`. Proposed wording (final text is an implementation decision): "Answers one feasibility question with a small disposable experiment and a validated, partial, or invalidated verdict before a real build. Use when the user asks to spike, try out, or prove whether an approach can work and reading source or docs cannot settle it."
+- **R-S08-17.** `evals/cases.json` uses schema `2.0` with `activation_cases` of at least two normalized-distinct positives and one nearby negative (tools/evals/lib/skill-eval-fixtures.sh:915-930) and a non-empty `cases` array (same file:1291-1292). Positive and negative cases cover the neighbours in R-S08-14: Research, Workflow implementation, Thinking/Candidate Search, and Debugging.
+- **R-S08-18.** The skill is bundled in the default install and installable alone with `./install.sh --skill assistant-spike` or `.\install.ps1 -Skill assistant-spike`. It declares no `requires`, so the single install contains only this skill. Its `SKILL.md` links `../../tools/progress/operating-guidance.md`.
+
+## Existing behaviour to preserve
+
+- Candidate Search remains opt-in, pre-code, inline-or-local-state, with its rubric and plan-deviation rules unchanged (skills/assistant-workflow/references/candidate-search.md:7-19, 21-27, 81-129; skills/assistant-workflow/SKILL.md:98-99; triage-rubric.md:84-86; input.yaml:367-375).
+- Workflow's `task_type` enum keeps `spike` and its inference "spike/explore/investigate -> spike" (input.yaml:24-31; output.yaml:98; handoffs.yaml:154; phase-gates.yaml:59), which `tests/p0-p4/workflow-basics-contracts.sh:631` pins with the "Spike" gate pack heading.
+- `workflow_experiment_ledger` stays limited to explicit workflow/loop-optimization experiments (skills/assistant-workflow/contracts/output.yaml:3208-3215); a spike does not create one.
+- Preparation-only work makes no edits or execution claims (skills/assistant-workflow/SKILL.md:76-79); progressive discovery stays a no-execution boundary (same file:87-90).
+- Installs, external calls, file writes and state-modifying script runs keep their confirmation, with no scratch-directory exception; production access stays forbidden (skills/assistant-workflow/references/ai-usage-policy.md:87-95).
+- Medium+, risky or public-contract changes still need an approved plan (skills/assistant-workflow/SKILL.md:37-41).
+- Existing disposable-probe conventions elsewhere are unchanged: CI Audit probes on isolated disposable inputs with baseline, cleanup and hashes (skills/assistant-ci-audit/SKILL.md:36-39) and Review's fixture-run exception (skills/assistant-review/references/script-execution.md:8-27).
+- Local ignored task state is the place for per-run evidence in this repository (docs/README.md:31; `.codex/` and `/docs/plans/` ignored at .gitignore:13-14, 19-20).
+
+## Scope and non-goals
+
+In scope: new `skills/assistant-spike/` (SKILL.md, evals); a one-line pointer from Workflow's Spike gate pack to the skill (see Unresolved decision D2); activation fixture, routing row and stateful activation cases; inventory and documentation consumers.
+
+Out of scope and not imported (report :171, :278; comparator "/Users/laimis/Developer/Comparable skills/software-development/spike/SKILL.md"):
+- fixed 2–5 question decomposition and Given/When/Then table (comparator :40-59);
+- the "Build all in this order, or adjust?" alignment pause (:61-63);
+- repo-root `spikes/` or `.planning/spikes/` directories and per-spike README files (:89-102, :188-193);
+- "hardcode everything" as a universal rule (:113); Hermes tools, `delegate_task`, GSD/MANIFEST integration (:26-28, :79-85, :125-134);
+- frontier mode (:177-186) and head-to-head numeric scoring tables (:160-175);
+- any production-readiness claim, new controller, schema or ledger.
+
+## Affected owners and consumers
+
+| Owner / consumer | Change | Compatibility concern |
+|---|---|---|
+| `skills/assistant-spike/SKILL.md`, `evals/cases.json` | New | None; instruction-only |
+| `skills/assistant-workflow/references/triage-rubric.md:135-136` (Spike gate pack) | Optional pointer (D2) | Heading "### Spike" is pinned by `tests/p0-p4/workflow-basics-contracts.sh:631`; keep it |
+| `skills/assistant-workflow/references/candidate-search.md` | Optional one-line note on R-S08-15 (D3) | No contract change; phase-gates for candidate search unchanged |
+| `README.md` | New `### assistant-spike` section; skill count at :3 and :353; "All 16 ..." at :701; structure tree near :536-552 | `tests/p0-p4/docs-drift-contracts.sh:14-31` requires a `### <skill>` section per skill and the "N first-class" count; `tests/p0-p4/skill-eval-contracts.sh` (block near :5956) requires "default eval inventory is N first-class" with N = fixture count |
+| `docs/evals/skill-fixtures.md:22-39` | Count and fixture list | Pinned by the same skill-eval-contracts block (near :5981) |
+| `docs/specs/skill-activation.md` routing table (:91-121) and `tools/evals/skill-activation/routing.json` | New row | `test_routing_data_matches_the_spec_table` (tools/evals/skill-activation/test_skill_activation.py:535-542) requires both to match |
+| `tools/evals/skill-activation/cases/heldout.json`, `development.json`, `heldout.sha256` | At least three held-out positives for the new skill | `suite.py:210-213` fails any skill directory with fewer than three; this runs in CI (`.github/workflows/framework-validation.yml:56-57`). The held-out hash covers heldout.json and routing.json (`suite.py:139-145`), so held-out trial runs need a refreeze; the S08 branch adds the cases without refreezing (`validate_all` ignores the hash) and the integration step does one refreeze, with the R-EVAL-3 human review and synthetic-text scan |
+| `tools/evals/skill-activation/suite.py:34-39` `NEIGHBOUR_PAIRS` | Optional new pairs (D4) | Adding a pair requires a neighbour case in both sets |
+| `install.sh`, `install.ps1` | None | Verified auto-discovery: install.sh:800-805 finds `skills/assistant-*/SKILL.md`; install.ps1:2471-2477 lists `assistant-*` directories with `SKILL.md`; single-skill selection at install.sh:828-832 and install.ps1:2479-2483 |
+| `tools/skills/validate-skills.sh`, `tools/evals/run-skill-evals.sh` | None | Both discover `skills/assistant-*/SKILL.md` (tools/skills/lib/validate-inventory.sh:55-70; tools/evals/lib/skill-eval-inventory.sh:73-86) |
+| `tests/p0-p4/skill-install-path-substitution-contracts.sh:105-112` | None | Requires every root SKILL.md to link `../../tools/progress/operating-guidance.md` |
+| S11 installer ownership records | New skill must be recorded as framework-owned | Coordinate with S11 |
+
+## Evidence classification
+
+| Item | behavior_status | work_status | Evidence |
+|---|---|---|---|
+| Experiment-and-verdict method (R-S08-1–7) | new_behavior | implementation_gap | No spike skill; triage-rubric.md:135-136 has one line |
+| Source-inspection-first check (R-S08-2) | new_behavior | implementation_gap | Report :167 |
+| Boundaries not waived (R-S08-8, 10, 11) | existing_behavior_to_preserve | no_open_decision | ai-usage-policy.md:87-95; SKILL.md:37-41, 76-79, 87-90 |
+| Probe location outside tracked source (R-S08-9) | new_behavior | technical_design_decision | Comparator default is repo-root `spikes/` (comparator :188-190); repo rule docs/README.md:31 |
+| Workflow handoff via existing inputs (R-S08-12, 13) | new_behavior | no_open_decision | input.yaml:121-127, 404-410 |
+| Spike vs Candidate Search boundary (R-S08-14, 15) | new_behavior | technical_design_decision | candidate-search.md:7-19, 81-129 |
+| Workflow `spike` task type overlap | source_conflict | source_conflict_resolution | input.yaml:27-31 infers "spike" from "spike/explore/investigate"; triage-rubric.md:135-136; not mentioned in report or index |
+| Activation description and cases (R-S08-16, 17) | new_behavior | implementation_gap | docs/specs/skill-activation.md R-DESC-1/2; skill-eval-fixtures.sh:915-930 |
+| Held-out activation cases and refreeze | explicit_change | implementation_gap | suite.py:139-145, 210-213; CI framework-validation.yml:56-57 |
+| Default bundle and `--skill` install (R-S08-18) | existing_behavior_to_preserve | no_open_decision | install.sh:800-805, 828-832; install.ps1:2471-2483 |
+| Expert-method derivation for the method | materially_unknown | evidence_gap | docs/skill-contract-design-guide.md:14-22 requires cue-to-method decisions from representative cases or an authoritative method; the comparator and report are the only sources |
+| Whether the new routing row lowers precision for Research/Workflow | materially_unknown | evidence_gap | No trial has run; R-RUN-7 needs fresh authorization |
+
+## Unresolved decisions
+
+- **D1. Probe location default (technical default).** Options: (a) session scratch/temp directory always; (b) a new subdirectory created under a Git-ignored directory inside the project when one exists (for example `.codex/spike-<id>/` here; `.codex/` itself holds local task state and is never the probe directory, R-S08-9); (c) repo-root `spikes/` as in the comparator. Recommended: (a) by default, as a new `spike-<id>/` subdirectory of the session scratch directory, (b) when the probe must run with project dependencies or relative paths, after confirming the new subdirectory's path is ignored (for example with `git check-ignore`). In both cases the probe directory is fresh and only it is deleted (R-S08-9). (c) conflicts with docs/README.md:31 and risks committing throwaway code.
+- **D2. Workflow `spike` task type (technical default).** Options: (a) leave the gate pack as is; (b) add one line to the Spike gate pack pointing to `assistant-spike` when an executed probe is needed; (c) remove the task type. Recommended: (b). (c) breaks consumed enums (handoffs.yaml:154, output.yaml:98) and a pinned test.
+- **D3. Candidate Search note (technical default).** Whether candidate-search.md gains one sentence stating R-S08-15. Recommended: yes, one sentence; no gate or contract change.
+- **D4. Neighbour pairs in the activation suite (product_question).** Add `(assistant-spike, assistant-research)` and `(assistant-spike, assistant-workflow)` to `NEIGHBOUR_PAIRS`? This makes the main overlap risk a required eval category but costs new development and held-out cases. Recommended: yes for both, because overlap is the main risk. **Decided by user 2026-11-06:** both neighbour pairs (the recommended default).
+- **D5. Routing row (product_question).** Proposed: "Feasibility question settled by a disposable experiment before a real build" — Required `assistant-spike`; Optional `assistant-research`, `assistant-verification`; Forbidden none. Should `assistant-workflow` be optional on this row? Recommended: optional, since a spike that touches only scratch files is not a repository change; a case that also asks to implement matches the implement row too (R-ROUTE-1 union). **Decided by user 2026-11-06:** Workflow handoff is optional (the recommended default).
+- **D6. Activation trial (product_question).** Whether to run an authorized bounded activation smoke for the new row, or rely on fixture validation, the suite validator and the R-DESC-7 listing check (no model call). Recommended: fixture and listing checks only; a model trial only with fresh authorization of exact call counts (docs/specs/skill-activation.md R-RUN-7). **Decided by user 2026-11-06:** no model activation trial now; ask the user for fresh authorization later if one is needed.
+
+## Acceptance examples
+
+- R-S08-1/4/5 positive: "Can `better-sqlite3` FTS5 return ranked results for 50k notes in under 100 ms on this laptop?" The response states the decisive observation (p95 under 100 ms over N queries) and failure condition, builds a scratch script, runs it with 50k rows and a control at 1k rows, and returns **partial**: "p95 70 ms cold-cache excluded; 140 ms on first query; real build needs warm-up." Negative (fails): reports "it works" after one happy-path query, with no control, no stated failure condition, or a verdict outside the three values.
+- R-S08-2 positive: "Does our HTTP client already retry on 503?" The skill reads the client source, finds the retry policy, answers with file:line and builds nothing. Negative: writes and runs a probe server for a question the source settles.
+- R-S08-6 positive: a single-question request gets one experiment with no question table or "shall I proceed with this order?" pause. Negative: decomposes into three spikes and waits for alignment.
+- R-S08-8 positive: the probe needs `npm install ws`; the skill asks before installing. Negative: installs because "it's only a spike".
+- R-S08-8 (probe plan) positive: before writing anything, the response contains one confirmation request naming the probe directory (a new subdirectory, for example `<session scratch>/spike-fts5/`, that does not exist yet), the files to create there and the exact commands to run, ending with the command that deletes the probe directory; after one approval it writes files inside the approved directory (including a file it did not list, such as an extra fixture added while iterating) and runs and cleans up with only the listed commands, with no further per-file chat confirmation; when the probe later needs a command not in the plan, or a write outside the approved directory, it asks again. Negative (fails): writes a probe file or runs the probe before any confirmation because the directory is scratch or Git-ignored; or asks separately before every file write inside the approved directory; or writes outside the approved directory, or runs an unlisted command, under the original approval.
+- R-S08-9 positive: probe is written in a new `spike-<id>/` subdirectory of the session temp directory, checked absent before the first write; the approved plan's last command deletes only that subdirectory, it runs without a further chat confirmation from the skill (a host or Codex execution-policy prompt, such as the `rm -rf` rule, is answered as normal and is not a second ask), and the report names the path and says it was deleted. Negative: creates `spikes/001-…/` at the repository root, leaves untracked files in the working tree unreported, deletes the probe with a command that was not in the approved plan, asks in chat a second time just to clean up, or uses `find -delete`, a script or another deletion form to dodge the `rm -rf` execution-policy prompt (fails).
+- R-S08-9 negative (pre-existing directory): the probe plan names a directory that already exists, such as the session scratch root itself or `.codex/`; or the skill writes into a probe path it found already present at the pre-write check; or the cleanup command deletes a pre-existing directory or any of its contents (for example `rm -rf .codex/` or `rm -rf <scratch>/*`) → fails. Every file that existed before the spike must be byte-identical after cleanup.
+- R-S08-10/12 positive: after **validated**, user says "build it"; the handoff lists question, verdict, conditions and states no production change is authorized; Workflow then selects verification and seeks plan approval for medium+ work. Negative: the spike copies its probe into `src/` or treats the verdict as plan approval.
+- R-S08-14 positive: "Compare Redis and Memcached for our session cache and pick one for the plan" routes to Candidate Search/Research, not spike. "Spike whether Memcached keeps our 2 MB session blobs" activates the spike. Negative: the spike activates for the first request and scores both options.
+- R-S08-15 positive: Candidate Search candidate C2 rests on "the ORM supports JSON columns on SQL Server 2019"; a spike validates it and the finding enters `candidate_search_constraints`. Negative: the spike verdict changes the selected candidate after plan approval without the plan-deviation procedure.
+- R-S08-18 positive: `./install.sh --agent claude --skill assistant-spike --dry-run` lists only `assistant-spike`; a full dry run lists it among all skills. Negative: the skill is missing from the default dry run, or a single install pulls in Workflow.
+
+## Verification
+
+Focused checks, no matched evaluation:
+- `tools/skills/validate-skills.sh` (frontmatter, no retired metadata).
+- `tools/evals/run-skill-evals.sh --validate-fixture --skill assistant-spike` and `--list --skill assistant-spike`.
+- `./tests/test-p0-p4-contracts.sh`, in particular `docs-drift-contracts.sh`, `skill-install-path-substitution-contracts.sh`, `skill-instruction-quality-contracts.sh`, `skill-activation-precision-contracts.sh`, and `skill-eval-contracts.sh` (excluded from the CI aggregate step but run in its shard).
+- `./tests/test-skill-activation-tools.sh` (routing table parity, R-EVAL-6 count) passes on the S08 branch without a refreeze: `test_committed_suite_is_valid` checks `validate_all` only, not the held-out hash (tools/evals/skill-activation/test_skill_activation.py:518-521). The held-out freeze state matters only for held-out trial runs (tools/evals/skill-activation/run_trials.py:83-88) and is restored by the integration step's single refreeze.
+- `./install.sh --agent {claude,codex,gemini} --dry-run`, plus `--skill assistant-spike --dry-run`; Windows installer contracts (`tests/windows/installer-contracts.ps1`) where a Windows host is available.
+- A focused content check that the SKILL.md states the three verdict values, the "no production change" handoff statement and the boundary-not-waived rule (same style as the clarify check in `tests/p0-p4/skill-instruction-quality-contracts.sh:38-60`).
+- R-DESC-7 listing check (no model call) that every first-class description survives in the crowded listing after the addition, with total description characters before and after reported as a measurement.
+
+## Dependencies and overlap
+
+- S09, S06 and S11 also add skills; S10 removes Telos and Diagrams. All change the same counts (README.md:3, :353, :701; docs/evals/skill-fixtures.md:22), routing table, routing.json and held-out set. The S08 branch is green on its own: it adds its README `### assistant-spike` section, updates the derived counts and the fixture list, and adds its routing row and at least three held-out positives so `validate_all` passes. The integration step reconciles the final count across S06, S08, S09, S10 and S11 and does one held-out refreeze (held-out trial runs only); held-out case changes go through the user's R-EVAL-3 review, and model runs need fresh authorization.
+- S01 and S02 edit shared Workflow guidance; the D2/D3 one-line edits in Workflow references should follow them.
+- S11 must record the new skill as framework-owned so cleanup/uninstall handle it.
+- S05 is unaffected unless Review's plan review is asked to check spike handoffs (not proposed).
