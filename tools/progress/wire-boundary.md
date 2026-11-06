@@ -136,6 +136,15 @@ history tail and retain policy sources and unresolved oscillation identities.
 
 ## Migration
 
+Workflow v16, review v10 and five-lens research v5 consume this policy.
+Historical records retain their original protocol labels; persisted migration
+and reconstruction details follow in this section.
+
+Historical attempt totals remain observations. They neither prove a genuine
+stall nor authorize a clean reset. Reconstruct only from retained observations;
+missing/conflicting history is an explicit evidence gap. Authorized read-only
+reconciliation can establish a frontier; it does not authorize corrective mutation.
+
 Validate original v14 or v15 approval and definition against independent
 authority before the fixed v14 → v15 and identity-only v15 → v16 normalization.
 Preserve original approval/source digest, normalized digest, mapping provenance,

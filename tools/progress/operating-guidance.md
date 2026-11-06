@@ -115,16 +115,10 @@ load [the wire boundary](wire-boundary.md). It preserves action/packet/member/in
 identity, source resolution, history, compaction, migration and replay enforcement.
 Ordinary single-pass activities need no serialized protocol or additional artifact.
 
-## Migration and preserved bounds
+## Preserved bounds and claims
 
-Workflow v16, review v10 and five-lens research v5 consume this policy.
-Historical records retain their original protocol labels; persisted migration
-and reconstruction details live in [the wire boundary](wire-boundary.md#migration).
-
-Historical attempt totals remain observations. They neither prove a genuine
-stall nor authorize a clean reset. Reconstruct only from retained observations;
-missing/conflicting history is an explicit evidence gap. Authorized read-only
-reconciliation can establish a frontier; it does not authorize corrective mutation.
+Historical records and persisted migration are in
+[the wire boundary](wire-boundary.md#migration), loaded only for persisted history.
 
 User budgets, host restrictions, subprocess deadlines, fetch bounds, API
 backoff/rate limits and application/product-loop policies keep their own owners

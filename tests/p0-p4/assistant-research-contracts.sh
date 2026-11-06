@@ -1568,8 +1568,11 @@ for file in \
         follow_up_missing+=("${file#$FRAMEWORK_DIR/}: v3 migration version")
     fi
 done
-if ! p0p4_contains_text "$research_skill" "Older v2 follow-ups need typed v4 conversion"; then
-    follow_up_missing+=("SKILL.md: v3 migration note")
+if ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-research/legacy-compatibility.md" "Older v2 follow-ups need typed v4 conversion"; then
+    follow_up_missing+=("legacy-compatibility.md: v3 migration note")
+fi
+if ! grep -Fq 'legacy-compatibility.md' "$research_skill"; then
+    follow_up_missing+=("SKILL.md does not link legacy-compatibility.md")
 fi
 if [[ "${#follow_up_missing[@]}" -eq 0 ]]; then
     pass

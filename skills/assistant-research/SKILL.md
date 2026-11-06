@@ -77,8 +77,7 @@ For structured consumers/persisted packets/audits/evals/handoffs, load
 `contracts/index.yaml` and needed entry/method, phase, handoff/completion sets.
 Invalid selectors load the full named contract. Preserve frozen packet digests,
 accepted results/follow-ups, synthesis, peer-input preimages, revision closure,
-high-stakes bindings and schemas. Older v2 follow-ups need typed v4 conversion;
-incomplete evidence cannot certify an audited run.
+high-stakes bindings and schemas.
 
 Compatibility fixtures retain tier budgets/source-count rules and consumed
 process evidence. Human answers may summarize findings, conflicts, peer critique,
@@ -88,8 +87,5 @@ Stop or qualify answers with inaccessible, stale, conflicting, or weak
 evidence. Unverified URLs and unsupported causal claims cannot be finalized.
 
 Preserve historical labels, evidence and the shared task guard; missing progress
-is a gap. Historical v4 sequential_fallback lens/peer records retain their original
-verdict, provenance and reduced-independence label under trusted v4 authority,
-never relabelled v5. Fully delegated old evidence supports current work only after
-independent current actor/context/source obligations are established. Missing
-identity stays unknown.
+is a gap. For persisted pre-v5 records, v2/v3 follow-ups or historical v4
+fallback evidence, load [legacy-compatibility.md](legacy-compatibility.md).
