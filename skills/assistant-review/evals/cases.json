@@ -699,14 +699,15 @@
       "setup_context": [
         "The assistant-review skill instructions are active.",
         "The review scope is medium-sized.",
-        "The user explicitly authorizes source modifications for this review."
+        "The user explicitly authorizes source modifications for this review.",
+        "No task journal, workflow composition, QA consumer or serialized result is present; the result returns only to the user."
       ],
       "expected_behavior": [
         "Requires rubric scores for correctness, code quality, architecture, security, and test coverage.",
         "Applies a weighted score action such as PASS, REFINE, or PIVOT to calibrate focus and residual risk.",
         "Uses evidence-backed finding filtering across every positive round ordinal with the same standards and the shared semantic progress guard.",
         "Buffers intermediate round details and presents one final summary after loop exit.",
-        "Includes score progression when multiple rounds occur.",
+        "Reports findings, coverage and limits without score-progression or drift labels for this standalone review.",
         "Does not ask the user between rounds unless blocked."
       ],
       "pass_criteria": [
