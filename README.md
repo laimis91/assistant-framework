@@ -1,6 +1,6 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. 16 first-class `assistant-*` skills: structured workflow, clarification, TDD enforcement, debugging, thinking tools, research, security analysis, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), and evidence-based verification selection and assessment.
+A Personal AI Assistant framework for developers. 16 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools, research, security analysis, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), and evidence-based verification selection and assessment.
 
 ## Documentation
 
@@ -10,16 +10,16 @@ Start with the [documentation map](docs/README.md) for task-specific guides, [du
 
 1. **Structured Workflow** — adaptive Discover > optional Plan > Build > Review > Document flow with bounded repair and evidence-gated handoff
 2. **Clarification** — Converts ambiguous, fragmented, or multi-intent prompts into an executable brief
-3. **TDD Enforcement** — Red-Green-Refactor cycle with strict verification gates at each transition
+3. **TDD** — Red-Green-Refactor with verification gates at each transition, when requested, required by project policy, or selected for checks
 4. **Debugging** — Evidence-first root-cause workflow: reproduce, hypothesize, isolate, fix, verify
 5. **Thinking Tools** — On-demand structured reasoning (first principles, multi-perspective debate, stress testing, etc.)
-6. **Research Tools** — Tiered information gathering with URL verification and confidence scoring
+6. **Research Tools** — Source-backed research with verified links, claim-specific evidence quality, and explicit conflicts and gaps
 7. **Security Analysis** — STRIDE threat modeling, OWASP code review, CVE dependency audit, attack surface mapping
-8. **Documentation** — Auto-generates API docs, architecture docs, README, changelogs, migration guides, code explanations
+8. **Documentation** — Creates or updates API docs, architecture docs, README, changelogs, migration guides and code explanations from source truth
 9. **Onboarding** — Systematic codebase learning: maps structure, identifies patterns, and reports actionable project orientation
 10. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
 11. **Visual Diagrams** — Mermaid diagrams from code: architecture, sequence, ER, flow, component, class, state
-12. **Review Automation** — Evidence-bounded review/fix/re-review with calibrated scores and finite rounds
+12. **Review Automation** — Evidence-bounded review/fix/re-review with fresh independent passes; further rounds need new evidence, with no cumulative round ceiling
 13. **Skill Creation** — Creates focused instructions, with schemas when a real consumer needs them
 14. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
 15. **Verification** — Selects proportionate checks and techniques, applies TDD only when appropriate, and assesses whether evidence supports the claim.
@@ -227,7 +227,7 @@ Resolves ambiguous or multi-intent requests using available context and material
 Triggers on: messy prompt, unclear prompt, figure out what I mean, help me structure this
 
 ### assistant-tdd
-Test-Driven Development enforcement: Red-Green-Refactor cycle with verification gates. Bug fix pattern (reproduce → fix → protect). Integrates with workflow's build loop and review cycle.
+Test-Driven Development when requested, required by project policy, or selected for checks by the verification decision: Red-Green-Refactor cycle with verification gates. Bug fix pattern (reproduce → fix → protect). Integrates with workflow's build loop and review cycle.
 
 Triggers on: TDD, tests first, test-driven, write the test first, red green refactor, or an intersecting workflow-selected TDD check
 
@@ -242,7 +242,7 @@ Six structured reasoning tools: clarify, perspectives, stress-test, deep-think, 
 Triggers on: architecture decisions, complex trade-offs, stress tests, debate, first principles, hypotheses
 
 ### assistant-research
-Source-backed research with verified links, claim-specific confidence, and explicit conflicts and gaps. Selected five-lens decision briefings retain five independent lens handoffs and separate peer review.
+Source-backed research with verified links, claim-specific evidence quality, and explicit conflicts and gaps. Selected five-lens decision briefings retain five independent lens handoffs and separate peer review.
 
 Triggers on: research, topic investigation, current evidence, source-backed comparisons
 
@@ -489,12 +489,12 @@ skills/
     evals/cases.json                <- Offline defect/control and authority fixtures
 
   assistant-tdd/
-    SKILL.md                       <- TDD enforcement (Red-Green-Refactor cycle)
+    SKILL.md                       <- Conditional TDD (Red-Green-Refactor cycle)
 
   assistant-thinking/
     SKILL.md                       <- Tool descriptions and usage guidance
     clarify.md                     <- First principles: hard vs soft constraints
-    perspectives.md                <- Multi-perspective debate (4 roles, 3 rounds)
+    perspectives.md                <- Smallest useful set of independent viewpoints
     stress-test.md                 <- Steelman + counter-argument
     deep-think.md                  <- 8 analytical lenses
     hypothesize.md                 <- Goal-first + hypothesis plurality
@@ -503,10 +503,11 @@ skills/
 
   assistant-research/
     SKILL.md                       <- Tool descriptions and usage guidance
-    research.md                    <- Tiered: quick / standard / extensive / deep
+    research.md                    <- Direct source research scaled to the question
     five-lens-briefing.md          <- STORM-inspired decision briefing: perspective scan / contradictions / synthesis / peer review
     investigate.md                 <- Deep investigation with ethical framework
     url-verify.md                  <- URL verification protocol
+    legacy-compatibility.md        <- Pre-v5 records, loaded only for persisted history
 
   assistant-security/
     SKILL.md                       <- Tool descriptions and severity scale
@@ -582,19 +583,19 @@ Workflow skill: Triages as Small, quick discovery, lightweight plan, fix + test 
 ### For TDD
 ```
 You: "Use TDD to add a password strength validator"
-TDD skill: Activates Red-Green-Refactor. Writes failing test first, implements minimum to pass, refactors, logs each cycle in task journal.
+TDD skill: Activates Red-Green-Refactor. Writes failing test first, implements minimum to pass, refactors, and reports each cycle.
 ```
 
 ### For thinking
 ```
 You: "Think about whether we should use microservices or modular monolith"
-Thinking skill: Loads perspectives.md, runs 4-perspective debate
+Thinking skill: Loads perspectives.md, runs a perspectives debate with only the roles that can change the decision
 ```
 
 ### For research
 ```
 You: "Research the best .NET caching libraries"
-Research skill: Runs standard-tier research with URL verification
+Research skill: Researches with primary sources, URL verification and explicit gaps
 ```
 
 ### For security
