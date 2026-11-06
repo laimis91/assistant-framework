@@ -186,8 +186,8 @@ short plan without an approval wait. For `prepare_only` at any size, `plan_mode=
 For prepare_only at any size, default to `plan_mode=none` unless optional readiness planning is explicitly requested.
 For `execution_intent != prepare_only`, `approval_required` applies to medium-or-larger work and to risk, policy, or
 public-impact changes. An explicitly requested `prepare_only` readiness Plan is always inline and no-wait. Build owns implementation, tests, verification, and
-the shared task-level guard: its source-bound effective window (default three consecutive unproductive semantic cycles),
-with completed evidence retained before later blockers and no cumulative attempt ceiling.
+the [common task-level stagnation guard](tools/progress/operating-guidance.md),
+with completed evidence retained before later blockers.
 Build repair is implementation/verification-failure recovery. Review-fix work
 for review findings stays within the bounded `assistant-review` loop and records
 its own revalidation before a fresh review result.
@@ -723,7 +723,8 @@ standing-instruction support.
 
 Workflow v16 validates/migrates original v14/v15 authority, retaining original and
 normalized digests, execution, actors, selected TDD and results. Review v10 and
-five-lens research v5 use the same three-consecutive-unproductive-cycle policy.
+five-lens research v5 use the same
+[common task-level stagnation guard](tools/progress/operating-guidance.md).
 Research v5 needs five separate lens agents and a newly created peer reviewer;
 historical v4 fallback records stay readable only.
 Productive attempts and review/QA rounds have no cumulative ceiling. Historical

@@ -171,9 +171,9 @@ Contract placement:
 
 ## Pattern 7: Bounded Review / QA Loops
 
-Framework correction loops share one task-level guard. Stop at the source-bound effective window
-(default three consecutive unproductive semantic cycles); productive work has no cumulative
-ceiling. Preserve explicit user/resource bounds and product-loop safety policies.
+Framework correction loops share the
+[common task-level stagnation guard](../../../tools/progress/operating-guidance.md).
+Preserve explicit user/resource bounds and product-loop safety policies.
 
 ```text
 round = 1
@@ -211,8 +211,8 @@ Scoring fields:
 
 Score deltas, finding counts and drift labels are diagnostics. They cannot grant
 continuation, stop productive work, change finding standards or demand a pivot.
-Use the existing common task guard and assessed semantic evidence; only three
-consecutive unproductive cycles establish the default stall. Retain current
+Use the [common task-level stagnation guard](../../../tools/progress/operating-guidance.md)
+and assessed semantic evidence. Retain current
 acceptance failures and complete coverage independently of score movement.
 
 ---
@@ -264,7 +264,7 @@ Apply this pattern to every repeated agent/tool/model loop.
 
 Required design fields:
 
-- framework semantic work: one shared task guard, with its source-bound effective window of unproductive completed cycles (default three); productive work has no cumulative round/step allowance
+- framework semantic work: the [common task-level stagnation guard](../../../tools/progress/operating-guidance.md)
 - application/tool/API execution: retain explicit user/product/resource bounds and accurate exits
 - stop condition: success, clean exit, max-budget exit, blocker exit
 - retry policy: operational transient retries retain their source-backed policy; framework correction uses the same guard

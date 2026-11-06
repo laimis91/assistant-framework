@@ -81,7 +81,7 @@ require_terms "skill contract guide" "$contract_guide" \
     'references/harness-patterns.md' \
     "Do not add this machinery to single-pass work" \
     "Keep review and QA responsibilities distinct" \
-    "source-bound effective window (default three consecutive unproductive semantic cycles)" \
+    "tools/progress/operating-guidance.md" \
     "an explicit pivot or restart decision"
 
 test_start "skill-creator harness patterns cover controller artifacts and loop safety"
@@ -94,7 +94,7 @@ require_terms "skill creator harness patterns" "$skill_creator_patterns" \
     "Code Review And QA Separation" \
     "Conditional Domain Rubrics" \
     "Bounded Review / QA Loops" \
-    "default three consecutive unproductive semantic cycles" \
+    "tools/progress/operating-guidance.md" \
     "Pivot / Restart Decisions" \
     "legacy_code_bug" \
     "Agentic Loop Safety"

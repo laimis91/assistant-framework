@@ -139,9 +139,9 @@ infer old authorization. Admission needs its independently resolved authority
 and supported Python runtime. Full serialized objects belong to these consumer
 boundaries; an ordinary human update can summarize the same decision and evidence.
 
-Repeated correction uses one shared task-level stagnation guard: three
-consecutive completed unproductive semantic cycles. Productive work has no
-cumulative attempt or round ceiling; record completed evidence before later blockers.
+Repeated correction uses the
+[common task-level stagnation guard](../../tools/progress/operating-guidance.md);
+record completed evidence before later blockers.
 Scope, access, cost, safety, acceptance, or verification changes require a new
 decision. Missing required evidence blocks completion. Medium+, strict, and
 required-QA handoffs use [final-handoff.md](references/final-handoff.md); incomplete
