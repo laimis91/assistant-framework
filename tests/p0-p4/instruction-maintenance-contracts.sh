@@ -90,6 +90,9 @@ else
     if ! p0p4_contains_text_ci "$onboard_inventory" 'counts are orientation facts, not quality'; then
         onboard_failures+=("inventory.md does not state that counts are not quality")
     fi
+    if ! grep -Fq '"id": "onboard-size-inventory-uses-local-tools"' "$FRAMEWORK_DIR/skills/assistant-onboard/evals/cases.json"; then
+        onboard_failures+=("onboard-size-inventory-uses-local-tools eval case missing")
+    fi
 fi
 if [[ "${#onboard_failures[@]}" -eq 0 ]]; then
     pass
