@@ -1,6 +1,6 @@
 # S02 — Conditional instruction loading and maintenance
 
-Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented on branch `fvi/s02-conditional-loading` under D1(a), on main b77a1e8 (merge commit recorded when merged). Measured with context report schema 3.0: the common guide is 54 words shorter (`common_operating_guidance`); the Review entry boundary is 90 words longer (`selected_skill_entry_boundary`); a standalone medium+ review no longer loads `score-tracking.md` (227 words, a file count outside the reporter's boundaries).
+Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented on branch `fvi/s02-conditional-loading` under D1(a), merged to main as 840e15a (#86). Measured with context report schema 3.0: the common guide is 54 words shorter (`common_operating_guidance`); the Review entry boundary is 90 words longer (`selected_skill_entry_boundary`); a standalone medium+ review no longer loads `score-tracking.md` (227 words, a file count outside the reporter's boundaries).
 Source: report "Recommended direction" ("Remove from ordinary loading"), "Status against main", §3 (removal table, Onboard/Docs recipes, documentation drift), §4 orders 2 and 8, §5 (context tool), §6 rows 1 and 27; slice map row S02; index "Report items not yet owned by a slice".
 
 ## Problem and intended outcome
