@@ -55,7 +55,18 @@ Use the reuse-first ordering in the Build reference before creating code or help
    a fresh review of the changed snapshot.
 6. **Handoff.** State the outcome, changed files and purpose, checks and results,
    material limits, and any next action. Omit empty sections and internal
-   routing fields from ordinary human responses.
+   routing fields from ordinary human responses. Also give a direct answer to
+   each question the user asked, with its evidence.
+
+Apply [request alignment](../../tools/progress/operating-guidance.md#request-alignment)
+to the artifacts Workflow writes for the user: preparation results,
+specifications, plans, Jira ticket text and the handoff. A plan or spec answers
+each open question the request raised or lists it as an unresolved decision;
+ticket acceptance criteria cover each requested behaviour; unrequested items are
+marked as proposals, not criteria. Formal reconciliation by Review is unchanged.
+For example, "fix the null check and tell me whether other callers have the same
+bug" gets a handoff that states the fix, its verification and the other-callers
+answer with evidence.
 
 ## Select only the needed machinery
 

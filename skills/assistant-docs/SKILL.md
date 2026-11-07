@@ -23,9 +23,9 @@ Load only the mode reference needed:
 | Upgrade or migration guide | `migration.md` |
 | Code explanation | `explainer.md` |
 
-- Back concrete claims with inspected sources. Do not invent features, issue numbers, versions, metrics, roadmap status, or examples. Use real examples or label illustrative ones. Mark unresolved claims for review instead of presenting them as fact.
+- Back concrete claims with inspected sources. Do not invent features, issue numbers, versions, metrics, roadmap status, or examples. Use real examples or label illustrative ones. Mark unresolved claims for review, including placeholder or unverified text, instead of presenting them as fact.
 - Check changed claims against current source and verify documented commands or links when practical. Do not add an unrelated repository-wide freshness audit.
-- Prefer canonical links over duplicate prose. Keep only sections useful to the intended reader. Use generated markers, XML comments, or diagrams only where the project or request calls for them.
+- Prefer canonical links over duplicate prose. Apply [request alignment](../../tools/progress/operating-guidance.md#request-alignment) to the requested reader task: each section has a role for the stated audience and purpose; leave out unrequested sections, filler and decorative content; propose, rather than silently add, material additions the user did not request. For example, "how to install on Windows" adds that section, marks an unverified PowerShell step for review and proposes a troubleshooting section. Use generated markers, XML comments, or diagrams only where the project or request calls for them.
 - Keep secrets, tokens, private endpoints, customer data, and internal details out of documents without authorization for that audience. Use local/repo-native sources; external uploads, generators, and installs require authorization.
 - For architecture claims, distinguish facts and assumptions. Memory, performance, and extensibility benefits need workload, budget or explicit unknown, measurement method, and failure condition; otherwise mark them for review.
 

@@ -141,7 +141,7 @@ load it; this is no new gate or universal test matrix.
 
 ## Document Review Checklist
 
-1. **Intent**: restate it; every requirement testable and traceable.
+1. **Intent**: restate it; every requirement testable and traceable. Apply the [coverage check](../../../tools/progress/operating-guidance.md#request-alignment); a requested outcome with no direct answer, or unrequested scope presented as requested, is a finding.
 2. **Gaps**: conflicts, assumptions, missing failure paths, owners; per step, rollback and verification; pre-mortem.
 3. **Plan versus code**: trace both ways; unplanned behavior is scope creep or a gap.
 4. **Ticket**: testable criteria, linked dependencies; Jira write-back needs approval.

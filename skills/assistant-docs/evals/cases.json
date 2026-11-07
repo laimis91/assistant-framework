@@ -572,6 +572,46 @@
           {"operator": "nonempty_string", "path": ["feature_preparation_evidence_trace", "review_trace", 0]}
         ]
       }
+    },
+    {
+      "id": "docs-readme-section-serves-requested-reader-task",
+      "title": "README section serves the requested reader task",
+      "category": "request_alignment",
+      "purpose": "Checks that a README update adds the requested section for the stated reader task, marks an unverifiable step for review, and proposes rather than silently adds unrequested sections.",
+      "prompt": "Update the README so a Windows user can install the CLI.",
+      "setup_context": [
+        "The assistant-docs skill instructions are active.",
+        "The repository has a working macOS/Linux install section and a PowerShell install script that cannot be executed in this environment.",
+        "A troubleshooting section would help Windows users but was not requested.",
+        "The README has no feature grid, and none was requested."
+      ],
+      "expected_behavior": [
+        "Adds an install-on-Windows section for the stated reader task.",
+        "Marks the unverified PowerShell step for review instead of presenting it as verified.",
+        "Proposes a troubleshooting section without adding it.",
+        "Leaves out unrequested sections, filler and decorative content."
+      ],
+      "pass_criteria": [
+        "A Windows install section is present.",
+        "The unverified PowerShell step carries a review marker.",
+        "The troubleshooting section is proposed, not added."
+      ],
+      "fail_signals": [
+        "An unrequested feature grid or compatibility matrix is added.",
+        "The troubleshooting section is silently added.",
+        "The PowerShell step is presented as verified."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Windows",
+          "PowerShell",
+          "review"
+        ],
+        "forbidden_substrings": [
+          "| Feature |",
+          "has been verified on Windows"
+        ]
+      }
     }
   ]
 }
