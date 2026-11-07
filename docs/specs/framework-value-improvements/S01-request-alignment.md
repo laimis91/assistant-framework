@@ -1,6 +1,6 @@
 # S01 — Request alignment and focused delivery
 
-Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented in main b77a1e8 (#85); matched evaluation pending user authorization.
+Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented in main b77a1e8 (#85). Matched evaluation run 2026-11-07 on DeepSeek Flash: claim rule met as a tie (3 of 4 held-out cases pass in both conditions, no coverage or material-support difference); see [results summary](../../evals/fixtures/request-alignment/results-summary.md).
 Source: report sections "Recommended direction", "Status against main", "High priority: broad analysis, focused answers" (sdlc-review, claude-design, combined method), §4 order 1, §6 rows 13 and 25; slice map row S01.
 
 ## Problem and intended outcome
