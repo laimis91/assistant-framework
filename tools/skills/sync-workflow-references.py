@@ -124,22 +124,25 @@ def parse_document(source: Path, expected_sections: tuple[str, ...]) -> Markdown
 
 
 INLINE_LINK = re.compile(r"\]\(([^)\s]+)\)")
-NON_RELATIVE_TARGET = re.compile(r"[a-z][a-z0-9+.-]*:|#|/")
+NON_RELATIVE_TARGET = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:|#|/")
+CODE_SPAN = re.compile(r"(`+)(.+?)\1")
+REFERENCE_DEFINITION = re.compile(r"^ {0,3}\[[^\]]+\]:\s")
+UNSUPPORTED_INLINE = re.compile(r"\]\(\s*<|\]\([^)\s]+\s+[\"'(]")
 
 
 def rebase_links(text: str, source_dir: Path, view_dir: Path) -> str:
-    """Rewrite relative Markdown link targets outside fenced blocks for a view in another directory."""
+    """Rewrite relative inline Markdown link targets outside fences for a view in another directory.
+
+    Link forms this rewrite cannot relocate fail generation instead of being copied unchanged.
+    """
+    prefix = posixpath.relpath(source_dir.as_posix(), view_dir.as_posix())
 
     def rebase(match: re.Match[str]) -> str:
         target = match.group(1)
         if NON_RELATIVE_TARGET.match(target):
             return match.group(0)
         path, separator, anchor = target.partition("#")
-        rebased = posixpath.relpath(
-            posixpath.normpath(posixpath.join(source_dir.as_posix(), path)),
-            view_dir.as_posix(),
-        )
-        return f"]({rebased}{separator}{anchor})"
+        return f"]({posixpath.normpath(posixpath.join(prefix, path))}{separator}{anchor})"
 
     output: list[str] = []
     active_fence: tuple[str, int] | None = None
@@ -154,6 +157,10 @@ def rebase_links(text: str, source_dir: Path, view_dir: Path) -> str:
             active_fence = fence
             output.append(line)
             continue
+        if REFERENCE_DEFINITION.match(line) or UNSUPPORTED_INLINE.search(line):
+            fail(f"unsupported Markdown link form for a relocated view: {line.strip()}")
+        if any("](" in span.group(2) for span in CODE_SPAN.finditer(line)):
+            fail(f"link-shaped text inside inline code cannot be relocated: {line.strip()}")
         output.append(INLINE_LINK.sub(rebase, line))
     return "".join(output)
 

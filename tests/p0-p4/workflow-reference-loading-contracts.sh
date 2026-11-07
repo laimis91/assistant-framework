@@ -76,8 +76,9 @@ def relocated(text, source_dir, view_dir):
         if re.match(r"[a-z][a-z0-9+.-]*:|#|/", target):
             return match.group(0)
         path, hash_mark, anchor = target.partition("#")
-        moved = os.path.relpath(os.path.normpath(os.path.join(source_dir, path)), view_dir)
-        return "](" + moved.replace(os.sep, "/") + hash_mark + anchor + ")"
+        # Same file seen from the view: climb from the view to the source directory, then follow the path.
+        up = os.path.relpath(source_dir, view_dir).replace(os.sep, "/")
+        return "](" + os.path.normpath(up + "/" + path).replace(os.sep, "/") + hash_mark + anchor + ")"
     out, fence = [], None
     for line in text.splitlines(keepends=True):
         stripped = line.lstrip(" ")
@@ -210,6 +211,25 @@ mkdir -p "$committed_fixture/views"
 cp -R "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases" "$committed_fixture/views/phases"
 cp -R "$FRAMEWORK_DIR/skills/assistant-workflow/references/plans" "$committed_fixture/views/plans"
 printf '\nDRIFT\n' >>"$committed_fixture/views/phases/build.md"
+for unsupported_link in '[guide]: ../../../tools/progress/operating-guidance.md' \
+    '[guide](../../../tools/progress/operating-guidance.md "Guide")' \
+    '[guide](<../../../tools/progress/operating-guidance.md>)' \
+    'See `[guide](../a.md)` in code.'; do
+    link_fixture="$(mktemp -d "${TMPDIR:-/tmp}/workflow-reference-link.XXXXXX")"
+    p0p4_register_cleanup "$link_fixture"
+    cp "$plans_source" "$link_fixture/plan-template.md"
+    python3 - "$phases_source" "$link_fixture/phases.md" "$unsupported_link" <<'PYINJECT'
+import sys
+text = open(sys.argv[1], encoding="utf-8").read()
+marker = "## Phase: Build\n"
+assert marker in text
+open(sys.argv[2], "w", encoding="utf-8").write(text.replace(marker, marker + "\n" + sys.argv[3] + "\n", 1))
+PYINJECT
+    if run_generator "$link_fixture" --apply >/dev/null 2>&1; then
+        failure_cases+=("unsupported link form accepted: $unsupported_link")
+    fi
+done
+
 if run_generator "$committed_fixture" --check >/dev/null 2>&1; then
     failure_cases+=("committed view corruption")
 fi
