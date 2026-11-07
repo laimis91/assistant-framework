@@ -116,10 +116,10 @@ Missing work/findings remains `HAS_REMAINING_ITEMS`.
 
 Report scope, findings/fixes, verification and limits. No findings means
 "No material findings within the reviewed scope and available evidence";
-`CLEAN` is an enum, not proof. Retain canonical reviewed scope, batch/round
-evidence, required checks and QA; at a structured boundary for score bookkeeping
-also retain `contracts/output.yaml`. A standalone review returned only to the
-user retains no `contracts/output.yaml` completion artifact. `CLEAN`/`ISSUES_FIXED` require complete current coverage and no
+`CLEAN` is an enum, not proof. Retain
+`contracts/output.yaml`, canonical reviewed scope, batch/round evidence, required
+checks and QA. A standalone review returned only to the user retains no
+`rubric_summary` score progression. `CLEAN`/`ISSUES_FIXED` require complete current coverage and no
 remaining must-fix/should-fix items; failed/blocked passes never qualify.
 Omit empty checklists and internal protocol from human summaries.
 
