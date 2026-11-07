@@ -161,6 +161,8 @@ def rebase_links(text: str, source_dir: Path, view_dir: Path) -> str:
             fail(f"unsupported Markdown link form for a relocated view: {line.strip()}")
         if any("](" in span.group(2) for span in CODE_SPAN.finditer(line)):
             fail(f"link-shaped text inside inline code cannot be relocated: {line.strip()}")
+        if line.count("](") != len(INLINE_LINK.findall(line)):
+            fail(f"incomplete or wrapped inline link cannot be relocated: {line.strip()}")
         output.append(INLINE_LINK.sub(rebase, line))
     return "".join(output)
 

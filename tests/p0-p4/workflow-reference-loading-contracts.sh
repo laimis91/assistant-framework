@@ -73,7 +73,7 @@ def relocated(text, source_dir, view_dir):
     # Views live in other directories; relative link targets must still name the same file.
     def move(match):
         target = match.group(1)
-        if re.match(r"[a-z][a-z0-9+.-]*:|#|/", target):
+        if re.match(r"[A-Za-z][A-Za-z0-9+.-]*:|#|/", target):
             return match.group(0)
         path, hash_mark, anchor = target.partition("#")
         # Same file seen from the view: climb from the view to the source directory, then follow the path.
@@ -214,7 +214,8 @@ printf '\nDRIFT\n' >>"$committed_fixture/views/phases/build.md"
 for unsupported_link in '[guide]: ../../../tools/progress/operating-guidance.md' \
     '[guide](../../../tools/progress/operating-guidance.md "Guide")' \
     '[guide](<../../../tools/progress/operating-guidance.md>)' \
-    'See `[guide](../a.md)` in code.'; do
+    'See `[guide](../a.md)` in code.' \
+    'See [guide]('; do
     link_fixture="$(mktemp -d "${TMPDIR:-/tmp}/workflow-reference-link.XXXXXX")"
     p0p4_register_cleanup "$link_fixture"
     cp "$plans_source" "$link_fixture/plan-template.md"
