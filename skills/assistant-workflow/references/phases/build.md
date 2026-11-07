@@ -87,7 +87,7 @@ execution, active workflow TDD, or a repair requiring its carried protocol. It
 owns delegated/direct fallback execution, Code Writer and Builder/Tester
 evidence, selected verification, conditional TDD, Code Writer unexpected blockers, and per-slice
 verification. Repeated work uses the
-[common task-level stagnation guard](../../../tools/progress/operating-guidance.md).
+[common task-level stagnation guard](../../../../tools/progress/operating-guidance.md).
 Silent fallback cannot complete.
 
 For medium+ harness-capable work, confirm the task journal or carried-forward
