@@ -13,6 +13,7 @@ Load [the common outcome guidance and shared stagnation policy](../../tools/prog
 Build a useful, scoped orientation from inspected source. Infer the project and focus from context; ask only when a missing choice materially changes the inspection. Keep onboarding read-only for production code.
 
 - Read project instructions, README/docs, build manifests, and relevant CI configuration. Identify purpose, stack, structure, and source-backed build, test, and run commands. Batch independent reads when supported.
+- Load [inventory.md](inventory.md) only when the user asks for size or language counts, or the repository is unfamiliar and large.
 - Trace the entry points and representative paths relevant to the requested depth. Map module responsibilities, data flow, configuration, and external dependencies. Follow important ownership, lifecycle, cancellation, and failure boundaries where they affect understanding.
 - Sample enough representative source and tests to identify conventions with concrete file examples. Inspect existing helpers and patterns before suggesting future change points.
 - Report relevant risks and gaps: for example permissions, persistence, integrations, resource ownership, or weak verification. Include semantic type or design-pressure observations only where inspected evidence makes them useful; project size does not require candidate arrays or a redesign.

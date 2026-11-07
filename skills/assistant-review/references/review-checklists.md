@@ -32,7 +32,7 @@ Use this checklist when reviewing changes that add or modify autonomous loops: a
 
 5. **Progress/stagnation detection**
    - A completed semantic cycle needs durable acceptance gains or useful novel evidence that changes the next action; scores/finding counts alone are diagnostic.
-   - At the source-bound effective window of consecutive unproductive cycles (default three), retain identity, count, frontier and oscillation history; report a concrete unblock. Context/evaluator changes and generic continuation never reset the guard.
+   - Framework correction loops in the reviewed change follow the [common task-level stagnation guard](../../../tools/progress/operating-guidance.md); application/tool/API loops keep the bounds in item 1. At a stall, retain identity, count, frontier and oscillation history and report a concrete unblock. Context/evaluator changes and generic continuation never reset the guard.
 
 6. **Cost/token guardrails**
    - Loops that call paid APIs, large models, web search, subagents, or large-context prompts need cost/time/token awareness.

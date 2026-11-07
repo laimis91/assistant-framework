@@ -29,7 +29,8 @@ while shared_progress_allows_work:
   2. EVALUATE
      - Incomplete coverage -> `HAS_REMAINING_ITEMS`, never CLEAN/ISSUES_FIXED; history does not block replacement. Audit exits after one started terminal batch; retry exhaustion never starts another.
      - Complete aggregate exits if actionable items are absent; otherwise perform authorized fixes while the shared guard permits work or report remaining. Rubric never manufactures work.
-     - On genuine shared semantic stagnation or material change, the orchestrator records pivot_restart_decision. Score diagnostics alone never force this decision.
+     - On genuine shared semantic stagnation or material change, the orchestrator records pivot_restart_decision: preserve pivot_restart_signal and route the Pivot/Restart Decision Packet through the orchestrator with the retained guard and concrete unblock condition. Rubric and score diagnostics alone do not trigger this decision.
+     - When genuinely stalled, retain evidence and report the specific blocker and next useful action. A pivot/restart decision is required for a material scope, access, cost, risk or acceptance change under existing authority rules. An equivalent routine correction needs no repeated approval. Generic continuation cannot erase a stall. A validated material unblock permits only its bound newly feasible action, consumed once after all gates, without resetting count/history.
 
   3. FIX / VALIDATE
      - Validate FIX_STEP entry_assertions before source/test mutation or dispatch. Only review-fix repairs authorized evidence; record closure.

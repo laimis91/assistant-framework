@@ -972,15 +972,15 @@ for file_and_term in \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::references/score-tracking.md" \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::references/qa-evaluation-loop.md" \
     "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md::Require a recorded pivot/restart decision before another pass only for evidenced" \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md::pivot_restart_signal" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md::pivot_restart_signal" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md::pivot_restart_signal" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md::orchestrator records pivot_restart_decision" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml::pivot_restart_signal" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::- name: pivot_restart_decision" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::pivot_restart_decision" \
     "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::genuine semantic stagnation or material change" \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md::Pivot/Restart Decision Packet" \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md::score diagnostics alone do not" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md::Pivot/Restart Decision Packet" \
+    "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md::score diagnostics alone do not" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md::Pivot/Restart Escalation" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md::QA does not silently continue"; do
     file="${file_and_term%%::*}"

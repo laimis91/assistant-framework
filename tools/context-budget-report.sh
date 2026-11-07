@@ -536,6 +536,10 @@ fi
 
 PROJECT_AGENTS_FILE="$REPO_ROOT/AGENTS.md"
 GLOBAL_INSTRUCTIONS_FILE="$INSTALL_HOME/.codex/AGENTS.md"
+# The managed block and every skill root load the installed common guide.
+COMMON_GUIDANCE_FILE="$INSTALL_HOME/.codex/tools/progress/operating-guidance.md"
+[[ -f "$COMMON_GUIDANCE_FILE" ]] \
+    || die "Isolated install did not provide tools/progress/operating-guidance.md; context inventory was not emitted."
 
 GLOBAL_AGENTS_BLOCK="$WORK_ROOT/generated-global-agents.md"
 extract_marker_block "$GLOBAL_INSTRUCTIONS_FILE" \
@@ -610,13 +614,14 @@ fi
 
 read -r PROJECT_WORDS PROJECT_BYTES < <(measure_file "$PROJECT_AGENTS_FILE")
 read -r GLOBAL_WORDS GLOBAL_BYTES < <(measure_file "$GLOBAL_AGENTS_BLOCK")
+read -r GUIDANCE_WORDS GUIDANCE_BYTES < <(measure_file "$COMMON_GUIDANCE_FILE")
 read -r CATALOG_WORDS CATALOG_BYTES < <(measure_file "$CATALOG_FILE")
 CATALOG_CHARACTERS="$(wc -m <"$CATALOG_FILE" | tr -d ' ')"
 read -r INITIAL_WORDS INITIAL_BYTES < <(measure_file "$SELECTED_INITIAL_FILE")
 read -r ENTRY_WORDS ENTRY_BYTES < <(measure_file "$SELECTED_ENTRY_FILE")
 
-STANDING_WORDS=$((PROJECT_WORDS + GLOBAL_WORDS + CATALOG_WORDS))
-STANDING_BYTES=$((PROJECT_BYTES + GLOBAL_BYTES + CATALOG_BYTES))
+STANDING_WORDS=$((PROJECT_WORDS + GLOBAL_WORDS + GUIDANCE_WORDS + CATALOG_WORDS))
+STANDING_BYTES=$((PROJECT_BYTES + GLOBAL_BYTES + GUIDANCE_BYTES + CATALOG_BYTES))
 TOTAL_INITIAL_WORDS=$((STANDING_WORDS + INITIAL_WORDS))
 TOTAL_INITIAL_BYTES=$((STANDING_BYTES + INITIAL_BYTES))
 TOTAL_ENTRY_WORDS=$((STANDING_WORDS + ENTRY_WORDS))
@@ -636,6 +641,8 @@ jq -n \
     --argjson project_bytes "$PROJECT_BYTES" \
     --argjson global_words "$GLOBAL_WORDS" \
     --argjson global_bytes "$GLOBAL_BYTES" \
+    --argjson guidance_words "$GUIDANCE_WORDS" \
+    --argjson guidance_bytes "$GUIDANCE_BYTES" \
     --argjson catalog_words "$CATALOG_WORDS" \
     --argjson catalog_bytes "$CATALOG_BYTES" \
     --argjson catalog_characters "$CATALOG_CHARACTERS" \
@@ -648,7 +655,7 @@ jq -n \
     --argjson total_entry_words "$TOTAL_ENTRY_WORDS" \
     --argjson total_entry_bytes "$TOTAL_ENTRY_BYTES" '
     {
-      schema_version: "2.0",
+      schema_version: "3.0",
       agent: $agent,
       skill: $skill,
       inventory_mode: $inventory_mode,
@@ -656,6 +663,7 @@ jq -n \
       components: {
         project_agents: {words: $project_words, bytes: $project_bytes},
         generated_global_agents: {words: $global_words, bytes: $global_bytes},
+        common_operating_guidance: {words: $guidance_words, bytes: $guidance_bytes},
         native_skill_catalog_descriptions: {
           words: $catalog_words,
           bytes: $catalog_bytes,
@@ -690,6 +698,10 @@ if [[ -n "$BASELINE" ]]; then
       ] | all(.[]; type == "number")
     ' "$BASELINE" >/dev/null 2>&1; then
         die "Baseline is missing numeric totals."
+    fi
+    BASELINE_SCHEMA="$(jq -r '.schema_version // "unknown"' "$BASELINE")"
+    if [[ "$BASELINE_SCHEMA" != "3.0" ]]; then
+        die "baseline schema $BASELINE_SCHEMA is not comparable with 3.0; regenerate the baseline with this reporter."
     fi
     jq --slurpfile baseline "$BASELINE" '
       def delta($current; $old): $current - $old;

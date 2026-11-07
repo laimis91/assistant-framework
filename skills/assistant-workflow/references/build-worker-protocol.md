@@ -228,10 +228,8 @@ For repeated work, use one task-level ProgressState in the existing journal or
 carried context under [the shared policy](../../../tools/progress/operating-guidance.md);
 persisted/executable progress admission follows [the wire boundary](../../../tools/progress/wire-boundary.md).
 Record the completed correction plus its due/executable verification/review as
-one semantic checkpoint before next-work blockers. The source-bound effective
-window (default three consecutive unproductive cycles) stops corrective work.
-Productive fourth and later attempts continue. Phase, worker, failure signature,
-score or plan-version changes cannot reset the same outcome guard. Retain
+one semantic checkpoint in the journal before next-work blockers, under the
+[common task-level stagnation guard](../../../tools/progress/operating-guidance.md). Retain
 legacy repair counters as historical observations only; missing history is an
 explicit evidence gap. Action-bound material unblock uses the same retained
 count and history, consumes once only after all dispatch gates, and provides no

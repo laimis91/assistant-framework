@@ -63,9 +63,38 @@ fi
 test_start "workflow focused-reference views contain exact selected source sections"
 if python3 - "$fixture_root" <<'PY'
 from pathlib import Path
+import os
+import re
 import sys
 
 root = Path(sys.argv[1])
+
+def relocated(text, source_dir, view_dir):
+    # Views live in other directories; relative link targets must still name the same file.
+    def move(match):
+        target = match.group(1)
+        if re.match(r"[A-Za-z][A-Za-z0-9+.-]*:|#|/", target):
+            return match.group(0)
+        path, hash_mark, anchor = target.partition("#")
+        # Same file seen from the view: climb from the view to the source directory, then follow the path.
+        up = os.path.relpath(source_dir, view_dir).replace(os.sep, "/")
+        return "](" + os.path.normpath(up + "/" + path).replace(os.sep, "/") + hash_mark + anchor + ")"
+    out, fence = [], None
+    for line in text.splitlines(keepends=True):
+        stripped = line.lstrip(" ")
+        marker = stripped[:1]
+        run = len(stripped) - len(stripped.lstrip(marker)) if marker in "`~" else 0
+        if fence:
+            if marker == fence[0] and run >= fence[1] and not stripped[run:].strip():
+                fence = None
+            out.append(line)
+            continue
+        if marker in "`~" and run >= 3:
+            fence = (marker, run)
+            out.append(line)
+            continue
+        out.append(re.sub(r"\]\(([^)\s]+)\)", move, line))
+    return "".join(out)
 
 def document(path):
     lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
@@ -103,7 +132,8 @@ phases = root / "phases.md"
 plans = root / "plan-template.md"
 shared = ("Shared Controller Decisions", "Progress Updates")
 def assert_view(path, source, headings):
-    if generated(path) != expected(source, headings):
+    want = relocated(expected(source, headings), str(source.resolve().parent), str(path.resolve().parent))
+    if generated(path) != want:
         raise AssertionError(path)
 
 for filename, heading in {
@@ -181,6 +211,26 @@ mkdir -p "$committed_fixture/views"
 cp -R "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases" "$committed_fixture/views/phases"
 cp -R "$FRAMEWORK_DIR/skills/assistant-workflow/references/plans" "$committed_fixture/views/plans"
 printf '\nDRIFT\n' >>"$committed_fixture/views/phases/build.md"
+for unsupported_link in '[guide]: ../../../tools/progress/operating-guidance.md' \
+    '[guide](../../../tools/progress/operating-guidance.md "Guide")' \
+    '[guide](<../../../tools/progress/operating-guidance.md>)' \
+    'See `[guide](../a.md)` in code.' \
+    'See [guide]('; do
+    link_fixture="$(mktemp -d "${TMPDIR:-/tmp}/workflow-reference-link.XXXXXX")"
+    p0p4_register_cleanup "$link_fixture"
+    cp "$plans_source" "$link_fixture/plan-template.md"
+    python3 - "$phases_source" "$link_fixture/phases.md" "$unsupported_link" <<'PYINJECT'
+import sys
+text = open(sys.argv[1], encoding="utf-8").read()
+marker = "## Phase: Build\n"
+assert marker in text
+open(sys.argv[2], "w", encoding="utf-8").write(text.replace(marker, marker + "\n" + sys.argv[3] + "\n", 1))
+PYINJECT
+    if run_generator "$link_fixture" --apply >/dev/null 2>&1; then
+        failure_cases+=("unsupported link form accepted: $unsupported_link")
+    fi
+done
+
 if run_generator "$committed_fixture" --check >/dev/null 2>&1; then
     failure_cases+=("committed view corruption")
 fi
@@ -237,6 +287,41 @@ if [[ "${#failure_cases[@]}" -eq 0 ]]; then
     pass
 else
     fail "focused workflow references accepted invalid state: ${failure_cases[*]}"
+fi
+
+test_start "committed workflow focused-reference views keep relative links resolvable"
+if python3 - "$FRAMEWORK_DIR/skills/assistant-workflow/references" <<'PYLINKS'
+from pathlib import Path
+import re
+import sys
+
+root = Path(sys.argv[1])
+broken = []
+for view in sorted([*root.glob("phases/*.md"), *root.glob("plans/*.md")]):
+    fence = None
+    for number, line in enumerate(view.read_text(encoding="utf-8").splitlines(), 1):
+        stripped = line.lstrip(" ")
+        marker = stripped[:1]
+        run = len(stripped) - len(stripped.lstrip(marker)) if marker in "`~" else 0
+        if fence:
+            if marker == fence[0] and run >= fence[1] and not stripped[run:].strip():
+                fence = None
+            continue
+        if marker in "`~" and run >= 3:
+            fence = (marker, run)
+            continue
+        for target in re.findall(r"\]\(([^)\s]+)\)", line):
+            if re.match(r"[a-z][a-z0-9+.-]*:|#|/", target):
+                continue
+            if not (view.parent / target.split("#", 1)[0]).exists():
+                broken.append(f"{view.relative_to(root)}:{number}: {target}")
+if broken:
+    raise SystemExit("\n".join(broken))
+PYLINKS
+then
+    pass
+else
+    fail "workflow focused-reference views contain unresolvable relative links"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

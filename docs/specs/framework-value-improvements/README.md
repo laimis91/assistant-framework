@@ -9,7 +9,7 @@ Source: [framework value assessment](../../research/assistant-framework-value-as
 | Slice | Specification | Adds | Depends on |
 |---|---|---|---|
 | S01 | [Request alignment and focused delivery](S01-request-alignment.md) | Shared request-coverage and relevance terms in the common guide, applied by Research, Workflow, Docs and Review's document checklist. Implemented; matched evaluation pending authorization | — (foundation) |
-| S02 | [Conditional instruction loading and maintenance](S02-conditional-loading.md) | Score bookkeeping loaded only where consumed, canonical links, README drift fixes, optional Onboard and Docs recipes | — (foundation) |
+| S02 | [Conditional instruction loading and maintenance](S02-conditional-loading.md) | Score bookkeeping loaded only where consumed, canonical links, README drift fixes, optional Onboard and Docs recipes. Implemented | — (foundation) |
 | S03 | [Practical debugging](S03-debugging-reproduction.md) | Reproduction and state-inspection references for assistant-debugging | S01 terms only |
 | S04 | [TDD craft](S04-tdd-craft.md) | One craft reference with worked authoring-time examples for assistant-tdd | Shared-example split with S05 |
 | S05 | [Review methods and test value](S05-review-and-test-value.md) | Perspective briefs, optional preflight, CI Audit test-value questions and audit-time examples | Shared-example split with S04 |

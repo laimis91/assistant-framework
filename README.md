@@ -1,6 +1,6 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. 16 first-class `assistant-*` skills: structured workflow, clarification, TDD enforcement, debugging, thinking tools, research, security analysis, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), and evidence-based verification selection and assessment.
+A Personal AI Assistant framework for developers. 16 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools, research, security analysis, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), and evidence-based verification selection and assessment.
 
 ## Documentation
 
@@ -10,16 +10,16 @@ Start with the [documentation map](docs/README.md) for task-specific guides, [du
 
 1. **Structured Workflow** — adaptive Discover > optional Plan > Build > Review > Document flow with bounded repair and evidence-gated handoff
 2. **Clarification** — Converts ambiguous, fragmented, or multi-intent prompts into an executable brief
-3. **TDD Enforcement** — Red-Green-Refactor cycle with strict verification gates at each transition
+3. **TDD** — Red-Green-Refactor with verification gates at each transition, when requested, required by project policy, or selected for checks
 4. **Debugging** — Evidence-first root-cause workflow: reproduce, hypothesize, isolate, fix, verify
 5. **Thinking Tools** — On-demand structured reasoning (first principles, multi-perspective debate, stress testing, etc.)
-6. **Research Tools** — Tiered information gathering with URL verification and confidence scoring
+6. **Research Tools** — Source-backed research with verified links, claim-specific evidence quality, and explicit conflicts and gaps
 7. **Security Analysis** — STRIDE threat modeling, OWASP code review, CVE dependency audit, attack surface mapping
-8. **Documentation** — Auto-generates API docs, architecture docs, README, changelogs, migration guides, code explanations
+8. **Documentation** — Creates or updates API docs, architecture docs, README, changelogs, migration guides and code explanations from source truth
 9. **Onboarding** — Systematic codebase learning: maps structure, identifies patterns, and reports actionable project orientation
 10. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
 11. **Visual Diagrams** — Mermaid diagrams from code: architecture, sequence, ER, flow, component, class, state
-12. **Review Automation** — Evidence-bounded review/fix/re-review with calibrated scores and finite rounds
+12. **Review Automation** — Evidence-bounded review/fix/re-review with fresh independent passes; further rounds need new evidence, with no cumulative round ceiling
 13. **Skill Creation** — Creates focused instructions, with schemas when a real consumer needs them
 14. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
 15. **Verification** — Selects proportionate checks and techniques, applies TDD only when appropriate, and assesses whether evidence supports the claim.
@@ -186,8 +186,8 @@ short plan without an approval wait. For `prepare_only` at any size, `plan_mode=
 For prepare_only at any size, default to `plan_mode=none` unless optional readiness planning is explicitly requested.
 For `execution_intent != prepare_only`, `approval_required` applies to medium-or-larger work and to risk, policy, or
 public-impact changes. An explicitly requested `prepare_only` readiness Plan is always inline and no-wait. Build owns implementation, tests, verification, and
-the shared task-level guard: its source-bound effective window (default three consecutive unproductive semantic cycles),
-with completed evidence retained before later blockers and no cumulative attempt ceiling.
+the [common task-level stagnation guard](tools/progress/operating-guidance.md),
+with completed evidence retained before later blockers.
 Build repair is implementation/verification-failure recovery. Review-fix work
 for review findings stays within the bounded `assistant-review` loop and records
 its own revalidation before a fresh review result.
@@ -227,7 +227,7 @@ Resolves ambiguous or multi-intent requests using available context and material
 Triggers on: messy prompt, unclear prompt, figure out what I mean, help me structure this
 
 ### assistant-tdd
-Test-Driven Development enforcement: Red-Green-Refactor cycle with verification gates. Bug fix pattern (reproduce → fix → protect). Integrates with workflow's build loop and review cycle.
+Test-Driven Development when requested, required by project policy, or selected for checks by the verification decision: Red-Green-Refactor cycle with verification gates. Bug fix pattern (reproduce → fix → protect). Integrates with workflow's build loop and review cycle.
 
 Triggers on: TDD, tests first, test-driven, write the test first, red green refactor, or an intersecting workflow-selected TDD check
 
@@ -242,7 +242,7 @@ Six structured reasoning tools: clarify, perspectives, stress-test, deep-think, 
 Triggers on: architecture decisions, complex trade-offs, stress tests, debate, first principles, hypotheses
 
 ### assistant-research
-Source-backed research with verified links, claim-specific confidence, and explicit conflicts and gaps. Selected five-lens decision briefings retain five independent lens handoffs and separate peer review.
+Source-backed research with verified links, claim-specific evidence quality, and explicit conflicts and gaps. Selected five-lens decision briefings retain five independent lens handoffs and separate peer review.
 
 Triggers on: research, topic investigation, current evidence, source-backed comparisons
 
@@ -257,7 +257,7 @@ Evidence-bounded code review: trivial/small light review uses one fresh pass plu
 Triggers on: review, fresh review, code review, review this, check the code
 
 ### assistant-docs
-Documentation generation and maintenance: API docs, architecture overview, README, changelog, migration guide, and code explanation. Checks source accuracy within the requested scope.
+Documentation generation and maintenance: API docs, architecture overview, README, changelog, migration guide, and code explanation. Checks source accuracy within the requested scope. Prose edits follow an editing checklist that preserves meaning, technical terms and the existing voice.
 
 Triggers on: document, write docs, update readme, changelog, API docs, architecture doc
 
@@ -267,7 +267,7 @@ Creates, updates, or assesses concise skills. Adds contracts when an actual cons
 Triggers on: create skill, new skill, add contracts, skill contracts, scaffold skill
 
 ### assistant-onboard
-Maps a codebase to the requested depth: entry points, responsibilities, commands, conventions, relevant risks, and coverage gaps. Persists orientation only when authorized.
+Maps a codebase to the requested depth: entry points, responsibilities, commands, conventions, relevant risks, and coverage gaps. An optional size/language inventory uses `git ls-files` and counters already installed, and reports counts as orientation facts, not quality. Persists orientation only when authorized.
 
 Triggers on: learn this codebase, onboard, get familiar with, map this project
 
@@ -489,12 +489,12 @@ skills/
     evals/cases.json                <- Offline defect/control and authority fixtures
 
   assistant-tdd/
-    SKILL.md                       <- TDD enforcement (Red-Green-Refactor cycle)
+    SKILL.md                       <- Conditional TDD (Red-Green-Refactor cycle)
 
   assistant-thinking/
     SKILL.md                       <- Tool descriptions and usage guidance
     clarify.md                     <- First principles: hard vs soft constraints
-    perspectives.md                <- Multi-perspective debate (4 roles, 3 rounds)
+    perspectives.md                <- Smallest useful set of independent viewpoints
     stress-test.md                 <- Steelman + counter-argument
     deep-think.md                  <- 8 analytical lenses
     hypothesize.md                 <- Goal-first + hypothesis plurality
@@ -503,10 +503,11 @@ skills/
 
   assistant-research/
     SKILL.md                       <- Tool descriptions and usage guidance
-    research.md                    <- Tiered: quick / standard / extensive / deep
+    research.md                    <- Direct source research scaled to the question
     five-lens-briefing.md          <- STORM-inspired decision briefing: perspective scan / contradictions / synthesis / peer review
     investigate.md                 <- Deep investigation with ethical framework
     url-verify.md                  <- URL verification protocol
+    legacy-compatibility.md        <- Pre-v5 records, loaded only for persisted history
 
   assistant-security/
     SKILL.md                       <- Tool descriptions and severity scale
@@ -524,6 +525,7 @@ skills/
     api-docs.md                    <- API surface documentation
     architecture.md                <- System overview generation
     readme-gen.md                  <- README generation from code analysis
+    editing-checklist.md           <- Prose editing: meaning, terms and voice preserved
     changelog.md                   <- Release notes from git history
     migration.md                   <- Breaking change migration guides
     explainer.md                   <- Code explanation for learning
@@ -533,6 +535,7 @@ skills/
 
   assistant-onboard/
     SKILL.md                       <- Scoped codebase orientation
+    inventory.md                   <- Optional size/language inventory with local tools
 
   assistant-ideate/
     SKILL.md                       <- Diverge-converge-refine pipeline
@@ -582,19 +585,19 @@ Workflow skill: Triages as Small, quick discovery, lightweight plan, fix + test 
 ### For TDD
 ```
 You: "Use TDD to add a password strength validator"
-TDD skill: Activates Red-Green-Refactor. Writes failing test first, implements minimum to pass, refactors, logs each cycle in task journal.
+TDD skill: Activates Red-Green-Refactor. Writes failing test first, implements minimum to pass, refactors, and reports each cycle.
 ```
 
 ### For thinking
 ```
 You: "Think about whether we should use microservices or modular monolith"
-Thinking skill: Loads perspectives.md, runs 4-perspective debate
+Thinking skill: Loads perspectives.md, runs a perspectives debate with only the roles that can change the decision
 ```
 
 ### For research
 ```
 You: "Research the best .NET caching libraries"
-Research skill: Runs standard-tier research with URL verification
+Research skill: Researches with primary sources, URL verification and explicit gaps
 ```
 
 ### For security
@@ -723,7 +726,8 @@ standing-instruction support.
 
 Workflow v16 validates/migrates original v14/v15 authority, retaining original and
 normalized digests, execution, actors, selected TDD and results. Review v10 and
-five-lens research v5 use the same three-consecutive-unproductive-cycle policy.
+five-lens research v5 use the same
+[common task-level stagnation guard](tools/progress/operating-guidance.md).
 Research v5 needs five separate lens agents and a newly created peer reviewer;
 historical v4 fallback records stay readable only.
 Productive attempts and review/QA rounds have no cumulative ceiling. Historical
