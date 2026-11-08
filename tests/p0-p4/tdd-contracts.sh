@@ -1021,4 +1021,113 @@ if ruby -ryaml -e '
     ref1.fetch("check").include?("validated v3 reuse_green") && ref1.fetch("check").include?("zero new invocations")
 ' "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md" "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/phase-gates.yaml"; then pass; else fail "TDD prose or REF1 still requires a distinct REFACTOR run"; fi
 
+tdd_craft_reference="$FRAMEWORK_DIR/skills/assistant-tdd/references/test-craft.md"
+ci_audit_test_maintenance="$FRAMEWORK_DIR/skills/assistant-ci-audit/references/test-maintenance.md"
+tdd_craft_distinctive_lines=(
+    'rules.apply.assert_called_once_with(order)'
+    'expected = compute_total(order)'
+    'rate_service.discount_for.return_value = 100'
+)
+
+test_start "TDD craft reference loads only inside active authoring and keeps the gates"
+if [[ ! -f "$tdd_craft_reference" ]]; then
+    fail "missing skills/assistant-tdd/references/test-craft.md"
+elif tdd_craft_link_error="$(ruby -e '
+  skill = File.read(ARGV.fetch(0))
+  frontmatter = skill.lines.first(4).join
+  expected_frontmatter = "---\nname: assistant-tdd\ndescription: \"Use for tests-first TDD requests, project TDD rules, or workflow-selected TDD checks.\"\n---\n"
+  abort "frontmatter changed" unless frontmatter == expected_frontmatter
+  red_step = skill[/^1\. \*\*RED\.\*\*.*?(?=^2\. \*\*GREEN\.\*\*)/m]
+  abort "RED step not found" if red_step.nil?
+  red_flat = red_step.gsub(/\s+/, " ")
+  abort "RED step lacks the craft link" unless red_flat.include?("(references/test-craft.md)")
+  abort "RED step lacks the load condition" unless red_flat.include?("When TDD is active and a test is being authored or corrected")
+  flat = skill.gsub(/\s+/, " ")
+  abort "craft link appears outside the RED step" unless flat.scan("references/test-craft.md").length == 1
+  [
+    "adds or extends a meaningful behavior assertion",
+    "observe the intended missing-behavior failure before production edits",
+    "why RED failed for the right reason",
+    "Missing or invalid required RED blocks production"
+  ].each { |phrase| abort "pinned phrase lost: #{phrase}" unless flat.include?(phrase) }
+' "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md" 2>&1)"; then
+    pass
+else
+    fail "assistant-tdd SKILL.md craft link invalid: $tdd_craft_link_error"
+fi
+
+test_start "TDD craft examples cover the required pairs and boundaries"
+if [[ ! -f "$tdd_craft_reference" ]]; then
+    fail "missing skills/assistant-tdd/references/test-craft.md"
+elif tdd_craft_content_error="$(ruby -e '
+  text = File.read(ARGV.fetch(0))
+  flat = text.gsub(/\s+/, " ")
+  lower = flat.downcase
+  required = [
+    "TDD is already active and a test is being authored or corrected",
+    "adds no phase, gate, report field, test quota or activation rule",
+    "assert checkout(order).total == 900",
+    "return_value=900",
+    "double application",
+    "expected 900, got 800",
+    "ModuleNotFoundError",
+    "fixture",
+    "exact symptom, not a generic failure",
+    "applied once",
+    "rejected",
+    "parser, rule-engine and receipt-formatter tests",
+    "`separated_workers`",
+    "single intersecting CheckSpec ID",
+    "unstable or external boundaries",
+    "the subject'"'"'s own result",
+    "exact request",
+    "is the contract",
+    "C#",
+    "TypeScript"
+  ] + ARGV.drop(1)
+  missing = required.reject { |term| flat.include?(term) }
+  abort "missing anchors: #{missing.join(" | ")}" unless missing.empty?
+  forbidden = [
+    "every new function", "one test per", "at least one test per", "run the full suite",
+    "always brittle", "never mock", "delete the existing implementation", "fix the test if it passes"
+  ].select { |term| lower.include?(term) }
+  abort "forbidden scope text: #{forbidden.join(" | ")}" unless forbidden.empty?
+  section = text[/^## Tests that pass without protecting the requirement$.*?(?=^## |\z)/m]
+  abort "missing three-class section" if section.nil?
+  classes = section.split(/^### /).drop(1)
+  abort "expected three classes, found #{classes.length}" unless classes.length == 3
+  classes.each_with_index do |body, index|
+    body_flat = body.gsub(/\s+/, " ")
+    abort "class #{index + 1} names no missed defect" unless body_flat.include?("Misses:")
+    abort "class #{index + 1} is not tied to intended-reason RED" unless body_flat.include?("cannot fail for the intended reason")
+    abort "class #{index + 1} lacks its distinctive example line" unless body_flat.include?(ARGV.fetch(index + 1))
+  end
+' "$tdd_craft_reference" "${tdd_craft_distinctive_lines[@]}" 2>&1)"; then
+    pass
+else
+    fail "TDD craft reference content invalid: $tdd_craft_content_error"
+fi
+
+test_start "TDD craft examples are not duplicated in CI Audit"
+tdd_craft_duplicates=()
+if [[ ! -f "$tdd_craft_reference" ]]; then
+    tdd_craft_duplicates+=("reference missing")
+elif [[ ! -f "$ci_audit_test_maintenance" ]]; then
+    tdd_craft_duplicates+=("CI Audit test-maintenance.md missing; update this guard to its new location")
+else
+    if grep -Fq 'assistant-ci-audit' "$tdd_craft_reference" || grep -Eq '\]\(\.\./\.\./' "$tdd_craft_reference"; then
+        tdd_craft_duplicates+=("TDD craft reference links outside assistant-tdd")
+    fi
+    for line in "${tdd_craft_distinctive_lines[@]}"; do
+        if grep -Fq -- "$line" "$ci_audit_test_maintenance"; then
+            tdd_craft_duplicates+=("test-maintenance.md repeats: $line")
+        fi
+    done
+fi
+if [[ "${#tdd_craft_duplicates[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "TDD craft examples duplicated or cross-linked: ${tdd_craft_duplicates[*]}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

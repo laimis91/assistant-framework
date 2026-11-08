@@ -577,6 +577,102 @@
           }
         ]
       }
+    },
+    {
+      "id": "mock-supplied-assertion-is-rejected-as-red-evidence",
+      "title": "Mock-supplied assertion is rejected as RED evidence",
+      "category": "red_gate_enforcement",
+      "purpose": "Checks that active TDD rejects a draft test whose asserted value is supplied by a mock, names the defect it misses, and rewrites it through the public entry point with the requirement's value.",
+      "prompt": "TDD is on for this fix. Requirement: a 100-cent promotion is applied once; a 1000-cent order totals 900. My draft test patches shop.rules.apply (the pricing rules) with return_value=900 and then asserts checkout(order).total == 900. Can I record its run as RED evidence and move on to production?",
+      "setup_context": [
+        "The assistant-tdd skill instructions are active.",
+        "TDD is active for the selected check because the user requested it.",
+        "The real pricing rules currently subtract the promotion twice, so checkout returns 800 for the 1000-cent order.",
+        "checkout(order) is the existing public entry point."
+      ],
+      "expected_behavior": [
+        "Rejects the mocked test as RED evidence because the mock supplies the asserted 900.",
+        "Names the defect the draft would miss: double application in the real pricing rules.",
+        "Rewrites the test through checkout(order) with a real order, real promotion and the requirement's 900.",
+        "Requires the intended RED symptom expected 900, got 800 before production edits.",
+        "Keeps selected-TDD scope without adding quotas, broad-suite runs or deletion of existing code."
+      ],
+      "pass_criteria": [
+        "The response refuses the mocked run as RED evidence.",
+        "The response names double application as the missed defect.",
+        "The response asserts checkout(order).total == 900 with real pricing rules.",
+        "The response requires the failure expected 900, got 800 before production code."
+      ],
+      "fail_signals": [
+        "Accepts the mocked run as valid RED evidence.",
+        "Starts production edits before observing the intended failure.",
+        "Requires a test for every public method."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "RED",
+          "mock",
+          "double application",
+          "checkout(order)",
+          "real pricing rules",
+          "900",
+          "expected 900, got 800",
+          "production"
+        ],
+        "forbidden_substrings": [
+          "run the full suite after GREEN",
+          "delete the existing implementation",
+          "test for every public method"
+        ]
+      }
+    },
+    {
+      "id": "subject-generated-expected-value-is-rewritten",
+      "title": "Subject-generated expected value is rewritten",
+      "category": "red_gate_enforcement",
+      "purpose": "Checks that active TDD replaces an expected value computed by the subject under test with the requirement's literal value and explains that the shared defect hides the failure.",
+      "prompt": "TDD is on. Requirement: a 100-cent promotion is applied once; a 1000-cent order totals 900. My draft test does expected = compute_total(order) and asserts checkout(order).total == expected, and it passes. checkout uses compute_total internally. Is this a good test to start the cycle with?",
+      "setup_context": [
+        "The assistant-tdd skill instructions are active.",
+        "TDD is active for the selected check because the user requested it.",
+        "compute_total currently subtracts the promotion twice and checkout calls it.",
+        "checkout(order) is the existing public entry point."
+      ],
+      "expected_behavior": [
+        "Explains that the expected value shares the defect with the subject, so the test cannot fail for the intended reason.",
+        "Names double application as the missed defect.",
+        "Replaces the expected value with the requirement's literal 900.",
+        "Requires the intended RED symptom expected 900, got 800 before production edits.",
+        "Keeps selected-TDD scope without adding quotas, broad-suite runs or deletion of existing code."
+      ],
+      "pass_criteria": [
+        "The response rejects the subject-generated expected value.",
+        "The response names double application as the shared defect.",
+        "The response asserts checkout(order).total == 900.",
+        "The response requires the failure expected 900, got 800 before production code."
+      ],
+      "fail_signals": [
+        "Keeps compute_total as the source of the expected value.",
+        "Treats the passing draft as proof the requirement holds.",
+        "Requires a test for every public method."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "RED",
+          "compute_total",
+          "shares the defect",
+          "double application",
+          "requirement",
+          "checkout(order).total == 900",
+          "expected 900, got 800"
+        ],
+        "forbidden_substrings": [
+          "run the full suite after GREEN",
+          "delete the existing implementation",
+          "test for every public method",
+          "keeping expected = compute_total(order) is fine"
+        ]
+      }
     }
   ]
 }
