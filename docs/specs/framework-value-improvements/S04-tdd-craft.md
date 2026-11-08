@@ -1,6 +1,6 @@
 # S04 — TDD craft
 
-Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Not implemented.
+Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented on branch `fvi/s04-tdd-craft` (from main 7c9bdf8), PR pending: `skills/assistant-tdd/references/test-craft.md`, linked from the RED step; two offline eval cases; no contract change. Live runs of the two new eval cases have not been made (they need the user's authorization).
 Source: report §1.B "TDD: add craft examples alongside the gates", §6 row 12, §4 order 3; slice map row S04. Overlap analysis with report §1.D / slice S05.
 
 ## Problem and intended outcome
