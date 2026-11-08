@@ -19,7 +19,7 @@ fixtures to check unchanged, changed, stale, partial, and unavailable source
 responses, including bounded recovery and registry preservation. It performs no
 network requests; the installed helper's actual transport is a separate check.
 
-This inventory now covers all 16 first-class `assistant-*` skills. The current
+This inventory now covers all 17 first-class `assistant-*` skills. The current
 tracked first-class fixtures are:
 
 - `skills/assistant-ci-audit/evals/cases.json`
@@ -33,6 +33,7 @@ tracked first-class fixtures are:
 - `skills/assistant-review/evals/cases.json`
 - `skills/assistant-security/evals/cases.json`
 - `skills/assistant-skill-creator/evals/cases.json`
+- `skills/assistant-spike/evals/cases.json`
 - `skills/assistant-tdd/evals/cases.json`
 - `skills/assistant-telos/evals/cases.json`
 - `skills/assistant-thinking/evals/cases.json`
