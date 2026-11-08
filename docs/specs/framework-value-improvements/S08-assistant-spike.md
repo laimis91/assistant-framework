@@ -1,6 +1,6 @@
 # S08 — Disposable feasibility experiments (assistant-spike)
 
-Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented on branch `fvi/s08-assistant-spike` (2026-11-07); held-out refreeze pending integration. On 2026-11-08 the user waived the R-EVAL-3 review of the S08 activation cases (merged unreviewed; feedback may come later) and accepted the method text (plan T3).
+Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented on branch `fvi/s08-assistant-spike` (2026-11-07), merged to main as 843a408 (#101); held-out refreeze pending integration. On 2026-11-08 the user waived the R-EVAL-3 review of the S08 activation cases (merged unreviewed; feedback may come later) and accepted the method text (plan T3).
 Source: report §2 "Recommend: assistant-spike" (docs/research/assistant-framework-value-assessment-2026-10-26.md:159-173), §6 row 10 (same file:278), order 5 (same file:215); slice map row S08 (docs/plans/framework-value-improvements/specification-index.md, "Full specification set").
 
 ## Problem and intended outcome
