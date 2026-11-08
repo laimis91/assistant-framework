@@ -70,4 +70,16 @@ Principle findings must include:
 - evidence: file, line, and observed behavior
 - fix: the smallest durable change that removes the risk
 
+A simplification, reuse, altitude or workaround finding also states:
+
+- actual cost, with file:line: what is duplicated or wasted, or what it makes
+  harder to change. A finding that cannot name its cost is a nit.
+- why the code is not an intentional boundary, such as a compatibility shim, staged
+  migration, vendored-code isolation or documented divergence. Check history,
+  comments, consumers and docs first; the divergence-control rule in Reuse Search
+  and Authoritative Duplication applies. When intent cannot be determined, keep the
+  finding low-confidence and non-blocking, unless the duplicate changes
+  authoritative semantics or causes an observed defect: then the Reuse Search
+  severity applies.
+
 Do not report vague findings without evidence and risk.

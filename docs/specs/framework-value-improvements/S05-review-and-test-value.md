@@ -1,6 +1,6 @@
 # S05 — Review methods and test-value judgment
 
-Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Not implemented.
+Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Drafted against main d11756d; evaluation baseline main 7c9bdf8. Implemented on branch `fvi/s05-review-test-value` (base main 7c9bdf8), not merged. The matched evaluation (R-S05-14) ran on 2026-11-08, with 48 runs: Claude Code headless with DeepSeek Flash, isolated homes, blind Claude grading. It passed all five parts of the pre-registered rule. Mean must-find matches per run rose from 1.38 to 1.58. False plus low-value findings fell from 7 to 5. No must-find was found less often. Decoy c5-k1 was filed in 3 of 3 runs in both conditions, so the failure is not new; c7-k1 and c8-k1 were never failed. Families 5 and 7 improved, and families 1–4, 6 and 8 were at ceiling in both conditions. Limits: small seeded sample. Oracle c7-d2 is a corpus defect: the CSRF check passes when both tokens are absent, so no run could find it; it is reported, not edited, and the result is the same with or without it. The locus matcher under-reports line matches. The changed condition invoked the skill in 21 of 24 runs, and the current condition in 24 of 24. Other valid findings not in the oracles fell from 41 to 32; this does not count toward the decision. The user confirmed the five-part decision rule as written and chose no requirement ID for decision 3 (checked by contract text pins) and no ninth corpus family, so the matched evaluation does not exercise the Verification examples (R-S05-15, R-S05-16, decision 3); focused evals cover them.
 Source: report §1 C "Review" (`docs/research/assistant-framework-value-assessment-2026-10-26.md:97-110`), §1 D "Test value" (`:111-126`), §4 order 4 (`:214`), "Recommended direction" audit-lessons row (`:17`), "Additional audit findings" (`:226-249`, Verification ownership at `:232-233`), assessment rows 8, 9, 13, 16 (`:276-284`), §7 adjustments (`:342-358`); review techniques catalog (`docs/research/review-techniques-catalog-2026-10-28.md`, gap analysis `:106-162`, proposals `:374-409`, user decisions `:411-427`, implementation status `:429-441`); slice map row S05 and the unassigned F6/F7 item (`docs/plans/framework-value-improvements/specification-index.md`).
 
 ## Problem and intended outcome
@@ -18,7 +18,7 @@ Review briefs (owner: assistant-review)
 Simplification findings (owner: assistant-review)
 
 - **R-S05-4** A simplification, reuse, altitude or workaround finding states its actual cost: what is duplicated, wasted or made harder to change, with file:line evidence.
-- **R-S05-5** Such a finding also states why the apparent workaround is not an intentional boundary, such as a compatibility shim, staged migration, vendored-code isolation or documented divergence. Evidence can come from history, comments, consumers or docs. When intent cannot be determined, the finding stays low-confidence and non-blocking.
+- **R-S05-5** Such a finding also states why the apparent workaround is not an intentional boundary, such as a compatibility shim, staged migration, vendored-code isolation or documented divergence. Evidence can come from history, comments, consumers or docs. When intent cannot be determined, the finding stays low-confidence and non-blocking, unless the duplicate changes authoritative semantics or causes an observed defect; then the Reuse Search severity applies.
 
 Optional preflight (owner: assistant-review)
 
@@ -145,7 +145,7 @@ Not included:
    - (c) Assign to S06 with the installer cases.
 
    **Recommended default: (a).** It is the smallest owner set that teaches the lesson where checks are selected and reviewed, and it uses F6/F7 only as examples, without repairing them. **Decided by user 2026-11-06:** S05 owns the installed-path / configured-home example (the recommended default).
-4. **Pre-registered decision rule for the matched evaluation** (technical_design_decision; user acceptance requested with this spec). The recommended default is in Verification.
+4. **Pre-registered decision rule for the matched evaluation** (technical_design_decision; user acceptance requested with this spec). The recommended default is in Verification. **Confirmed by the user 2026-11-06** as written.
 5. **Baseline isolation mechanism** (technical_design_decision for the plan). Options: a temporary `git worktree` at the base revision, or an exported copy of the base revision in scratch space. Both satisfy R-S05-9. A worktree writes metadata into `.git`, while an export does not. **Recommended default: export to scratch.** Use a worktree when the build needs repository metadata.
 
 ## Acceptance examples
@@ -175,7 +175,7 @@ Each new eval case must have `fail_signals` that a plausible incomplete response
 **Bounded matched evaluation (design):**
 - **Question.** Do the changed instructions produce more unique concrete findings and fewer false or low-value findings than the current instructions, without losing retained protection?
 - **Conditions.** Two conditions:
-  - Current: main d11756d, Review, CI Audit and Verification as installed.
+  - Current: main 7c9bdf8 (the S05 branch base, superseding d11756d per Ordering; S01 and S02 are present in both conditions), Review, CI Audit and Verification as installed.
   - Changed: the S05 branch.
 
   Model, host, effort, tools, case packets and prompts are identical. Each condition is installed into its own disposable home (isolated `HOME`/`CODEX_HOME`, following the `script-execution.md` pattern), so neither condition reads the other's or the user's installed copy. Run order is interleaved. Skills are invoked explicitly, so activation is not measured.
@@ -197,7 +197,7 @@ Each new eval case must have `fail_signals` that a plausible incomplete response
   - For CI Audit cases, correct keep or remove disposition with remaining proof named.
   - Tokens and elapsed time only where the host reports them; they never decide the outcome.
 - **Grading.** Condition labels are stripped before grading. Code-based matching is used where the locus is exact. A separate grader actor matches locus and mechanism, and is not the authoring session. The user adjudicates disagreements or they are reported unresolved.
-- **Pre-registered decision rule (proposed).** The changed condition is accepted when all of these hold:
+- **Pre-registered decision rule (confirmed by the user, 2026-11-06).** The changed condition is accepted when all of these hold:
   - its mean unique concrete findings is not lower overall;
   - false plus low-value findings are not higher overall;
   - no seeded must-find defect is found less often;

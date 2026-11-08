@@ -70,6 +70,7 @@ Use this checklist when reviewing code changes that affect public APIs, domain/b
 
 6. **Runtime surface sync**
    - Check code, tests, docs, config, migrations, generated clients, examples, CLI help, API schemas, deployment manifests, feature flags, telemetry, and runbooks when they can affect or describe runtime behavior.
+   - Literal default-home paths in roles and instructions, such as `~/.codex/tools/...`, are a runtime surface: check them against the configured home and the installed layout, not the source checkout.
 
 Treat bypassed invariants, public-contract drift, weak inherited tests, protocol safety-step omissions, missing high-impact guards, or runtime-surface drift as must-fix or should-fix depending on release risk.
 

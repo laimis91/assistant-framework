@@ -53,6 +53,8 @@ For two added menu documents with an unchanged loader and existing arbitrary-ent
 
 If that same change alters path resolution, identify the changed loader behavior and choose a focused regression oracle. The presence of new static entries no longer covers the changed behavior.
 
+When a change writes into locations that may hold user-owned content (managed marker blocks, linked destinations, shared roots, overlapping source and target paths), select the preservation outcome: seed a user-owned sentinel, such as a line outside the managed block and a sibling file in the shared root, check that it stays byte-identical after the run, and check that an ambiguous input is rejected before the first write. "Install exits 0 and the managed files exist" is a structural check, not that outcome. Audit F1, F2, F4 and F5 are such cases. Selection names the observable check only; analysing the ownership boundaries belongs to the security and review owners.
+
 ## Output and stop
 
 For a human-only selection, summarize the checks, rationale, and exclusions. When
