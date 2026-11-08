@@ -46,7 +46,10 @@ otherwise state gaps and recommend investigation. High stakes alone require
 neither five lenses nor serialization.
 
 Use [research.md](research.md) for sources, [investigate.md](investigate.md) for
-entities and [url-verify.md](url-verify.md) for uncertain URLs. Why/how/improvement
+entities and [url-verify.md](url-verify.md) for uncertain URLs; for a substantial
+report (a deliverable report, any five-lens run, or an explicit request for
+checkable citations or fact-checking), also use
+[source-provenance.md](source-provenance.md). Why/how/improvement
 questions may yield candidate mechanisms; retain their support, counterevidence,
 gaps, and validation method. Never claim proven causality or improvement without
 executed validation.

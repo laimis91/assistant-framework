@@ -3155,4 +3155,71 @@ if node "$FRAMEWORK_DIR/tests/p0-p4/lib/assistant-research-semantic-controls.cjs
 test_start "current Research v5 requires fresh native isolation and preserves original v4 fallback verdicts"
 if node "$FRAMEWORK_DIR/tests/p0-p4/lib/assistant-research-semantic-controls.cjs" --current-v5 "$FRAMEWORK_DIR" "$current_research_evals"; then pass; else fail "current-v5 actor/context/source/fallback/version isolation failed"; fi
 
+test_start "research provenance and fetch recovery stay conditional and inside v5 fields"
+research_root="${research_skill%/SKILL.md}"
+provenance_reference="$research_root/source-provenance.md"
+recovery_reference="$research_root/fetch-recovery.md"
+url_verify_reference="$research_root/url-verify.md"
+provenance_failures=()
+flatten_research_text() { tr '\n' ' ' <"$1" | tr -s '[:space:]' ' '; }
+for required_reference in "$provenance_reference" "$recovery_reference"; do
+    [[ -f "$required_reference" ]] || provenance_failures+=("$(basename "$required_reference") missing")
+done
+if [[ ${#provenance_failures[@]} -eq 0 ]]; then
+    provenance_pointer="$(flatten_research_text "$research_skill" | grep -o '.\{0,250\}(source-provenance\.md)' || true)"
+    for trigger_term in "substantial report" "deliverable report" "five-lens run" "explicit request"; do
+        printf '%s\n' "$provenance_pointer" | grep -Fq "$trigger_term" \
+            || provenance_failures+=("SKILL.md source-provenance.md pointer lacks trigger term: $trigger_term")
+    done
+    url_verify_text="$(flatten_research_text "$url_verify_reference")"
+    printf '%s\n' "$url_verify_text" | grep -Fq "(fetch-recovery.md)" \
+        || provenance_failures+=("url-verify.md does not link fetch-recovery.md")
+    printf '%s\n' "$url_verify_text" | grep -Fq "is a failed fetch even with HTTP 200: handle it under step 2" \
+        || provenance_failures+=("url-verify.md does not route rejected HTTP 200 bodies to recovery")
+    if printf '%s\n' "$url_verify_text" | grep -Fq "(404, 403, timeout): drop it"; then
+        provenance_failures+=("url-verify.md still drops failed fetches without recovery")
+    fi
+    for body_term in "HTTP 200" "interstitial" "error page"; do
+        printf '%s\n' "$url_verify_text" | grep -Fiq "$body_term" \
+            || provenance_failures+=("url-verify.md does not reject $body_term bodies")
+    done
+    five_lens_set="$(awk '
+        $0 == "  five_lens:" { in_set = 1; next }
+        in_set && /^  [[:alnum:]_-]+:[[:space:]]*$/ { exit }
+        in_set && /^    references:/ { in_references = 1; next }
+        in_references && /^    selectors:/ { exit }
+        in_references && /^      - / { sub(/^      - /, ""); print }
+    ' "$research_index")"
+    printf '%s\n' "$five_lens_set" | grep -Fxq "source-provenance.md" \
+        || provenance_failures+=("five_lens load set does not include source-provenance.md")
+    for short_answer_set in source_research investigate; do
+        short_answer_references="$(awk -v set="  $short_answer_set:" '
+            $0 == set { in_set = 1; next }
+            in_set && /^  [[:alnum:]_-]+:[[:space:]]*$/ { exit }
+            in_set && /^    references:/ { in_references = 1; next }
+            in_references && /^    selectors:/ { exit }
+            in_references && /^      - / { sub(/^      - /, ""); print }
+        ' "$research_index")"
+        [[ -n "$short_answer_references" ]] \
+            || provenance_failures+=("$short_answer_set load set references could not be parsed")
+        if printf '%s\n' "$short_answer_references" | grep -Fxq "source-provenance.md"; then
+            provenance_failures+=("$short_answer_set load set must not load source-provenance.md for short answers")
+        fi
+    done
+    if grep -Fq "fetch-recovery.md" "$research_index"; then
+        provenance_failures+=("fetch-recovery.md must load only through url-verify.md on a failed fetch")
+    fi
+    provenance_text="$(flatten_research_text "$provenance_reference")"
+    for pinned_term in "task-local" "undated" "does not prove support" "exactly one" "verification_detail"; do
+        printf '%s\n' "$provenance_text" | grep -Fq "$pinned_term" \
+            || provenance_failures+=("source-provenance.md lacks pinned term: $pinned_term")
+    done
+    recovery_text="$(flatten_research_text "$recovery_reference")"
+    for pinned_term in "at most once" "capture date" "as of" "approval" "private"; do
+        printf '%s\n' "$recovery_text" | grep -Fq "$pinned_term" \
+            || provenance_failures+=("fetch-recovery.md lacks pinned term: $pinned_term")
+    done
+fi
+if [[ ${#provenance_failures[@]} -eq 0 ]]; then pass; else fail "$(printf '%s; ' "${provenance_failures[@]}")"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"
