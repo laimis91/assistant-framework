@@ -1,6 +1,6 @@
 # Framework value improvements — specification set
 
-Status: **Accepted by the user**, 2026-11-06. Baseline: main d11756d. S01 to S05 are implemented (see their rows); each remaining slice still needs an approved implementation plan before any edits.
+Status: **Accepted by the user**, 2026-11-06. Baseline: main d11756d. S01 to S06 are implemented (see their rows); each remaining slice still needs an approved implementation plan before any edits.
 
 Source: [framework value assessment](../../research/assistant-framework-value-assessment-2026-10-26.md). The user accepted the S01–S11 slice map and its decisions on 6 November 2026: matched evaluation for S01 and S05 only; new skills bundled by default with `--skill` for single installs; a cleanup skill plus uninstall script (S11); no word or character budgets.
 
@@ -13,7 +13,7 @@ Source: [framework value assessment](../../research/assistant-framework-value-as
 | S03 | [Practical debugging](S03-debugging-reproduction.md) | Reproduction and state-inspection references for assistant-debugging. Implemented | S01 terms only |
 | S04 | [TDD craft](S04-tdd-craft.md) | One craft reference with worked authoring-time examples for assistant-tdd. Implemented | Shared-example split with S05 |
 | S05 | [Review methods and test value](S05-review-and-test-value.md) | Perspective briefs, optional preflight, CI Audit test-value questions and audit-time examples. Implemented | Shared-example split with S04 |
-| S06 | [Security and advisory triage](S06-security-and-advisory-triage.md) | Three Security companion references; new assistant-advisory-triage skill | Integration count reconciliation and held-out refreeze |
+| S06 | [Security and advisory triage](S06-security-and-advisory-triage.md) | Three Security companion references; new assistant-advisory-triage skill. Implemented | Integration count reconciliation and held-out refreeze |
 | S07 | [Research provenance and recovery](S07-research-provenance.md) | Source register for substantial reports, citation checks, bounded failed-fetch recovery | S01 terms only |
 | S08 | [assistant-spike](S08-assistant-spike.md) | New disposable-experiment skill and a prose handoff to Workflow | Integration count reconciliation and held-out refreeze |
 | S09 | [assistant-ui-qa](S09-assistant-ui-qa.md) | New exploratory UI QA skill feeding the QA evaluator | Integration count reconciliation and held-out refreeze |
