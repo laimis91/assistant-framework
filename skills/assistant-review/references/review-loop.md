@@ -14,6 +14,7 @@ PREPARE
     exactly: "Should I only report findings, or also implement and verify fixes?"
   - Standalone Spec Review on scope. Validate FIX_STEP entry_assertions before repair or mutation dispatch. On mismatch, run only in review-fix mode to repair evidence-backed must-fix and should-fix items. In audit, retain and stay read-only. Dispatch every planned read-only Reviewer pass with sanitized criteria; never expose the mismatch details to discovery siblings. Return it to the composing workflow for planning or approval when it changes scope, risk, or acceptance.
   - Workflow consumes current due-check evidence; no separate Spec agent runs (historical Spec PASS records stay readable). The final fresh acceptance review (`review_subject=acceptance`) solely owns request/plan/delivery reconciliation: its frozen batch assigns the spec obligations (missing acceptance criteria, extra scope, changed-files mismatch, verification mismatch) to `contract_and_test_oracle` or the light pass. Medium minimum is plan review plus a final batch at the canonical per-size count (medium 3). `no_build_scope` requires no fix required/occurred and no due selected/executable binding check. Any source fix requires current passed `evidence_ref`, never `not_applicable`.
+  - Optional: before a batch the orchestrator may load `references/review-preflight.md` (added-line scan, baseline versus new failures). Its hits are orchestrator-only leads, never discovery-pass input.
 
 while shared_progress_allows_work:
   Round 3+ requires a recorded `additional_round_reason` with new evidence.

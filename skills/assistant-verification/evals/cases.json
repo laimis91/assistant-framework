@@ -5188,6 +5188,76 @@
           }
         ]
       }
+    },
+    {
+      "id": "preservation-check-selects-sentinel-over-structural-install",
+      "title": "Preservation check selects a sentinel over a structural install check",
+      "category": "preservation_check_selection",
+      "purpose": "Checks that a change writing into user-owned locations selects a byte-identity sentinel and rejection before the first write rather than a structural install check.",
+      "prompt": "Select the checks for this installer change before we build it.",
+      "setup_context": [
+        "The assistant-verification skill instructions are active.",
+        "The change makes setup.sh rewrite a managed block between BEGIN-TOOLKIT and END-TOOLKIT markers in the user's ~/.bashrc and copy helpers into ~/.local/share/toolkit, a directory other tools also use.",
+        "The existing test only checks that setup.sh exits 0 and that the managed block is present."
+      ],
+      "expected_behavior": [
+        "Selects a check that seeds a user-owned sentinel line outside the managed block and a sibling file in the shared directory, and requires both to be byte-identical after the run.",
+        "Selects a check that an input with an unbalanced marker is rejected before any write.",
+        "Treats 'exits 0 and the block is present' as structural, not as the preservation outcome."
+      ],
+      "pass_criteria": [
+        "The selected checks name the sentinel and byte-identical comparison.",
+        "Rejection before the first write is selected for the ambiguous-marker input."
+      ],
+      "fail_signals": [
+        "The selected check is only that setup.sh exits 0 and the managed block exists.",
+        "The response lists and analyses every marker, link and shared-root boundary class instead of selecting the observable check."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "sentinel",
+          "byte-identical",
+          "before the first write"
+        ],
+        "forbidden_substrings": [
+          "exits 0 and the managed block is present, sufficient"
+        ]
+      }
+    },
+    {
+      "id": "empty-selection-after-failed-discovery-is-not-passing",
+      "title": "Empty selection after failed discovery is not passing evidence",
+      "category": "evidence_quality_wrong_outcome",
+      "purpose": "Checks that a passing result with an empty selected set is accepted only after discovery succeeded for a valid requested scope.",
+      "prompt": "Is this enough evidence to say the migration check passed?",
+      "setup_context": [
+        "The assistant-verification skill instructions are active.",
+        "check-migrations.sh selects migration files changed since a requested tag. It was run with --since v9.9, which does not exist, and printed '0 migrations to check' with exit 0; its tag lookup errors go to /dev/null.",
+        "In a separate run with --since v2.3, which exists, no migration files changed and it also printed '0 migrations to check'."
+      ],
+      "expected_behavior": [
+        "Records the --since v9.9 result as a discovery failure or gap, not passing evidence, because the requested tag does not exist.",
+        "Accepts the --since v2.3 result as an ordinary empty result for a valid scope."
+      ],
+      "pass_criteria": [
+        "The v9.9 run is classified as insufficient or failed discovery.",
+        "The v2.3 run is accepted as a valid empty result."
+      ],
+      "fail_signals": [
+        "'0 migrations to check' is accepted as passing for v9.9 without checking that discovery succeeded.",
+        "Both empty results are rejected."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "v9.9",
+          "discovery",
+          "v2.3",
+          "valid"
+        ],
+        "forbidden_substrings": [
+          "analysis passed, nothing to analyze"
+        ]
+      }
     }
   ]
 }
