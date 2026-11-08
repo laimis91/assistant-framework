@@ -749,11 +749,11 @@ class ExistingActivationCases(unittest.TestCase):
     def verdict(self, case, *skills, end=None):
         return activation.score(self.trace(*skills, end=end), case, ROOT)["verdict"]
 
-    def test_all_61_cases_load_with_unique_ids(self):
+    def test_all_64_cases_load_with_unique_ids(self):
         cases = activation.load_cases()
-        self.assertEqual(len(cases), 61)
-        self.assertEqual(len({case["id"] for case in cases}), 61)
-        self.assertEqual(sum(case["should_activate"] for case in cases), 40)
+        self.assertEqual(len(cases), 64)
+        self.assertEqual(len({case["id"] for case in cases}), 64)
+        self.assertEqual(sum(case["should_activate"] for case in cases), 42)
         self.assertEqual(sum(case["run_only"] for case in cases), 2)
 
     def test_positive_counts_every_activation_so_order_does_not_matter(self):
@@ -868,7 +868,7 @@ class ExistingActivationCases(unittest.TestCase):
         code, text = self.report_output(rows, "--baselines", "b1,b2", "--candidate", "c", "--json")
         printed = json.loads(text)
         self.assertEqual(code, 0)
-        self.assertEqual((printed["compared_cases"], printed["total_cases"]), (2, 61))
+        self.assertEqual((printed["compared_cases"], printed["total_cases"]), (2, 64))
         self.assertEqual(printed["regressions"], [["m", "x"], ["m", "y"]])
         self.assertEqual(printed["activation_cases"]["c / m"]["fail"], 2)
         self.assertEqual(printed["groups"], {})
