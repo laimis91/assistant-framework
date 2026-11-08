@@ -1,6 +1,6 @@
 # S09 — Exploratory UI QA (assistant-ui-qa)
 
-Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Not implemented.
+Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented on branch `fvi/s09-assistant-ui-qa` (2026-11-07); held-out refreeze pending integration. On 2026-11-08 the user accepted the severity and coverage method text (T3 evidence row) and waived the R-EVAL-3 review of the six S09 activation cases. The R-DESC-7 crowded listing check passed with no model call: all 17 descriptions stay word for word for six Claude model names (16,288 listing characters). The optional manual smoke found the planted broken Save button, with steps, console error and coverage, and gave no verdict.
 Source: report §2 "Add: assistant-ui-qa" (docs/research/assistant-framework-value-assessment-2026-10-26.md:175-179), §6 rows 2 and 5 (same file:270, :273), order 5 (same file:215); slice map row S09 (docs/plans/framework-value-improvements/specification-index.md, "Full specification set").
 
 ## Problem and intended outcome
@@ -108,7 +108,7 @@ Out of scope and not imported (report :177-179, :270, :273; comparator "/Users/l
 | Activation description and cases (R-S09-17, 18) | new_behavior | implementation_gap | skill-activation.md R-DESC-1/2 |
 | Precision against assistant-review's "QA" wording | materially_unknown | evidence_gap | Review's description ends "QA runs only when required"; no trial has run |
 | Held-out cases and refreeze | explicit_change | implementation_gap | suite.py:139-145, 210-213 |
-| Expert-method derivation for severity/coverage method | materially_unknown | evidence_gap | docs/skill-contract-design-guide.md:14-22; dogfood is the only source |
+| Expert-method derivation for severity/coverage method | new_behavior | implementation_gap | Derived per skills/assistant-skill-creator/references/expert-method-design.md from the dogfood comparator (SKILL.md "Phase 2: Explore" to "Phase 4: Categorize", references/issue-taxonomy.md), the only accessible source; source recommendations kept apart from inference. Decisions and wrong-outcome checks: input flows get valid, invalid and empty states (source recommendation; rejected by `signup-valid-invalid-empty-with-diagnostics` for happy-path-only); diagnostics only at loads and significant interactions (source says after every significant interaction, but its every-interaction capture is dropped; same case, fail signal "after every click"); severity from observed user impact, then workaround (source levels; "lower level when unsure" and "do not raise for inferred impact" are inference; `issue-record-has-steps-severity-category`); blocked means tried and stopped by something outside the explorer's control, not tested means not tried (inference from the source's "what was not, any blockers"; `coverage-lists-tested-not-tested-blocked`, `no-browser-runtime-reports-not-exercised`); duplicates merge only when the same cause is evident (source "same bug manifesting in different places"; `issue-record-has-steps-severity-category`). Method text in skills/assistant-ui-qa/SKILL.md and references/issue-taxonomy.md; no behavioural gain is claimed until a model run |
 
 ## Unresolved decisions
 

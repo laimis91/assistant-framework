@@ -3,7 +3,8 @@
   "body_directs": {
     "assistant-workflow": ["assistant-review", "assistant-verification", "assistant-tdd", "assistant-clarify", "assistant-debugging", "assistant-security"],
     "assistant-debugging": ["assistant-review", "assistant-verification", "assistant-tdd"],
-    "assistant-skill-creator": ["assistant-verification"]
+    "assistant-skill-creator": ["assistant-verification"],
+    "assistant-ui-qa": ["assistant-workflow", "assistant-debugging"]
   },
   "rows": {
     "implement": {"situation": "Feature, fix, refactor or migration, including right after plan approval", "required": ["assistant-workflow", "assistant-verification"], "optional": ["assistant-tdd"], "forbidden": []},
@@ -22,6 +23,7 @@
     "skill_upstream": {"situation": "Check of registered upstream skill guidance", "required": ["assistant-skill-creator"], "optional": [], "forbidden": []},
     "review": {"situation": "Review of code, spec, plan, tests, documents, Jira ticket or refinement material", "required": ["assistant-review"], "optional": [], "forbidden": ["assistant-skill-creator"]},
     "verify": {"situation": "Selecting checks or judging evidence, as its own request", "required": ["assistant-verification"], "optional": [], "forbidden": ["assistant-tdd"]},
+    "ui_qa": {"situation": "Exploratory testing of a running UI or user flow", "required": ["assistant-ui-qa"], "optional": ["assistant-verification", "assistant-debugging"], "forbidden": []},
     "ci_audit": {"situation": "Weak, slow or false-passing CI and tests", "required": ["assistant-ci-audit"], "optional": [], "forbidden": ["assistant-debugging"]},
     "research": {"situation": "Source-backed research or option comparison", "required": ["assistant-research"], "optional": [], "forbidden": []},
     "security_change": {"situation": "Change touching auth, external input, secrets, sensitive data, persistence, network or shell calls, dependencies or config, or external integrations", "required": ["assistant-workflow", "assistant-verification", "assistant-security"], "optional": ["assistant-tdd"], "forbidden": []},
