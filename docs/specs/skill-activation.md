@@ -111,6 +111,7 @@ This table is the expected behavior the evals grade. "Required" means activated 
 | Source-backed research or option comparison | `assistant-research` | | |
 | Change touching auth, external input, secrets, sensitive data, persistence, network or shell calls, dependencies or config, or external integrations | `assistant-workflow`, `assistant-verification`, `assistant-security` | `assistant-tdd` | |
 | Threat model, vulnerability audit, dependency audit or attack-surface analysis | `assistant-security` | | |
+| Triage of a security advisory or vulnerability report | `assistant-advisory-triage` | `assistant-security` | |
 | Request whose intent is still unresolved after inspection | `assistant-clarify` | | |
 | Architecture trade-off or stress test | `assistant-thinking` | | |
 | Generating and ranking options | `assistant-ideate` | | |
@@ -168,7 +169,7 @@ This table is the expected behavior the evals grade. "Required" means activated 
   - Smoke: 4 cases, 1 repeat, 1 model, isolated.
   - Pilot: development set, 3 repeats, 1 model, isolated.
   - Full: both sets, 5 repeats, 2 models, both listing conditions.
-  - Pilot and full also add the R-RUN-10 term: 61 × 3 repeats × arms × models.
+  - Pilot and full also add the R-RUN-10 term: 64 × 3 repeats × arms × models.
 - **R-RUN-8. Retention.** Per-run results stay in local ignored state. Each records source commit, description hash, model, host version, listing condition, calls, tokens and time, and contains no raw prompt, response, credential or secret. Committed fixture text is not raw content, so a transient grader input may hold an `activation_cases` request; retained results use case identifiers. Temporary homes, including host-written session logs, are deleted after each run.
 - **R-RUN-9. Feasibility, before building a collector.** This is a go/no-go check on:
   - whether containment from R-RUN-2 can be established;
@@ -178,12 +179,12 @@ This table is the expected behavior the evals grade. "Required" means activated 
   - whether the delivered listing can be captured, under what seeded usage history and context window size, and what evidence to fall back on if it cannot, such as the debug-log overflow warning;
   - whether `claude plugin eval` with its `tool_used: Skill` grader can be reused. It targets plugins, and this repository is not currently packaged as one;
   - whether `paths` frontmatter loads a skill in a way R-RUN-4 can observe.
-- **R-RUN-10. Existing cases.** The 61 `activation_cases` are collected as single-turn trials at the pilot and full stages, 3 repeats each, in the isolated condition, in every arm and on the same models. The rules are:
+- **R-RUN-10. Existing cases.** The 64 `activation_cases` (61 before S06 added `assistant-advisory-triage`) are collected as single-turn trials at the pilot and full stages, 3 repeats each, in the isolated condition, in every arm and on the same models. The rules are:
   - **Selection.** On a positive case, the selected skills are all those activated before the stop, so firing order does not matter. On a negative case, only the first activated skill counts, so a chained skill does not fail a neighbour's negative case.
   - **Run-only cases.** Two cases must run a command, such as "Run the existing route test command". Trials grant no Bash, so they cannot run it. They are collected anyway, because what they measure is whether a skill activates, and the report counts those trials. If a later stage grants Bash, a runner table keyed by case supplies the command, because the `activation_cases` format cannot declare it.
   - **Passing.** A case passes when a majority of its conclusive repeats agree with `should_activate`. A case with no conclusive majority is reported as inconclusive and is neither a pass nor a regression.
   - **Grading.** The new scorer applies the existing grader's comparison rule per repeat and aggregates. `--activation-results` needs one row per selected case and has no inconclusive state, so it is used only when every selected case is conclusive.
-  - **Regression.** A regression is a case that passes in both baseline arms and fails on the candidate, on the same model. Cases where the baseline arms disagree are reported but not gated. The report says "not evaluated" and exits nonzero when a named arm has no valid rows, the arms differ in cases, repeats, suite, host or listing condition, an arm mixes plugin trees, the two baseline arms are different plugin trees, or a trial is counted twice, because an absent case must not read as no regression. It states how many of the 61 cases were conclusive in all three arms, and says "not evaluated" if none were.
+  - **Regression.** A regression is a case that passes in both baseline arms and fails on the candidate, on the same model. Cases where the baseline arms disagree are reported but not gated. The report says "not evaluated" and exits nonzero when a named arm has no valid rows, the arms differ in cases, repeats, suite, host or listing condition, an arm mixes plugin trees, the two baseline arms are different plugin trees, or a trial is counted twice, because an absent case must not read as no regression. It states how many of the existing cases were conclusive in all three arms, and says "not evaluated" if none were.
   - **Limit.** At `max_turns`, a positive case passes if its skill activated and is otherwise inconclusive. A negative case is decided by its first activation, and is inconclusive if no skill activated.
   - **Errors.** A run error, an unreadable trace or an unclassified command is inconclusive even after an activation, unless a mutation came first.
 

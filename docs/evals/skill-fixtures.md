@@ -19,9 +19,10 @@ fixtures to check unchanged, changed, stale, partial, and unavailable source
 responses, including bounded recovery and registry preservation. It performs no
 network requests; the installed helper's actual transport is a separate check.
 
-This inventory now covers all 17 first-class `assistant-*` skills. The current
+This inventory now covers all 18 first-class `assistant-*` skills. The current
 tracked first-class fixtures are:
 
+- `skills/assistant-advisory-triage/evals/cases.json`
 - `skills/assistant-ci-audit/evals/cases.json`
 - `skills/assistant-clarify/evals/cases.json`
 - `skills/assistant-debugging/evals/cases.json`
@@ -43,6 +44,9 @@ tracked first-class fixtures are:
 The CI-audit fixtures consume supplied independent captures, including false
 passes, early-rejected fixtures, retained distinct protection and incomparable
 cost/authority controls. They use the existing fixed structured operators.
+Three substring-only CI-audit cases cover test-value judgment: fabricated proof
+and wrong-guard negatives beside a kept exact-byte contract, a removal that names
+its remaining proof, and failed discovery versus a valid empty result.
 Workflow scope/repair fixtures add only the missing boundary-retention and
 switch/resume controls; existing QRG, relative-loader, TDD and review-reuse cases
 remain the coverage for those behaviors. Canned-response grading tests the oracle,
@@ -319,7 +323,7 @@ Run it. `--authorized-calls` must equal the plan's `calls`, and `--host-version`
 keeps every arm of a comparison on one installed host:
 
 ```bash
-tools/evals/skill-activation/run_trials.py --batch dev-1 --arm current --set development --host-version 2.1.317 --repeats 3 --max-cost-usd 60 --authorized-calls 190 --run
+tools/evals/skill-activation/run_trials.py --batch dev-1 --arm current --set development --host-version 2.1.317 --repeats 3 --max-cost-usd 60 --authorized-calls 196 --run
 ```
 
 Report. Existing `activation_cases` use `--set activation` with two baselines and

@@ -4,6 +4,8 @@
     "assistant-workflow": ["assistant-review", "assistant-verification", "assistant-tdd", "assistant-clarify", "assistant-debugging", "assistant-security"],
     "assistant-debugging": ["assistant-review", "assistant-verification", "assistant-tdd"],
     "assistant-skill-creator": ["assistant-verification"],
+    "assistant-advisory-triage": ["assistant-security", "assistant-workflow"],
+    "assistant-security": ["assistant-advisory-triage"],
     "assistant-ui-qa": ["assistant-workflow", "assistant-debugging"]
   },
   "rows": {
@@ -28,6 +30,7 @@
     "research": {"situation": "Source-backed research or option comparison", "required": ["assistant-research"], "optional": [], "forbidden": []},
     "security_change": {"situation": "Change touching auth, external input, secrets, sensitive data, persistence, network or shell calls, dependencies or config, or external integrations", "required": ["assistant-workflow", "assistant-verification", "assistant-security"], "optional": ["assistant-tdd"], "forbidden": []},
     "security_audit": {"situation": "Threat model, vulnerability audit, dependency audit or attack-surface analysis", "required": ["assistant-security"], "optional": [], "forbidden": []},
+    "advisory_triage": {"situation": "Triage of a security advisory or vulnerability report", "required": ["assistant-advisory-triage"], "optional": ["assistant-security"], "forbidden": []},
     "clarify": {"situation": "Request whose intent is still unresolved after inspection", "required": ["assistant-clarify"], "optional": [], "forbidden": []},
     "thinking": {"situation": "Architecture trade-off or stress test", "required": ["assistant-thinking"], "optional": [], "forbidden": []},
     "ideate": {"situation": "Generating and ranking options", "required": ["assistant-ideate"], "optional": [], "forbidden": []},

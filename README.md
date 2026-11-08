@@ -1,6 +1,6 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. 17 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools, research, security analysis, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), evidence-based verification selection and assessment, and exploratory UI QA.
+A Personal AI Assistant framework for developers. 18 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools, research, security analysis, advisory triage, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), evidence-based verification selection and assessment, and exploratory UI QA.
 
 ## Documentation
 
@@ -14,7 +14,7 @@ Start with the [documentation map](docs/README.md) for task-specific guides, [du
 4. **Debugging** — Evidence-first root-cause workflow: reproduce, hypothesize, isolate, fix, verify
 5. **Thinking Tools** — On-demand structured reasoning (first principles, multi-perspective debate, stress testing, etc.)
 6. **Research Tools** — Source-backed research with verified links, claim-specific evidence quality, and explicit conflicts and gaps
-7. **Security Analysis** — STRIDE threat modeling, OWASP code review, CVE dependency audit, attack surface mapping
+7. **Security Analysis** — STRIDE threat modeling, OWASP code review, CVE dependency audit, attack surface mapping, agent/installer/release boundary companions, and advisory triage with a shipped-release close bar
 8. **Documentation** — Creates or updates API docs, architecture docs, README, changelogs, migration guides and code explanations from source truth
 9. **Onboarding** — Systematic codebase learning: maps structure, identifies patterns, and reports actionable project orientation
 10. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
@@ -248,9 +248,14 @@ Source-backed research with verified links, claim-specific evidence quality, and
 Triggers on: research, topic investigation, current evidence, source-backed comparisons
 
 ### assistant-security
-STRIDE threat model, OWASP code review, CVE dependency audit, attack surface mapping.
+STRIDE threat model, OWASP code review, CVE dependency audit, attack surface mapping. Three companions load only when the target has that surface: agent and tool authority, installer and filesystem ownership, and dependency and release provenance. Each reported item is either confirmed (with severity) or listed under Needs validation with its blocking fact and a safe owner check, and a full audit states assessed, blocked and excluded surfaces.
 
 Triggers on: security, threat model, audit, vulnerability, OWASP
+
+### assistant-advisory-triage
+Decides what to do with an incoming security advisory or vulnerability report: `close`, `keep open` or `keep open but narrow`. Reads the trust model first, proves whether the latest shipped release is affected or contains the fix (fixed on main alone never closes), checks for duplicates, keeps hardening separate, and drafts maintainer text without posting anything unless the user authorizes that action.
+
+Triggers on: GHSA, CVE report, advisory triage, vulnerability report disposition
 
 ### assistant-review
 Evidence-bounded code review: trivial/small light review uses one fresh pass plus one fresh re-review after a fix, and plan review uses one fresh pass; medium+ audits use one frozen multi-pass batch at the canonical count of two independent narrow passes, plus integration for medium scope and architecture for large scope. Review-fix work normally uses an initial batch, authorized productive correction, and one fresh post-fix re-review batch. Additional rounds require new evidence and a recorded reason, under the same shared task guard. Prioritizes concrete bugs, regressions, risks, and missing tests.
@@ -356,7 +361,7 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 tools/evals/run-skill-evals.sh --activation-results /tmp/skill-activation-results.json
 ```
 
-The default eval inventory is 17 first-class `assistant-*` skills with fixtures.
+The default eval inventory is 18 first-class `assistant-*` skills with fixtures.
 Canonical first-class fixtures use schema `2.0` and include top-level
 `activation_cases`: exact `{user_request, should_activate}` objects with at
 least two normalized-distinct positive requests and one normalized-disjoint
@@ -445,7 +450,10 @@ fixture:
 
 The suites require ripgrep (`rg`) on `PATH` and stop with an error without it.
 For the locked Draft 2020-12 evaluator checks in that aggregate, first use
-Node.js 22 and run `(cd tools/evals && npm ci --ignore-scripts)`.
+Node.js 22 and run `(cd tools/evals && npm ci --ignore-scripts)`; `node_modules`
+is Git-ignored, so each fresh clone or worktree needs this step. The shared
+harness adds `-Ku` to `RUBYOPT` so Ruby checks read and parse UTF-8 framework text
+under a non-UTF-8 locale such as `C`; it leaves the shell locale unchanged.
 
 Pull requests and pushes to `main` also run
 `.github/workflows/framework-validation.yml`, which executes the fast aggregate
@@ -521,7 +529,14 @@ skills/
     code-review.md                 <- OWASP Top 10 review
     dependency-audit.md            <- CVE dependency checking
     attack-surface.md              <- Attack surface mapping
+    agent-authority.md             <- Agent/tool authority and durable context
+    install-boundaries.md          <- Installer and filesystem ownership boundaries
+    release-provenance.md          <- Dependency and release provenance
     prompts/threat-model.md        <- Deep analysis prompt pack
+
+  assistant-advisory-triage/
+    SKILL.md                       <- Advisory verdict, shipped-release proof, read-only authority
+    evals/cases.json               <- Behaviour and activation eval cases
 
   assistant-review/
     SKILL.md                       <- Autonomous review/fix/re-review loop
@@ -712,7 +727,7 @@ configuration when reinstalling.
 
 ### Common guidance and unmatched activities
 
-All 17 first-class assistant skills reference
+All 18 first-class assistant skills reference
 `tools/progress/operating-guidance.md`. Unix installs put tools beside skills
 under `~/.claude`, configured `CODEX_HOME` (default `~/.codex`), or `~/.gemini`.
 Windows Codex also mirrors progress into `~/.agents/tools/progress`, so

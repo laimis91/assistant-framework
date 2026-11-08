@@ -84,6 +84,7 @@ load_sets:
       - references/review-checklists.md
       - references/review-rubric.md
       - references/csharp-review.md
+      - references/review-briefs.md
     selectors:
       - id: fresh-reviewer-context-bundle
         path: contracts/handoffs.yaml
@@ -96,6 +97,7 @@ load_sets:
       - references/review-checklists.md
       - references/review-rubric.md
       - references/csharp-review.md
+      - references/review-briefs.md
       - references/lifecycle-verification.md
     selectors:
       - id: lifecycle-reviewer-context-bundle
