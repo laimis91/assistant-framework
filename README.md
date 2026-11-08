@@ -439,7 +439,10 @@ fixture:
 
 The suites require ripgrep (`rg`) on `PATH` and stop with an error without it.
 For the locked Draft 2020-12 evaluator checks in that aggregate, first use
-Node.js 22 and run `(cd tools/evals && npm ci --ignore-scripts)`.
+Node.js 22 and run `(cd tools/evals && npm ci --ignore-scripts)`; `node_modules`
+is Git-ignored, so each fresh clone or worktree needs this step. The shared
+harness adds `-Ku` to `RUBYOPT` so Ruby checks read and parse UTF-8 framework text
+under a non-UTF-8 locale such as `C`; it leaves the shell locale unchanged.
 
 Pull requests and pushes to `main` also run
 `.github/workflows/framework-validation.yml`, which executes the fast aggregate
