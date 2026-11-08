@@ -507,6 +507,8 @@ skills/
     five-lens-briefing.md          <- STORM-inspired decision briefing: perspective scan / contradictions / synthesis / peer review
     investigate.md                 <- Deep investigation with ethical framework
     url-verify.md                  <- URL verification protocol
+    source-provenance.md           <- Source register and citation check, loaded only for substantial reports
+    fetch-recovery.md              <- Bounded failed-fetch recovery and snapshot labelling, loaded only on a failed fetch
     legacy-compatibility.md        <- Pre-v5 records, loaded only for persisted history
 
   assistant-security/
