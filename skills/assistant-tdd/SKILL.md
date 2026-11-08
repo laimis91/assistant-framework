@@ -20,7 +20,9 @@ independent; inactive TDD never needs a fabricated RED.
    and observe the intended missing-behavior failure before production edits.
    Syntax, imports, environment, and flaky failures do not authorize production.
    If it passes, inspect existing behavior and the oracle; do not remove working
-   code or invent failure evidence.
+   code or invent failure evidence. When TDD is active and a test is being
+   authored or corrected, load [test craft](references/test-craft.md) for worked
+   examples of tests whose RED fails for the intended reason.
 2. **GREEN.** Make the smallest production change that passes. Verify the target,
    selected relevant regressions, and applicable binding checks. Repair failures
    before moving on; do not infer an unselected full suite. Classify failures

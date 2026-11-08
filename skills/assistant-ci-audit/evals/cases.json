@@ -787,6 +787,122 @@
           }
         ]
       }
+    },
+    {
+      "id": "test-value-questions-and-junk-examples-keep-exact-bytes",
+      "title": "Test-value questions flag fabricated proof and keep contractual exact bytes",
+      "category": "test_value_judgment",
+      "purpose": "Checks that the audit applies the authoring questions, flags a fixture that fabricates the owner's output and a wrong-guard negative test, and keeps an exact-byte contract test.",
+      "prompt": "Audit these three tests for value without running anything. Tell me which to keep, rewrite or remove.",
+      "setup_context": [
+        "Default inspect_only. The assistant-ci-audit skill instructions are active.",
+        "tests/test_export.py::test_manifest_written: the fixture writes out/manifest.json itself, then asserts the file exists; export_bundle() is the owner that should write it.",
+        "tests/test_access.py::test_guest_denied: the request has no body, so it fails schema validation with 422 before the role check runs; the test asserts any 4xx.",
+        "tests/test_install.py::test_prompt_block_bytes: asserts the exact bytes of the installed instruction block, which downstream agents parse by marker."
+      ],
+      "expected_behavior": [
+        "Names the observable contract and a credible regression for each test.",
+        "Recommends rewriting test_manifest_written because the fixture fabricates the manifest export_bundle should produce.",
+        "Recommends rewriting test_guest_denied because it passes on the schema guard, not the role check.",
+        "Keeps test_prompt_block_bytes as a contractual exact-byte check."
+      ],
+      "pass_criteria": [
+        "test_manifest_written and test_guest_denied are rewrite; test_prompt_block_bytes is keep.",
+        "The reason for each disposition names what the test fails to detect or protects."
+      ],
+      "fail_signals": [
+        "test_prompt_block_bytes is recommended for removal because it inspects text.",
+        "test_manifest_written is kept because it passes.",
+        "test_guest_denied is accepted without noticing the earlier schema rejection."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "test_manifest_written",
+          "fabricat",
+          "test_guest_denied",
+          "wrong guard",
+          "test_prompt_block_bytes"
+        ],
+        "forbidden_substrings": [
+          "remove test_prompt_block_bytes",
+          "all three inspect source/text"
+        ]
+      }
+    },
+    {
+      "id": "owner-level-cleanup-names-remaining-proof",
+      "title": "Owner-level cleanup names the remaining proof",
+      "category": "test_value_judgment",
+      "purpose": "Checks that a removal recommendation names the retained proof for each removed claim and keeps a test whose protection cannot be accounted for.",
+      "prompt": "We have overlapping tax tests. Recommend which can go, change nothing.",
+      "setup_context": [
+        "Default inspect_only. The assistant-ci-audit skill instructions are active.",
+        "tests/test_tax_internal.py::test_round_half_even_helper asserts the private _round() helper; tests/test_invoice_api.py::test_total_rounding at line 41 asserts the same rounding through the public invoice API.",
+        "tests/test_tax_internal.py::test_zero_rate_region asserts a zero-rate region rule; no other test covers zero-rate regions."
+      ],
+      "expected_behavior": [
+        "Recommends removing test_round_half_even_helper and names test_total_rounding at tests/test_invoice_api.py:41 as the remaining proof for rounding.",
+        "Keeps test_zero_rate_region because no remaining proof can be named, recording it as an unresolved gap rather than a removal.",
+        "Reports dispositions per test, not as a count."
+      ],
+      "pass_criteria": [
+        "The removal names test_total_rounding and what it detects.",
+        "test_zero_rate_region is not recommended for removal."
+      ],
+      "fail_signals": [
+        "Recommends removing both internal tests as duplicates.",
+        "Reports the cleanup as a number of tests removed with no remaining proof named."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "test_round_half_even_helper",
+          "remaining proof",
+          "test_total_rounding",
+          "test_zero_rate_region"
+        ],
+        "forbidden_substrings": [
+          "remove 2 duplicate tests",
+          "remove test_zero_rate_region"
+        ]
+      }
+    },
+    {
+      "id": "failed-discovery-is-not-a-valid-empty-result",
+      "title": "Failed discovery is not a valid empty result",
+      "category": "test_value_judgment",
+      "purpose": "Checks that an audit separates a discovery step that failed for an invalid comparison from a valid empty selection.",
+      "prompt": "Audit whether our lint gate can be trusted. It passed on my branch.",
+      "setup_context": [
+        "Default inspect_only. The assistant-ci-audit skill instructions are active.",
+        "scripts/lint-changed.sh collects files with `git diff --name-only \"$BASE\"...HEAD 2>/dev/null` and exits 0 printing 'nothing to lint' when the list is empty.",
+        "CI calls it with BASE=origin/develop, but the CI checkout is shallow and has no origin/develop ref.",
+        "On a developer machine with origin/develop present and only Markdown changes, the same script also prints 'nothing to lint'."
+      ],
+      "expected_behavior": [
+        "Reports that in CI the discovery fails for the missing origin/develop ref and the gate passes on an empty list, so the pass is not evidence.",
+        "Distinguishes the valid empty result on the developer machine, where the base exists and nothing relevant changed.",
+        "Recommends that an invalid requested comparison fail, without editing the script."
+      ],
+      "pass_criteria": [
+        "The CI pass is classified as failed discovery, not a valid empty result.",
+        "The developer-machine empty result is accepted as ordinary."
+      ],
+      "fail_signals": [
+        "The CI result 'nothing to lint' is accepted as a passing gate.",
+        "Every empty result is treated as a failure.",
+        "The audit edits scripts/lint-changed.sh."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "origin/develop",
+          "failed discovery",
+          "valid empty"
+        ],
+        "forbidden_substrings": [
+          "nothing to lint, passed",
+          "every empty result is a failure"
+        ]
+      }
     }
   ]
 }

@@ -14,6 +14,17 @@ if ! command -v rg >/dev/null 2>&1; then
     exit 1
 fi
 
+# Suite Ruby checks read UTF-8 framework text. Under a non-UTF-8 locale such as C,
+# Ruby defaults to US-ASCII: reading files raises invalid byte sequence errors and
+# `ruby -e` scripts with UTF-8 literals raise invalid multibyte char. -Ku sets both
+# the source and default external encoding to UTF-8 without changing the shell
+# locale (sort, grep and collation behavior stay as the caller set them).
+# A caller-supplied encoding switch wins; -Ku would otherwise override its source encoding.
+case " ${RUBYOPT:-} " in
+    *" -K"* | *" -E"* | *" --encoding"* | *" --external-encoding"*) ;;
+    *) export RUBYOPT="${RUBYOPT:+$RUBYOPT }-Ku" ;;
+esac
+
 P0P4_HARNESS_LOADED=1
 P0P4_HARNESS_STARTED_AT_SECONDS=$SECONDS
 PASS=0
