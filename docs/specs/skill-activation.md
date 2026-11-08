@@ -53,7 +53,7 @@ These limit the design and any implementation must respect them.
 
 ### Use-case ledger
 
-- **R-LED-1.** Before any description changes, each of the 16 first-class skills has a ledger built from its description clauses, `activation_cases` (61 today: 40 positive, 21 negative), body scope and boundary statements, eval cases, and the contract tests that pin descriptions.
+- **R-LED-1.** Before any description changes, each of the 16 first-class skills has a ledger built from its description clauses, `activation_cases` (61 at that baseline: 40 positive, 21 negative), body scope and boundary statements, eval cases, and the contract tests that pin descriptions.
 - **R-LED-2.** Description clauses and positive `activation_cases` map to the new description, because a body loads only after activation and a trigger moved there no longer helps. Other scope lines may map to the description or the body. Any removal records a reason the user has approved.
 - **R-LED-3.** The ledger is local task state, per the [documentation rules](../README.md#update-documentation-with-the-change). Only the resulting descriptions, fixtures and documentation are committed.
 
@@ -108,6 +108,7 @@ This table is the expected behavior the evals grade. "Required" means activated 
 | Selecting checks or judging evidence, as its own request | `assistant-verification` | | `assistant-tdd` |
 | Weak, slow or false-passing CI and tests | `assistant-ci-audit` | | `assistant-debugging` |
 | Source-backed research or option comparison | `assistant-research` | | |
+| Feasibility question settled by a disposable experiment before a real build | `assistant-spike` | `assistant-research`, `assistant-verification`, `assistant-workflow` | |
 | Change touching auth, external input, secrets, sensitive data, persistence, network or shell calls, dependencies or config, or external integrations | `assistant-workflow`, `assistant-verification`, `assistant-security` | `assistant-tdd` | |
 | Threat model, vulnerability audit, dependency audit or attack-surface analysis | `assistant-security` | | |
 | Triage of a security advisory or vulnerability report | `assistant-advisory-triage` | `assistant-security` | |
@@ -141,7 +142,7 @@ This table is the expected behavior the evals grade. "Required" means activated 
 - **R-EVAL-6.** Every skill has at least three stateful positive cases in the held-out set, with development cases on top, so a per-skill rate does not rest on one case. `assistant-workflow` and `assistant-skill-creator` also have one for each phase they apply to.
 - **R-EVAL-7.** Negative cases are of two kinds, reported separately:
   - No skill should fire.
-  - A neighbour must win. Required pairs: review and skill-creator; verification and tdd; debugging and ci-audit; debugging and thinking; research, thinking and ideate; workflow preparation and thinking.
+  - A neighbour must win. Required pairs: review and skill-creator; verification and tdd; debugging and ci-audit; debugging and thinking; research, thinking and ideate; workflow preparation and thinking; spike and research; spike and workflow.
 - **R-EVAL-8. Sensitivity check.** A control arm installs the current source with only the Skills bullet reverted to its text before commit `36c59c5`, so later skill changes do not confound the result. It then replays cases derived from the real failing turns.
   - If the control does not miss at the [OD-2](#accepted-defaults) rate, the replay is not faithful. Fix it before any comparison.
   - If the control misses and the current baseline does not, the result is "already improved by the wording". Report that to the user before writing candidates.
@@ -178,7 +179,7 @@ This table is the expected behavior the evals grade. "Required" means activated 
   - whether the delivered listing can be captured, under what seeded usage history and context window size, and what evidence to fall back on if it cannot, such as the debug-log overflow warning;
   - whether `claude plugin eval` with its `tool_used: Skill` grader can be reused. It targets plugins, and this repository is not currently packaged as one;
   - whether `paths` frontmatter loads a skill in a way R-RUN-4 can observe.
-- **R-RUN-10. Existing cases.** The 64 `activation_cases` (61 before S06 added `assistant-advisory-triage`) are collected as single-turn trials at the pilot and full stages, 3 repeats each, in the isolated condition, in every arm and on the same models. The rules are:
+- **R-RUN-10. Existing cases.** The 70 `activation_cases` (61 before S06 added `assistant-advisory-triage` and S08 added `assistant-spike`) are collected as single-turn trials at the pilot and full stages, 3 repeats each, in the isolated condition, in every arm and on the same models. The rules are:
   - **Selection.** On a positive case, the selected skills are all those activated before the stop, so firing order does not matter. On a negative case, only the first activated skill counts, so a chained skill does not fail a neighbour's negative case.
   - **Run-only cases.** Two cases must run a command, such as "Run the existing route test command". Trials grant no Bash, so they cannot run it. They are collected anyway, because what they measure is whether a skill activates, and the report counts those trials. If a later stage grants Bash, a runner table keyed by case supplies the command, because the `activation_cases` format cannot declare it.
   - **Passing.** A case passes when a majority of its conclusive repeats agree with `should_activate`. A case with no conclusive majority is reported as inconclusive and is neither a pass nor a regression.

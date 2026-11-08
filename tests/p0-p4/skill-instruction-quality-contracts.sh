@@ -61,6 +61,44 @@ else
     fail "clarification decision safeguards failed: ${clarify_failures[*]}"
 fi
 
+test_start "assistant-spike states verdicts, bound probe approval and no production authority"
+spike_skill="$FRAMEWORK_DIR/skills/assistant-spike/SKILL.md"
+spike_failures=()
+for file_and_term in \
+    "$spike_skill::**validated**:" \
+    "$spike_skill::**partial**:" \
+    "$spike_skill::**invalidated**:" \
+    "$spike_skill::riskiest assumption" \
+    "$spike_skill::control" \
+    "$spike_skill::authorizes no production change" \
+    "$spike_skill::never waives" \
+    "$spike_skill::fresh subdirectory" \
+    "$spike_skill::cleanup command" \
+    "$spike_skill::existing \`constraints\` input" \
+    "$spike_skill::candidate_search_constraints" \
+    "$spike_skill::../../tools/progress/operating-guidance.md" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/triage-rubric.md::assistant-spike" \
+    "$FRAMEWORK_DIR/skills/assistant-workflow/references/candidate-search.md::assistant-spike"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        spike_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+if [[ -f "$spike_skill" ]]; then
+    if grep -F -- 'spikes/' "$spike_skill" | grep -Eiv "do not create|don't create|never create" | grep -q .; then
+        spike_failures+=("affirmative spikes/ directory")
+    fi
+    if grep -E -- 'find' "$spike_skill" | grep -F -- '-delete' | grep -Eiv "\bnever\b|\bnot\b|do not|don't" | grep -q .; then
+        spike_failures+=("affirmative find -delete cleanup")
+    fi
+fi
+if [[ ${#spike_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-spike safeguards failed: ${spike_failures[*]}"
+fi
+
 test_start "assistant-workflow routes repository changes through requirements discovery"
 workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
 if grep -Fq -- "backlog items" "$workflow_skill" \

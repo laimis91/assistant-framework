@@ -5,7 +5,8 @@
     "assistant-debugging": ["assistant-review", "assistant-verification", "assistant-tdd"],
     "assistant-skill-creator": ["assistant-verification"],
     "assistant-advisory-triage": ["assistant-security", "assistant-workflow"],
-    "assistant-security": ["assistant-advisory-triage"]
+    "assistant-security": ["assistant-advisory-triage"],
+    "assistant-spike": ["assistant-workflow"]
   },
   "rows": {
     "implement": {"situation": "Feature, fix, refactor or migration, including right after plan approval", "required": ["assistant-workflow", "assistant-verification"], "optional": ["assistant-tdd"], "forbidden": []},
@@ -26,6 +27,7 @@
     "verify": {"situation": "Selecting checks or judging evidence, as its own request", "required": ["assistant-verification"], "optional": [], "forbidden": ["assistant-tdd"]},
     "ci_audit": {"situation": "Weak, slow or false-passing CI and tests", "required": ["assistant-ci-audit"], "optional": [], "forbidden": ["assistant-debugging"]},
     "research": {"situation": "Source-backed research or option comparison", "required": ["assistant-research"], "optional": [], "forbidden": []},
+    "spike": {"situation": "Feasibility question settled by a disposable experiment before a real build", "required": ["assistant-spike"], "optional": ["assistant-research", "assistant-verification", "assistant-workflow"], "forbidden": []},
     "security_change": {"situation": "Change touching auth, external input, secrets, sensitive data, persistence, network or shell calls, dependencies or config, or external integrations", "required": ["assistant-workflow", "assistant-verification", "assistant-security"], "optional": ["assistant-tdd"], "forbidden": []},
     "security_audit": {"situation": "Threat model, vulnerability audit, dependency audit or attack-surface analysis", "required": ["assistant-security"], "optional": [], "forbidden": []},
     "advisory_triage": {"situation": "Triage of a security advisory or vulnerability report", "required": ["assistant-advisory-triage"], "optional": ["assistant-security"], "forbidden": []},
