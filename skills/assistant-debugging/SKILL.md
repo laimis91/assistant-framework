@@ -53,6 +53,14 @@ bindings and accept validated TDD v3 `reuse_green`; persisted v2 fixes stay
 readable; a persisted v1.1 fix needs a refreshed decision, never inferred checks
 or RED.
 
+Load [reproduction.md](references/reproduction.md) when no adequate
+exact-symptom reproduction exists yet. Load
+[state-inspection.md](references/state-inspection.md) for an unresolved
+runtime-state question in Python, Node or .NET that the reproduction, traceback
+or logs cannot answer. Work that already has an exact-symptom reproduction loads
+neither. Record `yes` or `partial` by the `reproduced` description in
+`contracts/output.yaml`.
+
 For affected acquisition/readiness, active work, cancellation, collection/finalization, shutdown, owned resources, cleanup or retry, load
 `lifecycle` from the index and [lifecycle-verification.md](references/lifecycle-verification.md)
 during reproduction/isolation and before fix verification. Synchronous or cosmetic

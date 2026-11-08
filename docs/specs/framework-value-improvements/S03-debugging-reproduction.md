@@ -1,6 +1,6 @@
 # S03 — Practical debugging
 
-Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Not implemented. Revised 2026-11-06 for the user's decision on runtimes (Unresolved decision 3: Python, Node and .NET).
+Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented on branch `fvi/s03-debugging-reproduction` (from main 7c9bdf8), pending its pull request; live runs of the five new eval cases await the user's authorization. Revised 2026-11-06 for the user's decision on runtimes (Unresolved decision 3: Python, Node and .NET).
 Source: report §1.A "Debugging: teach how to build a reproduction", §6 rows 6, 7 and 11, §4 order 3, "Status against main" (lifecycle row); slice map row S03.
 
 ## Problem and intended outcome

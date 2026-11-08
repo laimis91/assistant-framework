@@ -417,7 +417,7 @@ else
     fail "flat task response was reused or not reported missing with multiple skill fixtures"
 fi
 
-packet_names_fixture="$(mktemp "${TMPDIR:-/tmp}/clarification-packet-names.XXXXXX.json")"
+packet_names_fixture="$(mktemp "${TMPDIR:-/tmp}/clarification-packet-names.XXXXXX")"
 p0p4_register_cleanup "$packet_names_fixture"
 cat >"$packet_names_fixture" <<'EOF_PACKET_NAMES'
 {"cases":[{"id":"TASK-01","category":"ordinary"},{"id":"task-02","category":"ordinary"},{"id":"clarity-one","category":"clarification"},{"id":"clarity-two","category":"clarification"}]}
