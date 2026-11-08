@@ -2543,6 +2543,158 @@
           "APPROVED without findings"
         ]
       }
+    },
+    {
+      "id": "integration-brief-starts-from-outside-diff-consumers",
+      "title": "Integration brief starts from consumers outside the diff",
+      "category": "discovery_perspective_brief",
+      "purpose": "Checks that the integration_compatibility_and_consumers brief leads with consumers outside the diff while keeping the acceptance criteria and the canonical medium topology.",
+      "prompt": "Review this medium change before merge: it renames the configuration key retry_limit to max_retries.",
+      "setup_context": [
+        "The assistant-review skill instructions are active; scope is medium, so the canonical batch has three discovery passes.",
+        "The diff renames the key in config/defaults.yaml and in the loader config/loader.py.",
+        "scripts/nightly.sh, outside the diff, still reads retry_limit; it is the only other consumer.",
+        "The acceptance criteria say every existing job keeps its retry behaviour after the rename."
+      ],
+      "expected_behavior": [
+        "The integration pass starts from consumers of the renamed key outside the diff and finds scripts/nightly.sh still reading retry_limit.",
+        "The finding ties the stale consumer to the acceptance criteria that every job keeps its retry behaviour.",
+        "The batch keeps exactly the three canonical medium discovery perspectives."
+      ],
+      "pass_criteria": [
+        "A finding names scripts/nightly.sh as the outside-diff consumer still reading retry_limit.",
+        "The finding cites the acceptance criteria."
+      ],
+      "fail_signals": [
+        "The review inspects only the changed files and misses scripts/nightly.sh.",
+        "The review adds a fourth or fifth discovery pass for consumers.",
+        "The acceptance criteria are dropped from the integration pass."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "scripts/nightly.sh",
+          "retry_limit",
+          "acceptance criteria"
+        ],
+        "forbidden_substrings": [
+          "review only the changed files",
+          "fifth discovery pass"
+        ]
+      }
+    },
+    {
+      "id": "simplification-finding-states-cost-and-rules-out-shim",
+      "title": "Simplification finding states its cost and rules out a compatibility shim",
+      "category": "principle_and_readability_lens",
+      "purpose": "Checks that a reuse or simplification finding states its actual cost with file:line and that an intentional compatibility shim is not filed as should-fix.",
+      "prompt": "Review this change for reuse and simplification problems.",
+      "setup_context": [
+        "The assistant-review skill instructions are active in audit mode.",
+        "lib/slug.py:22 adds make_slug(), which re-implements text.slugify() at lib/text.py:9; make_slug keeps trailing hyphens and slugify strips them, so the two page builders that call them produce different URLs for the same title.",
+        "git log shows no compatibility reason for make_slug.",
+        "lib/api_v1.py:5 wraps the new client in a thin legacy_get() function; its commit message says it keeps the v1 API for existing integrations, and two external callers use it."
+      ],
+      "expected_behavior": [
+        "Reports make_slug at lib/slug.py:22 as duplicating slugify at lib/text.py:9, states the cost (divergent trailing-hyphen handling gives two URLs for one title) and recommends reusing slugify.",
+        "Treats legacy_get as an intentional compatibility shim with evidence from its commit message and callers, and does not file it as must-fix or should-fix."
+      ],
+      "pass_criteria": [
+        "The make_slug finding names lib/slug.py:22, lib/text.py:9 and the trailing-hyphen divergence.",
+        "legacy_get is recognised as a compatibility shim and not filed as a defect."
+      ],
+      "fail_signals": [
+        "legacy_get is reported as an unnecessary wrapper to remove.",
+        "The make_slug finding gives no cost or no file:line evidence.",
+        "A finding whose intent cannot be determined is filed as blocking."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "lib/slug.py:22",
+          "lib/text.py:9",
+          "trailing",
+          "compatibility shim"
+        ],
+        "forbidden_substrings": [
+          "looks unnecessary, remove it",
+          "remove legacy_get"
+        ]
+      }
+    },
+    {
+      "id": "preflight-hit-is-a-lead-not-a-finding",
+      "title": "Preflight hit is a lead, not a finding",
+      "category": "review_preflight",
+      "purpose": "Checks that an optional added-line preflight hit is inspected by the orchestrator before it becomes a finding and never reaches discovery passes.",
+      "prompt": "Review this change; run a quick preflight over the added lines first.",
+      "setup_context": [
+        "The assistant-review skill instructions are active in audit mode; the orchestrator chose the optional preflight.",
+        "The added-line scan matches two lines: deploy/publish.sh:31 adds `upload \"$artifact\" 2>/dev/null || true`, and tests/test_cache.py:12 adds `print(cache)`.",
+        "Inspection shows that when upload fails, publish.sh still exits 0 and reports the release as published.",
+        "The print in tests/test_cache.py is harmless debug output in a test."
+      ],
+      "expected_behavior": [
+        "The orchestrator inspects each hit before recording anything.",
+        "Records deploy/publish.sh:31 as a finding with its impact: a failed upload is reported as a successful release.",
+        "Treats the test print as a low-value lead at most, not a must-fix finding.",
+        "Does not pass the preflight list to discovery passes."
+      ],
+      "pass_criteria": [
+        "The publish.sh finding names deploy/publish.sh:31 and the false-success impact.",
+        "The preflight hits stay orchestrator-only leads."
+      ],
+      "fail_signals": [
+        "An unconfirmed grep hit is reported as must-fix.",
+        "The preflight hit list is sent to discovery passes as findings.",
+        "The preflight is treated as a required gate or an extra pass."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "deploy/publish.sh:31",
+          "lead"
+        ],
+        "forbidden_substrings": [
+          "must-fix: tests/test_cache.py",
+          "preflight findings passed to discovery"
+        ]
+      }
+    },
+    {
+      "id": "baseline-failure-compared-by-identity-and-cause",
+      "title": "Baseline failures are compared by identity and cause",
+      "category": "review_preflight",
+      "purpose": "Checks that baseline-versus-new comparison uses check ID, failure signature and cause rather than counts, and never modifies the user checkout.",
+      "prompt": "Review-fix this change and tell me whether it introduced any test regressions. My working tree has uncommitted notes; leave them alone.",
+      "setup_context": [
+        "The assistant-review skill instructions are active in review-fix mode with authority to run the test suite.",
+        "At the base revision three tests fail: test_parse_header with ValueError, test_sync_remote with ConnectionError and test_render_page with KeyError.",
+        "On the change three tests fail: test_parse_header with ValueError, test_sync_remote with ConnectionError and test_render_page with TimeoutError.",
+        "The user checkout has uncommitted changes in notes.md."
+      ],
+      "expected_behavior": [
+        "Runs the baseline from an exported copy of the base revision in scratch space.",
+        "Reports test_render_page as a new failure because its cause changed from KeyError to TimeoutError, naming both causes.",
+        "Keeps the two same-cause baseline failures visible in the report.",
+        "Leaves notes.md and the user checkout unchanged."
+      ],
+      "pass_criteria": [
+        "test_render_page is reported as new with KeyError and TimeoutError named.",
+        "No stash, reset or checkout touches the user checkout."
+      ],
+      "fail_signals": [
+        "Counts are compared and the result is reported as no regressions.",
+        "The user checkout is stashed or reset to get a baseline.",
+        "Baseline failures are dropped from the report as irrelevant."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "test_render_page",
+          "KeyError",
+          "TimeoutError"
+        ],
+        "forbidden_substrings": [
+          "3 failures, now 3 failures, no regressions"
+        ]
+      }
     }
   ]
 }

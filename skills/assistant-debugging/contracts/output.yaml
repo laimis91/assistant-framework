@@ -76,7 +76,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [yes, no, blocked, partial]
-        description: "Whether the reported symptom was reproduced"
+        description: "Whether the reported symptom was reproduced. `yes`: a check asserting the exact reported symptom (the specific wrong value, error identity, message or state) observed it, and a nearby unrelated failure on the same path would not satisfy that check. `partial`: the symptom was observed, but the check does not distinguish it from a nearby unrelated failure, or only part of the symptom was observed. Historical `yes` records may predate this discrimination rule."
 
   - name: hypotheses
     type: object[]

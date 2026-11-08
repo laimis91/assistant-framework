@@ -2054,4 +2054,143 @@ elif jq -e '.cases[] | select(.id == "medium-review-requires-rubric") | .expecte
 fi
 if [[ ${#score_boundary_failures[@]} -eq 0 ]]; then pass; else fail "${score_boundary_failures[*]}"; fi
 
+test_start "review briefs cover every discovery perspective without changing topology"
+review_briefs="$FRAMEWORK_DIR/skills/assistant-review/references/review-briefs.md"
+if [[ ! -f "$review_briefs" ]]; then
+    fail "review-briefs.md missing"
+elif review_brief_errors="$(ruby -ryaml -e '
+  briefs_path, index_path, handoffs_path = ARGV
+  text = File.read(briefs_path)
+  errors = []
+  perspectives = %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse light_contract_and_runtime]
+  sections = text.split(/^## /).drop(1).map { |s| [s.lines.first.strip, s] }.to_h
+  perspectives.each do |p|
+    heading = "`#{p}`"
+    body = sections[heading]
+    if body.nil?
+      errors << "missing heading ## #{heading}"
+      next
+    end
+    flat = body.gsub(/\s+/, " ")
+    errors << "#{p} brief lacks acceptance criteria" unless flat.include?("acceptance criteria")
+    errors << "#{p} brief lacks beyond the diff" unless flat.include?("beyond the diff")
+  end
+  handoffs = YAML.load_file(handoffs_path)
+  passes = nil
+  walk = lambda do |node|
+    case node
+    when Hash
+      passes = node if node["name"] == "expected_passes" && node["object_fields"]
+      node.each_value { |v| walk.call(v) }
+    when Array
+      node.each { |v| walk.call(v) }
+    end
+  end
+  walk.call(handoffs)
+  enum = passes && passes["object_fields"].find { |f| f["name"] == "perspective" }&.fetch("enum_values")
+  errors << "perspective enum not found" unless enum
+  if enum
+    text.scan(/`([a-z]+(?:_[a-z]+){2,})`/).flatten.uniq.each do |token|
+      errors << "token #{token} is not a canonical perspective" unless enum.include?(token)
+    end
+  end
+  canonical = nil
+  walk2 = lambda do |node|
+    case node
+    when Hash
+      canonical = node if node["name"] == "canonical_discovery_perspectives"
+      node.each_value { |v| walk2.call(v) }
+    when Array
+      node.each { |v| walk2.call(v) }
+    end
+  end
+  walk2.call(handoffs)
+  expected = {
+    "trivial_small" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths],
+    "medium" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers],
+    "large" => %w[contract_and_test_oracle runtime_lifecycle_and_failure_paths integration_compatibility_and_consumers architecture_maintainability_and_reuse]
+  }
+  actual = canonical && canonical["object_fields"].map { |f| [f["name"], [f["enum_values"], f["min_items"], f["max_items"]]] }.to_h
+  expected.each do |size, values|
+    unless actual && actual[size] == [values, values.length, values.length]
+      errors << "canonical_discovery_perspectives.#{size} changed"
+    end
+  end
+  errors << "canonical_discovery_perspectives gained a size" if actual && actual.keys.sort != expected.keys.sort
+  sets = YAML.load_file(index_path).fetch("load_sets")
+  ordinary = sets.fetch("reviewer_context").fetch("references")
+  lifecycle = sets.fetch("lifecycle_reviewer_context").fetch("references")
+  ref = "references/review-briefs.md"
+  errors << "reviewer_context lacks review-briefs.md after csharp-review.md" unless ordinary.index(ref) && ordinary.index(ref) == ordinary.index("references/csharp-review.md").to_i + 1
+  errors << "lifecycle equality broken" unless lifecycle == ordinary + ["references/lifecycle-verification.md"]
+  bundle = handoffs.fetch("dispatch_context_bundles").find { |b| b["name"] == "fresh_reviewer_context" }
+  entry = bundle.fetch("worker_references").find { |r| r["path"] == ref }
+  condition = "review_perspective is contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse or light_contract_and_runtime"
+  errors << "worker_references entry missing or wrong" unless entry && entry["sections"] == ["all"] && entry["condition"] == condition
+  puts errors
+  exit(errors.empty? ? 0 : 1)
+' "$review_briefs" "$review_index" "$review_handoffs" 2>&1)"; then
+    pass
+else
+    fail "review briefs contract: $(tr '\n' ';' <<<"$review_brief_errors")"
+fi
+
+test_start "simplification findings state actual cost and rule out an intentional boundary"
+simplification_failures=()
+for term in "actual cost" "intentional boundary" "compatibility shim" "low-confidence" "non-blocking" "divergence-control rule in Reuse Search"; do
+    if ! p0p4_reference_section_has_term "$review_principles" "## Reporting Rule" "$term"; then
+        simplification_failures+=("## Reporting Rule missing $term")
+    fi
+done
+if ! jq -e '.cases[] | select(.id == "simplification-finding-states-cost-and-rules-out-shim") | .fail_signals | length > 0' "$review_evals" >/dev/null; then
+    simplification_failures+=("eval simplification-finding-states-cost-and-rules-out-shim missing")
+fi
+if [[ ${#simplification_failures[@]} -eq 0 ]]; then pass; else fail "${simplification_failures[*]}"; fi
+
+test_start "review preflight stays optional, orchestrator-only and checkout-safe"
+review_preflight="$FRAMEWORK_DIR/skills/assistant-review/references/review-preflight.md"
+preflight_failures=()
+if [[ ! -f "$review_preflight" ]]; then
+    preflight_failures+=("review-preflight.md missing")
+else
+    for term in "check ID" "failure signature" "cause" "Never stash, reset or check out over the user's" "git archive" "is a lead, not a finding" "never reaches discovery passes" "counts alone"; do
+        if ! p0p4_contains_text "$review_preflight" "$term"; then preflight_failures+=("review-preflight.md missing $term"); fi
+    done
+    if grep -Eq '(^|[^[:alnum:]_-])git (stash|reset|checkout|restore|clean)([^[:alnum:]_-]|$)' "$review_preflight" \
+        && ! grep -E '(^|[^[:alnum:]_-])git (stash|reset|checkout|restore|clean)([^[:alnum:]_-]|$)' "$review_preflight" | grep -Fq 'never'; then
+        preflight_failures+=("review-preflight.md recommends a checkout-modifying git command")
+    fi
+fi
+prepare_block="$(awk '/^PREPARE$/ { inside = 1; next } inside && /^while / { exit } inside { print }' "$review_loop")"
+if ! grep -F 'references/review-preflight.md' <<<"$prepare_block" | grep -Fqi 'optional'; then
+    preflight_failures+=("review-loop.md PREPARE lacks the optional review-preflight.md pointer")
+fi
+if awk '/^  1[.] REVIEW/ { inside = 1; next } /^  2[.] EVALUATE/ { inside = 0 } inside' "$review_loop" | grep -Fq 'review-preflight.md'; then
+    preflight_failures+=("review-preflight.md is referenced inside 1. REVIEW")
+fi
+if ! ruby -ryaml -e '
+  sets = YAML.load_file(ARGV[0]).fetch("load_sets")
+  bundle = YAML.load_file(ARGV[1]).fetch("dispatch_context_bundles").find { |b| b["name"] == "fresh_reviewer_context" }
+  ref = "references/review-preflight.md"
+  leaked = %w[reviewer_context lifecycle_reviewer_context].any? { |name| sets.fetch(name).fetch("references").include?(ref) } ||
+    bundle.fetch("worker_references").any? { |r| r["path"] == ref }
+  exit(leaked ? 1 : 0)
+' "$review_index" "$review_handoffs"; then
+    preflight_failures+=("review-preflight.md leaked into a reviewer bundle")
+fi
+for preflight_case in preflight-hit-is-a-lead-not-a-finding baseline-failure-compared-by-identity-and-cause; do
+    if ! jq -e --arg id "$preflight_case" '.cases[] | select(.id == $id) | .fail_signals | length > 0' "$review_evals" >/dev/null; then
+        preflight_failures+=("eval $preflight_case missing")
+    fi
+done
+if [[ ${#preflight_failures[@]} -eq 0 ]]; then pass; else fail "${preflight_failures[*]}"; fi
+
+test_start "runtime surface sync checks literal default-home paths against the configured home"
+runtime_sync_item="$(awk '/^6[.] \*\*Runtime surface sync\*\*/ { inside = 1; print; next } inside && /^[0-9]+[.] \*\*/ { exit } inside && /^$/ { exit } inside { print }' "$review_checklists")"
+if grep -Fq 'default-home' <<<"$runtime_sync_item" && grep -Fq 'configured home' <<<"$runtime_sync_item"; then
+    pass
+else
+    fail "Runtime surface sync item lacks the default-home / configured home clause"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

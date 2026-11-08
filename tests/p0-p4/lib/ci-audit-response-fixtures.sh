@@ -67,6 +67,26 @@ write_s1_response() {
               performance_comparisons:[{id:"missing-pair",status:"incomparable",baseline_run_refs:[],candidate_run_refs:[],completed_obligations_and_protection:"Unknown; no completed paired work.",changed_or_redundant_checks:"None observed.",conditions:"No comparable capture.",measurements:"Unavailable.",units_and_variability:"Unavailable.",unmeasured_work:"All execution, maintenance and cost.",conclusion:"No savings: no actual paired completed-work evidence."}],
               evidence_gaps:["No diagnostic authority/finite allowance, discovery/fixture evidence or metrics. Planned probes are unexecuted; working-input injection and count-based deletion rejected."],next_action:"Request bounded local diagnostic authority and missing observations; do not inject, delete or dispatch."}' >"$response_path"
             ;;
+        test-value-questions-and-junk-examples-keep-exact-bytes)
+            cat >"$response_path" <<'S05_RESPONSE'
+test_manifest_written: rewrite. The fixture fabricates out/manifest.json that export_bundle() should produce, so it passes when the owner writes nothing.
+test_guest_denied: rewrite. It passes on the wrong guard: schema validation returns 422 before the role check runs.
+test_prompt_block_bytes: keep. The exact installed block bytes are the contract downstream agents parse.
+S05_RESPONSE
+            ;;
+        owner-level-cleanup-names-remaining-proof)
+            cat >"$response_path" <<'S05_RESPONSE'
+Remove test_round_half_even_helper; remaining proof: test_total_rounding at tests/test_invoice_api.py:41 detects rounding regressions through the public invoice API.
+Keep test_zero_rate_region: no remaining proof can be named, so its protection stays an unresolved gap.
+S05_RESPONSE
+            ;;
+        failed-discovery-is-not-a-valid-empty-result)
+            cat >"$response_path" <<'S05_RESPONSE'
+In CI the git diff against origin/develop fails because the shallow checkout lacks that ref; the error is suppressed and the gate passes on an empty list. That is failed discovery, not passing evidence.
+On the developer machine origin/develop exists and only Markdown changed, so "nothing to lint" is a valid empty result.
+Recommendation (no edit): make an invalid requested comparison fail.
+S05_RESPONSE
+            ;;
         *) return 1 ;;
     esac
 }

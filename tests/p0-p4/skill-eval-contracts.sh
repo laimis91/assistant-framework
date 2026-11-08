@@ -1125,6 +1125,9 @@ p0p4_write_skill_eval_responses() {
                     assistant-docs:feature-preparation-doc-rejects-mismatched-evidence-claim)
                         jq -n --arg summary "$required_summary" '{summary: $summary, evidence_sources: [{source: "prep/viewing-route#viewing-route-effects", claims_supported: "The supplied claim_or_question is mismatched and cannot support the VIEWING preservation behavior."}], doc_coverage: "No VIEWING behavior document was written because the supplied evidence claim is mismatched.", review_items: ["Replace the supplied claim_or_question with the exact carried claim before documenting the behavior."], safety_notes: ["none"], feature_preparation_scope: "existing_system", feature_preparation_evidence_status: "incomplete", feature_preparation_evidence_trace: {outcome: "blocked_incomplete_evidence", recovery_action: "request_complete_evidence", review_trace: ["The supplied claim_or_question is mismatched; use the canonical claim without enabling editing."]}}' >"$response_path"
                         ;;
+                    assistant-security:branch-protection-structured-needs-validation-list)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, findings: [], needs_validation: [{hypothesis: "Unreviewed pushes to the release branch could publish a package with the stored token.", blocking_fact: "Whether branch protection requires reviewed pull requests on the release branch.", safe_check: "A repository owner reads the release branch protection settings."}], risk_level: "none", action_items: []}' >"$response_path"
+                        ;;
                     *)
                         fail "unhandled structured skill eval case: $skill_name/$id"
                         ;;
