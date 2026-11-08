@@ -133,6 +133,7 @@ Focused checks, no matched evaluation:
 - `./install.sh --agent {claude,codex,gemini} --dry-run`, plus `--skill assistant-spike --dry-run`; Windows installer contracts (`tests/windows/installer-contracts.ps1`) where a Windows host is available.
 - A focused content check that the SKILL.md states the three verdict values, the "no production change" handoff statement and the boundary-not-waived rule (same style as the clarify check in `tests/p0-p4/skill-instruction-quality-contracts.sh:38-60`).
 - R-DESC-7 listing check (no model call) that every first-class description survives in the crowded listing after the addition, with total description characters before and after reported as a measurement.
+  **Result 2026-11-08 (host 2.1.317, run at the user's request, merged with main after S06):** in the crowded condition (18 framework skills plus 40 stubs), a fresh home and the default listing budget, the listing kept all 18 framework descriptions word for word for `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5-1` and the two `[1m]` variants. The listing is 16,705 characters. Framework description total: 3,939 before S08, 4,343 after. No model call was made: the API base URL was a closed local port and the key a placeholder.
 
 ## Dependencies and overlap
 

@@ -75,6 +75,9 @@ fi
 if ! grep -Fq 'resolve `reviewer_context` from `contracts/index.yaml`' "$review_skill_dir/references/review-loop.md"; then
     first_review_reference_failures+=("review loop does not route first-pass worker context through reviewer_context")
 fi
+if printf '%s\n' "$first_review_refs" | grep -Fqx 'references/review-preflight.md'; then
+    first_review_reference_failures+=("optional review-preflight.md became a mandatory first-review reference")
+fi
 if [[ "${#first_review_reference_failures[@]}" -eq 0 ]]; then
     pass
 else

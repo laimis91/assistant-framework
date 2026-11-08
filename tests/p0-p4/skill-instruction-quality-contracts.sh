@@ -523,4 +523,92 @@ else
     fail "assistant-review v7 prompt/rubric parity failed: ${review_v7_prompt_failures[*]}"
 fi
 
+test_start "assistant-security selects boundary companions and separates needs-validation items"
+security_dir="$FRAMEWORK_DIR/skills/assistant-security"
+security_skill="$security_dir/SKILL.md"
+security_companion_failures=()
+for file_and_term in \
+    "$security_skill::agent-authority.md" \
+    "$security_skill::install-boundaries.md" \
+    "$security_skill::release-provenance.md" \
+    "$security_skill::Needs validation" \
+    "$security_skill::needs_validation" \
+    "$security_skill::observations" \
+    "$security_skill::evidence_gap" \
+    "$security_skill::follow_up" \
+    "$security_skill::assistant-advisory-triage" \
+    "$security_dir/agent-authority.md::instructed" \
+    "$security_dir/agent-authority.md::enforced" \
+    "$security_dir/install-boundaries.md::sentinel" \
+    "$security_dir/install-boundaries.md::review-checklists.md" \
+    "$security_dir/install-boundaries.md::script-execution.md" \
+    "$security_dir/release-provenance.md::dependency-audit.md"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        security_companion_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+for companion in agent-authority.md install-boundaries.md release-provenance.md; do
+    if [[ ! -f "$security_dir/$companion" ]]; then
+        security_companion_failures+=("skills/assistant-security/$companion: missing file")
+    fi
+done
+for sandbox_file in "$security_skill" "$security_dir/agent-authority.md" "$security_dir/install-boundaries.md" "$security_dir/release-provenance.md"; do
+    if [[ -f "$sandbox_file" ]] && grep -Eqi 'sandbox' "$sandbox_file"; then
+        security_companion_failures+=("${sandbox_file#$FRAMEWORK_DIR/}: mentions a sandbox the host may not enforce")
+    fi
+done
+if [[ -f "$security_dir/install-boundaries.md" ]] && p0p4_contains_text_ci "$security_dir/install-boundaries.md" "probe statically first"; then
+    security_companion_failures+=("skills/assistant-security/install-boundaries.md: copies the Review probe text")
+fi
+if grep -Eq '^requires:' "$security_skill"; then
+    security_companion_failures+=("skills/assistant-security/SKILL.md: declares requires")
+fi
+if [[ "${#security_companion_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-security companion and evidence-state guidance failed: ${security_companion_failures[*]}"
+fi
+
+test_start "assistant-advisory-triage keeps a shipped-release close bar and read-only authority"
+triage_skill="$FRAMEWORK_DIR/skills/assistant-advisory-triage/SKILL.md"
+triage_failures=()
+for triage_term in \
+    "close" \
+    "keep open" \
+    "keep open but narrow" \
+    "fixed on main" \
+    "shipped release" \
+    "is never by itself a reason to close" \
+    "Triage is read-only by default" \
+    "only when the user's task authorizes that specific action" \
+    "post nothing" \
+    "do not close on that assumption" \
+    "assistant-security" \
+    "assistant-workflow" \
+    "draft"; do
+    if ! p0p4_contains_text "$triage_skill" "$triage_term"; then
+        triage_failures+=("skills/assistant-advisory-triage/SKILL.md: missing $triage_term")
+    fi
+done
+if [[ -f "$triage_skill" ]]; then
+    for banned_term in "OpenClaw" "Peter" "Cyber Classifier"; do
+        if grep -Fqi -- "$banned_term" "$triage_skill"; then
+            triage_failures+=("skills/assistant-advisory-triage/SKILL.md: contains $banned_term")
+        fi
+    done
+    if grep -Eqi 'pbcopy|clipboard' "$triage_skill"; then
+        triage_failures+=("skills/assistant-advisory-triage/SKILL.md: mentions clipboard actions")
+    fi
+    if grep -Eq '^requires:' "$triage_skill"; then
+        triage_failures+=("skills/assistant-advisory-triage/SKILL.md: declares requires")
+    fi
+fi
+if [[ "${#triage_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "assistant-advisory-triage close bar and authority guidance failed: ${triage_failures[*]}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -339,4 +339,68 @@ if ruby -ryaml -e '
   exit valid ? 0 : 1
 ' "$FRAMEWORK_DIR"; then pass; else fail "lifecycle detail leaks into ordinary specialist context or lacks its local conditional path"; fi
 
+test_start "ci-audit test-maintenance carries authoring questions, audit-time examples and F3 without owning repairs"
+ci_maintenance="$FRAMEWORK_DIR/skills/assistant-ci-audit/references/test-maintenance.md"
+ci_evals="$FRAMEWORK_DIR/skills/assistant-ci-audit/evals/cases.json"
+ci_value_failures=()
+for term in \
+    "observable contract" \
+    "credible regression" \
+    "why existing proof misses" \
+    "no real caller" \
+    "fabricat" \
+    "exact bytes of an installed prompt" \
+    "wrong guard" \
+    "unreachable rejection" \
+    "platform or protocol contract" \
+    "subject-generated expected value" \
+    "internal call-shape" \
+    "mock that supplies" \
+    "remaining proof" \
+    "the test is not removed" \
+    "--base nonexistent" \
+    "No .cs files to analyze." \
+    "valid empty" \
+    "repair belongs to the separate audit session" \
+    "Unknown failures belong to debugging." \
+    "Exact text/schema checks are appropriate when those bytes/shapes are contractual."; do
+    if ! p0p4_contains_text "$ci_maintenance" "$term"; then ci_value_failures+=("test-maintenance.md missing $term"); fi
+done
+for ci_case in test-value-questions-and-junk-examples-keep-exact-bytes owner-level-cleanup-names-remaining-proof failed-discovery-is-not-a-valid-empty-result; do
+    if ! jq -e --arg id "$ci_case" '.cases[] | select(.id == $id) | .fail_signals | length > 0' "$ci_evals" >/dev/null; then
+        ci_value_failures+=("ci-audit eval $ci_case missing")
+    fi
+done
+if [[ ${#ci_value_failures[@]} -eq 0 ]]; then pass; else fail "${ci_value_failures[*]}"; fi
+
+test_start "verification selects preservation outcomes and rejects failed discovery as empty evidence"
+verification_selection="$FRAMEWORK_DIR/skills/assistant-verification/references/selection.md"
+verification_evidence="$FRAMEWORK_DIR/skills/assistant-verification/references/evidence-quality.md"
+verification_evals="$FRAMEWORK_DIR/skills/assistant-verification/evals/cases.json"
+verification_value_failures=()
+for file_and_term in \
+    "$verification_selection::sentinel" \
+    "$verification_selection::before the first write" \
+    "$verification_selection::F1, F2, F4 and F5" \
+    "$verification_evidence::discovery itself succeeded" \
+    "$verification_evidence::F3" \
+    "$verification_evidence::configured home" \
+    "$verification_evidence::installed layout" \
+    "$verification_evidence::installed, available, selected, executed and outcome-verified"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then verification_value_failures+=("${file#$FRAMEWORK_DIR/}: missing $term"); fi
+done
+for walkthrough_term in "--base nonexistent" "2>/dev/null" "No .cs files to analyze."; do
+    if p0p4_contains_text "$verification_evidence" "$walkthrough_term"; then
+        verification_value_failures+=("evidence-quality.md restates the CI Audit F3 walkthrough ($walkthrough_term)")
+    fi
+done
+for verification_case in preservation-check-selects-sentinel-over-structural-install empty-selection-after-failed-discovery-is-not-passing; do
+    if ! jq -e --arg id "$verification_case" '.cases[] | select(.id == $id) | .fail_signals | length > 0' "$verification_evals" >/dev/null; then
+        verification_value_failures+=("verification eval $verification_case missing")
+    fi
+done
+if [[ ${#verification_value_failures[@]} -eq 0 ]]; then pass; else fail "${verification_value_failures[*]}"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

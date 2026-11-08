@@ -70,6 +70,9 @@ dispatch_context_bundles:
       - path: references/csharp-review.md
         sections: [all]
         condition: "reviewed material includes C#"
+      - path: references/review-briefs.md
+        sections: [all]
+        condition: "review_perspective is contract_and_test_oracle, runtime_lifecycle_and_failure_paths, integration_compatibility_and_consumers, architecture_maintainability_and_reuse or light_contract_and_runtime"
       - path: references/lifecycle-verification.md
         sections: [all]
         condition: "assigned_scope or coverage_obligations affect acquisition/readiness, active work, cancellation, collection/finalization, shutdown, owned resources, cleanup or retry"

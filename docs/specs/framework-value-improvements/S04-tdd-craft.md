@@ -1,6 +1,6 @@
 # S04 — TDD craft
 
-Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Not implemented.
+Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented on branch `fvi/s04-tdd-craft` (from main 7c9bdf8), merged to main as 841a755 (#90): `skills/assistant-tdd/references/test-craft.md`, linked from the RED step; two offline eval cases; no contract change. Live runs of the two new eval cases have not been made (they need the user's authorization). SKILL.md, guide and contract line citations rechecked against main 0f5fc76.
 Source: report §1.B "TDD: add craft examples alongside the gates", §6 row 12, §4 order 3; slice map row S04. Overlap analysis with report §1.D / slice S05.
 
 ## Problem and intended outcome
@@ -22,10 +22,10 @@ assistant-tdd defines when TDD is active, who owns RED/GREEN/REFACTOR, and what 
 
 - Selected-TDD scope: TDD only when requested, required by project policy, or activated for selected checks; inactive TDD never needs a fabricated RED (`skills/assistant-tdd/SKILL.md:13-15`). Description unchanged (`SKILL.md:3`).
 - RED: meaningful behaviour assertion, intended missing-behaviour failure before production edits; syntax/import/environment/flaky failures do not authorise production; a passing RED triggers inspection of existing behaviour and the oracle, never removal of working code or invented failure (`SKILL.md:19-23`).
-- GREEN: smallest change; selected regressions and binding checks; no inferred full suite; incidental assertions do not justify production changes (`SKILL.md:24-29`).
-- REFACTOR with optional `none needed` and v3 `reuse_green` (`SKILL.md:30-37`).
-- Ownership: `bounded_executor` vs `separated_workers` with the same selected writer for `test_authoring`, `production`, `refactor` (`SKILL.md:52-57`); one intersecting CheckSpec ID per active packet and exact RED binding (`SKILL.md:59-64`).
-- Unknown-cause bugs go through assistant-debugging before selecting the regression oracle (`SKILL.md:68-69`).
+- GREEN: smallest change; selected regressions and binding checks; no inferred full suite; incidental assertions do not justify production changes (`SKILL.md:26-31`).
+- REFACTOR with optional `none needed` and v3 `reuse_green` (`SKILL.md:32-39`).
+- Ownership: `bounded_executor` vs `separated_workers` with the same selected writer for `test_authoring`, `production`, `refactor` (`SKILL.md:54-59`); one intersecting CheckSpec ID per active packet and exact RED binding (`SKILL.md:61-66`).
+- Unknown-cause bugs go through assistant-debugging before selecting the regression oracle (`SKILL.md:70-71`).
 - Contract gates: RED1 one behaviour-focused assertion when tests need creation/repair; RED2 executed and failed; RED3 right reason, excluding syntax, missing import or wrong setup; RED4 no production code during RED and no deletion of prior work (`contracts/phase-gates.yaml:18-35`).
 - One cycle per behaviour; split complex behaviours (`contracts/input.yaml:44-49`). Meaningful-failure oracle binding (`contracts/output.yaml:55`, `:115`, `:119`).
 - Related guidance owned elsewhere, not to be contradicted: tests must distinguish expected behaviour from a plausible wrong outcome; tautological assertions give no evidence (`skills/assistant-workflow/references/ai-usage-policy.md:42-44`); "Mock at boundaries, not at implementation details" (`skills/assistant-workflow/references/prompts/test-strategy.md:67`); unit traps including private call-order assertions (`skills/assistant-verification/references/methods/unit.md:11`, `:15`); CI Audit's internal-coupling and exact-bytes guidance (`skills/assistant-ci-audit/references/test-maintenance.md:8-9`, `:20`).
@@ -54,7 +54,7 @@ Out of scope (report "Do not import" and slice brief):
 
 | Item | behavior_status | work_status | Evidence |
 |---|---|---|---|
-| Selected-TDD activation and ownership | existing_behavior_to_preserve | no_open_decision | `SKILL.md:13-15`, `:52-64` |
+| Selected-TDD activation and ownership | existing_behavior_to_preserve | no_open_decision | `SKILL.md:13-15`, `:54-66` |
 | RED right-reason gate | existing_behavior_to_preserve | no_open_decision | `contracts/phase-gates.yaml:27-30` |
 | No `references/` directory in assistant-tdd | new_behavior | implementation_gap | `find skills/assistant-tdd` lists only `SKILL.md`, `contracts/*`, `evals/cases.json` |
 | Worked good/bad pair, RED pair, vertical slice | new_behavior | implementation_gap | No examples in `SKILL.md` or contracts |
@@ -81,7 +81,7 @@ Requirement used throughout: "A 100-cent promotion is applied once to an order; 
 - **R-S04-3 positive:** RED output "expected 900, got 800" before the fix; recorded as the meaningful failure. Passes.
   **Negative:** RED output "ModuleNotFoundError: promotions" (or a missing fixture file) is recorded as RED and production edits begin. Fails (matches RED3's exclusion).
 - **R-S04-4 positive:** Slice 1: "promotion applied once" RED→GREEN; slice 2: "second identical promotion rejected with a named error" RED→GREEN, each through `checkout`. Passes.
-  **Negative:** Writer authors tests for parser, rule engine and receipt formatter first, then implements all layers. Fails. (Also negative: the example implies `separated_workers` may author tests for several active IDs in one stage, contradicting `SKILL.md:59-62`.)
+  **Negative:** Writer authors tests for parser, rule engine and receipt formatter first, then implements all layers. Fails. (Also negative: the example implies `separated_workers` may author tests for several active IDs in one stage, contradicting `SKILL.md:61-64`.)
 - **R-S04-5 positive (each class):** the reference shows that `rules.apply.assert_called_once_with(order)` passes while totals are wrong; that `expected = compute_total(order); assert checkout(order).total == expected` passes with the bug because both share it; and that a stubbed rate service returning the asserted discount tests the stub. Each names the missed defect. Passes.
   **Negative:** The reference forbids all mocks or all call assertions. Fails R-S04-6.
 - **R-S04-6 positive:** An example notes that asserting the exact request sent to an external payment API is valid when that request format is the contract. **Negative:** Text implies exact-byte checks are always brittle. Fails.
