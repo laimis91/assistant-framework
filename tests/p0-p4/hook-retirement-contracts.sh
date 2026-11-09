@@ -791,7 +791,11 @@ for arg in "\$@"; do
     case "\$arg" in
         "$shim_private_root/tmp/"*)
             parent="\${arg%/*}"
-            printf '%s %s\n' "\$parent" "\$(stat -f %Lp "\$parent" 2>/dev/null || stat -c %a "\$parent")" >>"$shim_private_root/cp-sources.log"
+            case "\$(uname -s)" in
+                Darwin|FreeBSD) parent_mode="\$(stat -f %Lp "\$parent")" ;;
+                *) parent_mode="\$(stat -c %a "\$parent")" ;;
+            esac
+            printf '%s %s\n' "\$parent" "\$parent_mode" >>"$shim_private_root/cp-sources.log"
             ;;
     esac
 done
