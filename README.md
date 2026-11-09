@@ -1,6 +1,6 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. 18 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools, research, disposable feasibility spikes, security analysis, advisory triage, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), and evidence-based verification selection and assessment.
+A Personal AI Assistant framework for developers. 19 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools, research, disposable feasibility spikes, security analysis, advisory triage, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), evidence-based verification selection and assessment, and exploratory UI QA.
 
 ## Documentation
 
@@ -24,6 +24,7 @@ Start with the [documentation map](docs/README.md) for task-specific guides, [du
 14. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
 15. **Verification** — Selects proportionate checks and techniques, applies TDD only when appropriate, and assesses whether evidence supports the claim.
 16. **Feasibility Spike** — Answers one feasibility question with a small disposable experiment and a control, returning validated, partial or invalidated without authorizing production changes
+17. **Exploratory UI QA** — Explores a running UI through the available browser tools and reports reproducible issues with severity and tested, not tested and blocked coverage; acceptance stays with the QA Evaluator
 
 ## Installation
 
@@ -307,6 +308,11 @@ may use disposable controlled probes. Findings recommend protection-preserving
 changes and measured comparisons; they grant no repair or dispatch authority.
 Use debugging for one failing test and verification for selecting checks.
 
+### assistant-ui-qa
+Explores a running web or app UI in a local or named test environment through whatever browser runtime the session has. It exercises valid, invalid and empty states and navigation in each in-scope flow, reads console and network diagnostics at loads and significant interactions, and reports reproducible issues with severity and category plus tested, not tested and blocked coverage. Production targets stay off limits, real credentials are never entered, and irreversible actions wait for approval. It gives no acceptance verdict or score: inside a required-QA Workflow task the report is `verification_evidence` for the QA Evaluator, and it does not satisfy required manual verification. Fixes go through workflow, with debugging first when the cause is unknown.
+
+Triggers on: test this app, dogfood the signup flow, click through the settings page and report bugs, exploratory UI testing
+
 ### assistant-verification
 Selects proportional verification scope, methods, and TDD applicability, then assesses observed evidence and limitations. It guides verification without running checks. Workflow consumers retain canonical typed decisions; human-only assessments can use concise prose.
 
@@ -361,7 +367,7 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 tools/evals/run-skill-evals.sh --activation-results /tmp/skill-activation-results.json
 ```
 
-The default eval inventory is 18 first-class `assistant-*` skills with fixtures.
+The default eval inventory is 19 first-class `assistant-*` skills with fixtures.
 Canonical first-class fixtures use schema `2.0` and include top-level
 `activation_cases`: exact `{user_request, should_activate}` objects with at
 least two normalized-distinct positive requests and one normalized-disjoint
@@ -547,6 +553,11 @@ skills/
   assistant-review/
     SKILL.md                       <- Autonomous review/fix/re-review loop
 
+  assistant-ui-qa/
+    SKILL.md                       <- Exploratory UI QA: scope, runtime, exploration, report, safety
+    references/issue-taxonomy.md   <- Severity, category, duplicate and coverage rules
+    evals/cases.json               <- Offline behavior and activation fixtures
+
   assistant-docs/
     SKILL.md                       <- Mode selection and general protocol
     api-docs.md                    <- API surface documentation
@@ -728,7 +739,7 @@ configuration when reinstalling.
 
 ### Common guidance and unmatched activities
 
-All 18 first-class assistant skills reference
+All 19 first-class assistant skills reference
 `tools/progress/operating-guidance.md`. Unix installs put tools beside skills
 under `~/.claude`, configured `CODEX_HOME` (default `~/.codex`), or `~/.gemini`.
 Windows Codex also mirrors progress into `~/.agents/tools/progress`, so

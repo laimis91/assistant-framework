@@ -24,6 +24,7 @@ The orchestrator provides:
 - `debate_record`: pre-build debate/subagent-perspective evidence from the Done Contract; required when a Done Contract exists.
 - `acceptance_criteria`: binary criteria from the user request, approved plan, slice manifest, or Done Contract.
 - `verification_evidence`: build/test/manual/check evidence from the actual main actor or selected optional verification owner.
+  A UI QA report from `assistant-ui-qa` is valid `verification_evidence`, and its in-scope UI notes may go in `domain_context`; it carries no acceptance verdict, does not itself require QA, and does not satisfy required manual verification.
 - `code_review_result`: final Code Reviewer or Reviewer compatibility result.
 - `domain_context`: scoped UI/visual, product, UX, docs, DX, or domain notes when applicable.
 - `rubric_refs`: explicit references to scoped domain rubric families from `references/domain-rubrics.md` when applicable.

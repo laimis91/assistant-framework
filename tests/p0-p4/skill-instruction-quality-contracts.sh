@@ -267,6 +267,48 @@ else
     fail "assistant-workflow small plans must support no-wait approval: ${workflow_small_failures[*]}"
 fi
 
+test_start "assistant-ui-qa reports coverage without acceptance verdicts and never fakes UI evidence"
+ui_qa_skill="$FRAMEWORK_DIR/skills/assistant-ui-qa/SKILL.md"
+qa_loop="$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md"
+ui_qa_failures=()
+for file_and_term in \
+    "$ui_qa_skill::../../tools/progress/operating-guidance.md" \
+    "$ui_qa_skill::UI not exercised" \
+    "$ui_qa_skill::list every in-scope flow as not tested" \
+    "$ui_qa_skill::Never report a flow as tested without having driven it" \
+    "$ui_qa_skill::without the user's confirmation" \
+    "$ui_qa_skill::**Tested**" \
+    "$ui_qa_skill::**Not tested**" \
+    "$ui_qa_skill::**Blocked**" \
+    "$ui_qa_skill::Critical, High, Medium or Low" \
+    "$ui_qa_skill::references/issue-taxonomy.md" \
+    "$ui_qa_skill::no acceptance verdict" \
+    "$ui_qa_skill::QA Evaluator" \
+    "$ui_qa_skill::\`verification_evidence\`" \
+    "$ui_qa_skill::\`domain_context\`" \
+    "$ui_qa_skill::\`manual_verification_mode=required\`" \
+    "$ui_qa_skill::Production systems are off limits even when the user names one" \
+    "$ui_qa_skill::never committed" \
+    "$qa_loop::assistant-ui-qa"; do
+    file="${file_and_term%%::*}"
+    term="${file_and_term#*::}"
+    if ! p0p4_contains_text "$file" "$term"; then
+        ui_qa_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
+    fi
+done
+for ui_qa_file in "$ui_qa_skill" "$FRAMEWORK_DIR/skills/assistant-ui-qa/references/issue-taxonomy.md"; do
+    if [[ ! -f "$ui_qa_file" ]]; then
+        ui_qa_failures+=("${ui_qa_file#$FRAMEWORK_DIR/}: missing file")
+    elif grep -Eq 'browser_[a-z]+|@e[0-9N]|dogfood-output|MEDIA:' "$ui_qa_file"; then
+        ui_qa_failures+=("${ui_qa_file#$FRAMEWORK_DIR/}: names a single runtime's tool API or output convention")
+    fi
+done
+if [[ ${#ui_qa_failures[@]} -eq 0 ]]; then
+    pass
+else
+    fail "assistant-ui-qa coverage and acceptance boundary failed: ${ui_qa_failures[*]}"
+fi
+
 test_start "control guidance retains actionable evidence and recovery"
 missing_paired_guidance=()
 review_skill="$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"

@@ -106,6 +106,7 @@ This table is the expected behavior the evals grade. "Required" means activated 
 | Check of registered upstream skill guidance | `assistant-skill-creator` | | |
 | Review of code, spec, plan, tests, documents, Jira ticket or refinement material | `assistant-review` | | `assistant-skill-creator` |
 | Selecting checks or judging evidence, as its own request | `assistant-verification` | | `assistant-tdd` |
+| Exploratory testing of a running UI or user flow | `assistant-ui-qa` | `assistant-verification`, `assistant-debugging` | |
 | Weak, slow or false-passing CI and tests | `assistant-ci-audit` | | `assistant-debugging` |
 | Source-backed research or option comparison | `assistant-research` | | |
 | Feasibility question settled by a disposable experiment before a real build | `assistant-spike` | `assistant-research`, `assistant-verification`, `assistant-workflow` | |
@@ -142,7 +143,7 @@ This table is the expected behavior the evals grade. "Required" means activated 
 - **R-EVAL-6.** Every skill has at least three stateful positive cases in the held-out set, with development cases on top, so a per-skill rate does not rest on one case. `assistant-workflow` and `assistant-skill-creator` also have one for each phase they apply to.
 - **R-EVAL-7.** Negative cases are of two kinds, reported separately:
   - No skill should fire.
-  - A neighbour must win. Required pairs: review and skill-creator; verification and tdd; debugging and ci-audit; debugging and thinking; research, thinking and ideate; workflow preparation and thinking; spike and research; spike and workflow.
+  - A neighbour must win. Required pairs: review and skill-creator; verification and tdd; debugging and ci-audit; debugging and thinking; research, thinking and ideate; workflow preparation and thinking; spike and research; spike and workflow; ui-qa and debugging; ui-qa and review.
 - **R-EVAL-8. Sensitivity check.** A control arm installs the current source with only the Skills bullet reverted to its text before commit `36c59c5`, so later skill changes do not confound the result. It then replays cases derived from the real failing turns.
   - If the control does not miss at the [OD-2](#accepted-defaults) rate, the replay is not faithful. Fix it before any comparison.
   - If the control misses and the current baseline does not, the result is "already improved by the wording". Report that to the user before writing candidates.
