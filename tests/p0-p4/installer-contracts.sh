@@ -1406,4 +1406,77 @@ for protocol_agent in codex claude gemini; do
 done
 if [[ "${#protocol_metadata_failures[@]}" == 0 ]]; then pass; else fail "protocol metadata preflight: ${protocol_metadata_failures[*]}"; fi
 
+overlap_tree_fingerprint() {
+    find "$1" -type d -print -o -type l -exec ls -ld {} \; -o -type f -exec shasum -a 256 {} + | LC_ALL=C sort
+}
+
+test_start "installer refuses checkout and agent-home overlap before any write (audit F5)"
+overlap_root="$(mktemp -d)"
+overlap_logs="$(mktemp -d)"
+p0p4_register_cleanup "$overlap_root" "$overlap_logs"
+# The checkout copy sits where a Claude home would be, so one copy serves every case.
+overlap_fw="$overlap_root/h/.claude"
+mkdir -p "$overlap_fw"
+rsync -a --exclude='.git' --exclude='node_modules' --exclude='/docs/plans/' "$FRAMEWORK_DIR/" "$overlap_fw/"
+ln -s "$overlap_fw" "$overlap_root/fw-link"
+overlap_failures=()
+overlap_cases=(
+    "codex|$overlap_root/codex-home|$overlap_fw|CODEX_HOME equals the checkout"
+    "codex|$overlap_root/codex-home|$overlap_fw/|CODEX_HOME equals the checkout with a trailing slash"
+    "codex|$overlap_root/codex-home|$overlap_root/h|CODEX_HOME is the checkout's parent"
+    "codex|$overlap_root/codex-home|$overlap_root|CODEX_HOME is a further ancestor"
+    "codex|$overlap_root/codex-home|$overlap_fw/nested/codex|CODEX_HOME is inside the checkout"
+    "codex|$overlap_root/codex-home|$overlap_fw/skills/..|CODEX_HOME reaches the checkout through .."
+    "codex|$overlap_root/codex-home|$overlap_root/fw-link|CODEX_HOME is a symlink to the checkout"
+    "codex|$overlap_root/codex-home|$overlap_root/fw-link/missing/home|CODEX_HOME is inside the checkout through a symlink"
+    "claude|$overlap_root/h||Claude home equals the checkout"
+    "gemini|$overlap_fw/inner||Gemini home is inside the checkout"
+)
+if [[ -d "$overlap_root/H" && "$overlap_root/H" -ef "$overlap_root/h" ]]; then
+    overlap_cases+=("codex|$overlap_root/codex-home|$overlap_root/H/.CLAUDE|CODEX_HOME differs from the checkout only by letter case")
+fi
+for overlap_case in "${overlap_cases[@]}"; do
+    IFS='|' read -r overlap_agent overlap_home overlap_codex_home overlap_label <<<"$overlap_case"
+    for overlap_mode in real dry-run; do
+        overlap_args=(--agent "$overlap_agent")
+        [[ "$overlap_mode" == real ]] || overlap_args+=(--dry-run)
+        overlap_before="$(overlap_tree_fingerprint "$overlap_root")"
+        overlap_status=0
+        if [[ -n "$overlap_codex_home" ]]; then
+            HOME="$overlap_home" CODEX_HOME="$overlap_codex_home" bash "$overlap_fw/install.sh" "${overlap_args[@]}" >"$overlap_logs/out.log" 2>&1 || overlap_status=$?
+        else
+            HOME="$overlap_home" bash "$overlap_fw/install.sh" "${overlap_args[@]}" >"$overlap_logs/out.log" 2>&1 || overlap_status=$?
+        fi
+        overlap_after="$(overlap_tree_fingerprint "$overlap_root")"
+        if [[ "$overlap_status" == 0 ]]; then
+            overlap_failures+=("$overlap_label ($overlap_mode) was accepted")
+        elif ! grep -Fq 'Refusing overlapping source and target for agent home' "$overlap_logs/out.log"; then
+            overlap_failures+=("$overlap_label ($overlap_mode) failed without the overlap refusal: $(head -c 300 "$overlap_logs/out.log")")
+        fi
+        if [[ "$overlap_before" != "$overlap_after" ]]; then
+            ownership_install_fingerprint_difference "$overlap_label ($overlap_mode)" "$overlap_before" "$overlap_after"
+            overlap_failures+=("$overlap_label ($overlap_mode) changed the checkout or a home")
+        fi
+        rm -f "$overlap_logs/out.log"
+    done
+done
+# Control: a sibling whose name only starts with the checkout's name does not overlap.
+overlap_control_status=0
+mkdir -p "$overlap_root/control-home"
+HOME="$overlap_root/control-home" CODEX_HOME="$overlap_root/h/.claude2" bash "$overlap_fw/install.sh" --agent codex --skill assistant-thinking >"$overlap_logs/control.log" 2>&1 || overlap_control_status=$?
+if [[ "$overlap_control_status" != 0 || ! -f "$overlap_root/h/.claude2/skills/assistant-thinking/SKILL.md" ]]; then
+    overlap_failures+=("prefix-sibling CODEX_HOME was refused or did not install: $(head -c 300 "$overlap_logs/control.log")")
+fi
+if [[ "${#overlap_failures[@]}" == 0 ]]; then pass; else fail "overlap refusal: ${overlap_failures[*]}"; fi
+
+test_start "installer calls the overlap check before its first write (audit F5)"
+overlap_check_line="$(grep -n '^assert_no_framework_target_overlap ' "$FRAMEWORK_DIR/install.sh" | head -n 1 | cut -d: -f1 || true)"
+overlap_first_write_line="$(grep -nE '^[[:space:]]*(mkdir -p|rsync -a|ln -s|cp |rm -|rmdir|mv )' "$FRAMEWORK_DIR/install.sh" | awk -F: -v s="$(grep -n '^# ── Validate' "$FRAMEWORK_DIR/install.sh" | cut -d: -f1)" '$1 > s { print $1; exit }' || true)"
+if [[ -n "$overlap_check_line" && -n "$overlap_first_write_line" && "$overlap_check_line" -lt "$overlap_first_write_line" ]] \
+    && awk -v c="$overlap_check_line" 'NR < c && /^(preflight_[a-z_]+|resolve_bundled_skill_closure)( |$)/ { found = 1 } END { exit found }' "$FRAMEWORK_DIR/install.sh"; then
+    pass
+else
+    fail "assert_no_framework_target_overlap must run in the main flow before any preflight or write (check line: ${overlap_check_line:-none}, first write: ${overlap_first_write_line:-none})"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

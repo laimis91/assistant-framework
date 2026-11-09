@@ -787,6 +787,60 @@ retire_installed_plugin_tool() {
     fi
 }
 
+# Print a path that may not exist yet in physical form. Existing components
+# resolve through `cd -P`, as the kernel would; the missing tail is appended
+# lexically, as `mkdir -p` would create it.
+physical_path_for_comparison() {
+    local path="$1" current="/" component missing=false
+    local -a components=()
+
+    [[ "$path" == /* ]] || path="$PWD/$path"
+    IFS='/' read -r -a components <<<"$path"
+    for component in ${components[@]+"${components[@]}"}; do
+        [[ -n "$component" && "$component" != "." ]] || continue
+        if ! $missing && [[ -d "${current%/}/$component" ]]; then
+            current="$(cd -P -- "${current%/}/$component" && pwd -P)" || return 1
+        elif [[ "$component" == ".." ]]; then
+            missing=true
+            current="$(dirname -- "$current")"
+        else
+            missing=true
+            current="${current%/}/$component"
+        fi
+    done
+    printf '%s\n' "$current"
+}
+
+# True when the physical candidate path is the existing directory or inside it.
+# `-ef` compares device and inode, so symlink aliases and case-insensitive
+# spellings of the same directory match, and a name prefix such as fw2 vs fw
+# does not.
+path_is_same_or_inside() {
+    local candidate="$1" container="$2" parent
+
+    while :; do
+        if [[ -e "$candidate" && "$candidate" -ef "$container" ]]; then
+            return 0
+        fi
+        parent="$(dirname -- "$candidate")"
+        [[ "$parent" != "$candidate" ]] || return 1
+        candidate="$parent"
+    done
+}
+
+# Refuse a target that equals, contains or is inside the framework checkout,
+# matching install.ps1 Assert-NoSourceTargetOverlap. Runs before any write.
+assert_no_framework_target_overlap() {
+    local target="$1" label="$2" target_physical=""
+
+    target_physical="$(physical_path_for_comparison "$target")" \
+        || fail "Could not resolve the $label path: $target. No installation files have been changed."
+    if path_is_same_or_inside "$target_physical" "$FRAMEWORK_DIR" \
+        || { [[ -e "$target_physical" ]] && path_is_same_or_inside "$FRAMEWORK_DIR" "$target_physical"; }; then
+        fail "Refusing overlapping source and target for $label: '$FRAMEWORK_DIR' and '$target_physical'. Choose an agent home outside the framework checkout. No installation files have been changed."
+    fi
+}
+
 # ── Validate ──────────────────────────────────────────────────────────────────
 
 [[ -n "$AGENT" ]] || fail "Missing --agent. Supported: claude, codex, gemini"
@@ -815,6 +869,8 @@ if [[ "$AGENT" == "codex" ]]; then
 else
     AGENT_HOME="$HOME/.${AGENT}"
 fi
+# Refuse checkout/target overlap before any preflight or write, dry-run included.
+assert_no_framework_target_overlap "$AGENT_HOME" "agent home"
 SKILLS_TARGET="$AGENT_HOME/skills"
 TOOLS_SOURCE="$FRAMEWORK_DIR/tools"
 TOOLS_TARGET="$AGENT_HOME/tools"

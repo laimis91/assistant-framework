@@ -399,7 +399,7 @@ else
 fi
 
 test_start "P0-P4 fixture installs isolate ambient CODEX_HOME and restore caller state"
-ambient_codex_fixture_root="$(mktemp -d "$FRAMEWORK_DIR/.p0p4-ambient-codex-home.XXXXXX")"
+ambient_codex_fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/p0p4-ambient-codex-home.XXXXXX")"
 ambient_codex_child="$ambient_codex_fixture_root/fixture-child.sh"
 p0p4_register_cleanup "$ambient_codex_fixture_root"
 cat >"$ambient_codex_child" <<'CHILD'
