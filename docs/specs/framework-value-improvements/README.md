@@ -1,6 +1,6 @@
 # Framework value improvements — specification set
 
-Status: **Accepted by the user**, 2026-11-06. Baseline: main d11756d. S01 to S08 are implemented (see their rows); each remaining slice still needs an approved implementation plan before any edits.
+Status: **Accepted by the user**, 2026-11-06. Baseline: main d11756d. S01 to S09 are implemented (see their rows); each remaining slice still needs an approved implementation plan before any edits.
 
 Source: [framework value assessment](../../research/assistant-framework-value-assessment-2026-10-26.md). The user accepted the S01–S11 slice map and its decisions on 6 November 2026: matched evaluation for S01 and S05 only; new skills bundled by default with `--skill` for single installs; a cleanup skill plus uninstall script (S11); no word or character budgets.
 
@@ -16,7 +16,7 @@ Source: [framework value assessment](../../research/assistant-framework-value-as
 | S06 | [Security and advisory triage](S06-security-and-advisory-triage.md) | Three Security companion references; new assistant-advisory-triage skill. Implemented | Integration count reconciliation and held-out refreeze |
 | S07 | [Research provenance and recovery](S07-research-provenance.md) | Source register for substantial reports, citation checks, bounded failed-fetch recovery. Implemented | S01 terms only |
 | S08 | [assistant-spike](S08-assistant-spike.md) | New disposable-experiment skill and a prose handoff to Workflow. Implemented | Integration count reconciliation and held-out refreeze |
-| S09 | [assistant-ui-qa](S09-assistant-ui-qa.md) | New exploratory UI QA skill feeding the QA evaluator | Integration count reconciliation and held-out refreeze |
+| S09 | [assistant-ui-qa](S09-assistant-ui-qa.md) | New exploratory UI QA skill feeding the QA evaluator. Implemented | Integration count reconciliation and held-out refreeze |
 | S10 | [Skill retirement and Ideate consolidation](S10-skill-retirement.md) | Remove Telos; retire Diagrams after migrating its obligations to Docs/Workflow; merge Ideate into Thinking and remove Ideate (user decision 2026-11-06) | S11; integration count reconciliation and held-out refreeze |
 | S11 | [Cleanup and uninstall](S11-cleanup-and-uninstall.md) | New cleanup skill with a deterministic ownership helper; `uninstall.sh`/`uninstall.ps1`; one retired-item inventory; installers auto-remove proven-owned retired skills and agents through the same helper (user decision 2026-11-06) | Audit repairs F5, F4, F2; integration count reconciliation and held-out refreeze |
 
