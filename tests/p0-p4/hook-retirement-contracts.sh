@@ -699,4 +699,84 @@ else
     fail "${surface_failures[*]}"
 fi
 
+hook_link_tree_fingerprint() {
+    find "$1" -type d -print -o -type l -exec ls -ld {} \; -o -type f -exec shasum -a 256 {} + | LC_ALL=C sort
+}
+
+test_start "legacy hook cleanup refuses linked or wrong-type hook paths before any write (audit F2)"
+hook_link_root="$(mktemp -d)"
+hook_link_logs="$(mktemp -d)"
+p0p4_register_cleanup "$hook_link_root" "$hook_link_logs"
+hook_link_external="$hook_link_root/external"
+mkdir -p "$hook_link_external/dir"
+printf 'external sentinel\n' >"$hook_link_external/dir/sentinel.txt"
+printf '#!/usr/bin/env bash\necho external\n' >"$hook_link_external/session-start.sh"
+hook_link_failures=()
+for agent in claude codex gemini; do
+    for hook_link_kind in entrypoint-leaf hooks-assistant hooks-root module-dir helper-leaf-dir; do
+        for hook_link_mode in real dry-run; do
+            hook_link_home="$hook_link_root/$agent-$hook_link_kind-$hook_link_mode"
+            hook_link_agent_home="$(agent_home_path "$hook_link_home" "$agent")"
+            hook_link_dir="$hook_link_agent_home/hooks/assistant"
+            mkdir -p "$hook_link_agent_home"
+            case "$hook_link_kind" in
+                entrypoint-leaf)
+                    mkdir -p "$hook_link_dir"
+                    printf '#!/usr/bin/env bash\necho stale\n' >"$hook_link_dir/skill-router.sh"
+                    ln -s "$hook_link_external/session-start.sh" "$hook_link_dir/session-start.sh"
+                    ;;
+                hooks-assistant)
+                    mkdir -p "$hook_link_agent_home/hooks"
+                    ln -s "$hook_link_external/dir" "$hook_link_dir"
+                    ;;
+                hooks-root) ln -s "$hook_link_external/dir" "$hook_link_agent_home/hooks" ;;
+                module-dir)
+                    mkdir -p "$hook_link_dir"
+                    printf '#!/usr/bin/env bash\necho stale\n' >"$hook_link_dir/skill-router.sh"
+                    ln -s "$hook_link_external/dir" "$hook_link_dir/workflow-guard.d"
+                    ;;
+                helper-leaf-dir)
+                    mkdir -p "$hook_link_dir/hook-runtime.sh"
+                    printf '#!/usr/bin/env bash\necho stale\n' >"$hook_link_dir/skill-router.sh"
+                    ;;
+            esac
+            hook_link_args=()
+            [[ "$hook_link_mode" == real ]] || hook_link_args+=(--dry-run)
+            hook_link_before="$(hook_link_tree_fingerprint "$hook_link_root")"
+            hook_link_status=0
+            run_agent_install "$agent" "$hook_link_home" "" "$hook_link_logs/out" "$hook_link_logs/err" ${hook_link_args[@]+"${hook_link_args[@]}"} || hook_link_status=$?
+            hook_link_after="$(hook_link_tree_fingerprint "$hook_link_root")"
+            if [[ "$hook_link_status" == 0 ]]; then
+                hook_link_failures+=("$agent $hook_link_kind ($hook_link_mode) was accepted")
+            elif ! grep -q 'Refusing' "$hook_link_logs/out" "$hook_link_logs/err"; then
+                hook_link_failures+=("$agent $hook_link_kind ($hook_link_mode) failed without a refusal: $(head -c 300 "$hook_link_logs/err")")
+            fi
+            if [[ "$hook_link_before" != "$hook_link_after" ]]; then
+                diff <(printf '%s\n' "$hook_link_before") <(printf '%s\n' "$hook_link_after") | head -n 20 >&2 || true
+                hook_link_failures+=("$agent $hook_link_kind ($hook_link_mode) wrote before refusing")
+            fi
+        done
+    done
+done
+if [[ "${#hook_link_failures[@]}" == 0 ]]; then pass; else fail "hook link safety: ${hook_link_failures[*]}"; fi
+
+test_start "legacy hook shims replace hard-linked entrypoints without writing through them (audit F2)"
+hook_hard_failures=()
+for agent in claude codex gemini; do
+    hook_hard_home="$(mktemp -d)"
+    p0p4_register_cleanup "$hook_hard_home"
+    hook_hard_dir="$(agent_home_path "$hook_hard_home" "$agent")/hooks/assistant"
+    mkdir -p "$hook_hard_dir"
+    printf '#!/usr/bin/env bash\necho external-hard-link\n' >"$hook_hard_home/external.sh"
+    ln "$hook_hard_home/external.sh" "$hook_hard_dir/session-start.sh"
+    if ! run_agent_install "$agent" "$hook_hard_home" "" "$hook_hard_home/out" "$hook_hard_home/err"; then
+        hook_hard_failures+=("$agent install failed: $(tail -n 1 "$hook_hard_home/err")")
+        continue
+    fi
+    grep -Fq 'echo external-hard-link' "$hook_hard_home/external.sh" || hook_hard_failures+=("$agent shim write went through a hard link")
+    file_is_inert_shim "$hook_hard_dir/session-start.sh" "$hook_hard_home/shim.out" "$hook_hard_home/shim.err" || hook_hard_failures+=("$agent did not install an inert shim over the hard link")
+    ls -a "$hook_hard_dir" | grep -q '^\.assistant-install' && hook_hard_failures+=("$agent hooks dir kept a temporary install file")
+done
+if [[ "${#hook_hard_failures[@]}" == 0 ]]; then pass; else fail "hook shim replacement: ${hook_hard_failures[*]}"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

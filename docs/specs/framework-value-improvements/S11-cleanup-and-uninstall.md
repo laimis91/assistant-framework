@@ -278,9 +278,9 @@ Out of scope:
 | Content-proof mechanism (fingerprint vs receipt) | new_behavior | technical_design_decision | D-S11-2 |
 | Exact hook-registration and marker rules | existing_behavior_to_preserve | no_open_decision | install.sh:468-676, 1136-1194; install.ps1:2016-2291 |
 | Shared retired-item inventory | explicit_change | implementation_gap | Lists duplicated and divergent (install.sh:389-427, 720-788, 939 at ad6e598; install.ps1:49-79, 2551-2566) |
-| Unix tools/eval-docs `rsync --delete` over shared roots | source_conflict | source_conflict_resolution | install.sh:932-951, 972-974 at ad6e598 vs Windows install.ps1:1367-1419; resolved by audit F4 (owned top-level entries only, exact retirements) |
+| Unix tools/eval-docs `rsync --delete` over shared roots | source_conflict | source_conflict_resolution | install.sh:932-951, 972-974 at ad6e598 vs Windows install.ps1:1367-1419; resolved by audit F4 (8e9a302; owned top-level entries only, exact retirements) |
 | Unix overlap check absent | source_conflict | source_conflict_resolution | install.sh:810-817 at ad6e598 vs install.ps1:292-302, 2497; resolved by audit F5 (e17e05b) |
-| Unix agent/rule/shim writes follow links | source_conflict | source_conflict_resolution | install.sh:1000-1003, 1029-1032, 1054-1057, 453-466; audit F2 (separate session) |
+| Unix agent/rule/shim writes follow links | source_conflict | source_conflict_resolution | install.sh:1000-1003, 1029-1032, 1054-1057, 453-466 at ad6e598; resolved by audit F2 (link preflight and rename-into-place writes) |
 | Uninstall of instruction block on Windows-normalized files | materially_unknown | technical_design_decision | install.ps1:2280-2291 rewrites whole file; R-S11-11 defines identity as pre-uninstall bytes |
 | `~/.agents` symlink kept on uninstall | existing_behavior_to_preserve | no_open_decision | Decided by user 2026-11-06: keep and report (D-S11-7 (a)); installer creates it only when absent (install.sh:902-919); R-S11-15 |
 | Hook shim lifetime | explicit_change | no_open_decision | "one compatibility release" with no release tags; decided by user 2026-11-06: cleanup offers removal only of unregistered byte-identical shims, installers keep writing them until the user closes the window (D-S11-9) |

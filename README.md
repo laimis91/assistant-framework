@@ -752,7 +752,10 @@ In the shared `tools/` and `docs/evals/` roots both installers replace only the
 framework's own top-level entries and retire only exact obsolete tool paths, so
 files and folders you add beside them survive reinstalls. The Unix installer
 refuses, before any write, when one of those roots or an owned entry is a
-symlink or has the wrong type.
+symlink or has the wrong type. It also refuses a linked or wrong-type
+`agents/`, `rules/` or `hooks/assistant/` path, or file in them, and installs
+each agent, rule and retired-hook shim by renaming a new file into place, so an
+existing link is never written through.
 
 The Codex and Claude installers each maintain one marker-managed, ASCII-only
 block (`~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`) that loads the common file

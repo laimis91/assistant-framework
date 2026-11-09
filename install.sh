@@ -454,17 +454,25 @@ remove_legacy_framework_hook_helpers() {
 
 write_legacy_framework_hook_shims() {
     local hooks_target="$1"
-    local entrypoint
+    local entrypoint shim_source
 
-    mkdir -p "$hooks_target"
+    shim_source="$(mktemp "${TMPDIR:-/tmp}/assistant-hook-shim.XXXXXX")" \
+        || fail "Could not create a temporary hook shim"
+    printf '%s\n' \
+        '#!/usr/bin/env bash' \
+        '# Assistant Framework retired-hook compatibility shim.' \
+        'exit 0' > "$shim_source"
+    # cp applies the umask to new files, matching the former redirect-created shims.
+    chmod 0666 "$shim_source"
     while IFS= read -r entrypoint; do
         [[ -n "$entrypoint" ]] || continue
-        printf '%s\n' \
-            '#!/usr/bin/env bash' \
-            '# Assistant Framework retired-hook compatibility shim.' \
-            'exit 0' > "$hooks_target/$entrypoint"
-        chmod +x "$hooks_target/$entrypoint"
+        # A subshell lets the shim source be removed before a refusal exits.
+        if ! ( replace_managed_file "$shim_source" "$hooks_target/$entrypoint" "legacy hook shim" true ); then
+            rm -f -- "$shim_source"
+            exit 1
+        fi
     done < <(legacy_framework_hook_entrypoints)
+    rm -f -- "$shim_source"
 }
 
 cleanup_legacy_framework_hooks() {
@@ -671,6 +679,8 @@ PY
     fi
 
     if [[ "$legacy_detected" == "true" ]]; then
+        # Recheck immediately before removing helpers or writing shims.
+        assert_legacy_hook_paths_safe "$hooks_target"
         remove_legacy_framework_hook_helpers "$hooks_target"
         write_legacy_framework_hook_shims "$hooks_target"
         ok "Retired hook registrations removed for $agent; cached entrypoints replaced with inert shims"
@@ -844,23 +854,40 @@ list_owned_top_level_entries() {
     done
 }
 
-# Refuse a symlink or non-directory at any component from below AGENT_HOME
-# down to and including the target directory.
-assert_owned_root_chain_safe() {
-    local target="$1" label="$2" relative current component
+# Refuse a symlink at any component from below AGENT_HOME down to and
+# including the target, a non-directory at any parent component, and a target
+# of the wrong kind: "dir" (must be a directory) or "file" (must be a regular
+# file). Missing components are fine; the installer creates them as real
+# directories or renames a real file into place.
+assert_managed_path_safe() {
+    local target="$1" leaf_kind="$2" label="$3" relative current component
+    local index=0 count
     local -a components=()
 
     relative="${target#"$AGENT_HOME"/}"
+    [[ "$relative" != "$target" ]] || fail "Refusing $label outside the agent home: $target"
     current="$AGENT_HOME"
     IFS='/' read -r -a components <<<"$relative"
+    count=${#components[@]}
     for component in ${components[@]+"${components[@]}"}; do
+        index=$((index + 1))
         current="$current/$component"
         if [[ -L "$current" ]]; then
-            fail "Refusing $label sync through a symlink: $current"
-        elif [[ -e "$current" && ! -d "$current" ]]; then
-            fail "Refusing $label sync because a path component is not a directory: $current"
+            fail "Refusing $label through a symlink: $current"
+        elif [[ ! -e "$current" ]]; then
+            continue
+        elif (( index < count )) || [[ "$leaf_kind" == dir ]]; then
+            [[ -d "$current" ]] || fail "Refusing $label because a path component is not a directory: $current"
+        elif [[ ! -f "$current" ]]; then
+            fail "Refusing $label because the target is not a regular file: $current"
         fi
     done
+}
+
+# Refuse a symlink or non-directory at any component from below AGENT_HOME
+# down to and including the target directory.
+assert_owned_root_chain_safe() {
+    assert_managed_path_safe "$1" dir "$2 sync"
 }
 
 # Refuse before any write when the root chain, an owned top-level target entry
@@ -933,6 +960,78 @@ mark_owned_tool_scripts_executable() {
             chmod +x "$target/$name"/*.sh
         fi
     done < <(list_owned_top_level_entries "$source")
+}
+
+# Install one managed file by renaming a temporary sibling over the target, so
+# an existing symlink or hard link is replaced and never written through. The
+# result keeps the mode cp would give: the existing file's mode when the
+# target exists, otherwise the source mode under the current umask.
+replace_managed_file() {
+    local source="$1" target="$2" label="$3" executable="${4:-false}"
+    local directory="${target%/*}" name="${target##*/}" temp_dir mode=""
+
+    assert_managed_path_safe "$target" file "$label"
+    mkdir -p "$directory"
+    if [[ -f "$target" ]]; then
+        # GNU stat -f prints filesystem status, so try the GNU form first.
+        mode="$(stat -c %a "$target" 2>/dev/null)" || mode="$(stat -f %Lp "$target" 2>/dev/null)" || mode=""
+    fi
+    temp_dir="$(mktemp -d "$directory/.assistant-install.XXXXXX")" \
+        || fail "Could not create a temporary directory for $label in $directory"
+    if ! cp "$source" "$temp_dir/$name" \
+        || { [[ -n "$mode" ]] && ! chmod "$mode" "$temp_dir/$name"; } \
+        || { $executable && ! chmod +x "$temp_dir/$name"; }; then
+        rm -rf -- "$temp_dir"
+        fail "Could not prepare $label: $target"
+    fi
+    # Recheck immediately before the rename; the subshell lets the temporary
+    # copy be removed before the refusal exits the installer.
+    if ! ( assert_managed_path_safe "$target" file "$label" ); then
+        rm -rf -- "$temp_dir"
+        exit 1
+    fi
+    if ! mv -f -- "$temp_dir/$name" "$target"; then
+        rm -rf -- "$temp_dir"
+        fail "Could not install $label: $target"
+    fi
+    rm -rf -- "$temp_dir"
+}
+
+# Refuse a linked or wrong-type legacy hook path before any cleanup write,
+# as install.ps1 Assert-LegacyHookCleanupSafe does for every agent.
+assert_legacy_hook_paths_safe() {
+    local hooks_target="$1" relative
+
+    while IFS= read -r relative; do
+        [[ -n "$relative" ]] || continue
+        assert_managed_path_safe "$hooks_target/$relative" file "legacy hook cleanup"
+    done < <({ legacy_framework_hook_entrypoints; legacy_framework_hook_helpers; legacy_framework_hook_modules; })
+    for relative in workflow-phase-gates.d workflow-guard.d; do
+        assert_managed_path_safe "$hooks_target/$relative" dir "legacy hook cleanup"
+    done
+}
+
+# Refuse, before any write and in dry-run, a linked or wrong-type path for
+# every agent, rule and legacy hook file this install may write or remove.
+preflight_managed_file_writes() {
+    local file
+
+    if [[ "$AGENT" == "codex" ]]; then
+        for file in "$FRAMEWORK_DIR/agents/codex/"*.toml; do
+            [[ -f "$file" ]] || continue
+            assert_managed_path_safe "$AGENT_HOME/agents/${file##*/}" file "Codex agent install"
+        done
+        for file in "$FRAMEWORK_DIR/codex-rules/"*.rules; do
+            [[ -f "$file" ]] || continue
+            assert_managed_path_safe "$AGENT_HOME/rules/${file##*/}" file "execution policy rule install"
+        done
+    elif [[ "$AGENT" == "claude" ]]; then
+        for file in "$FRAMEWORK_DIR/agents/claude/"*.md; do
+            [[ -f "$file" ]] || continue
+            assert_managed_path_safe "$AGENT_HOME/agents/${file##*/}" file "Claude agent install"
+        done
+    fi
+    assert_legacy_hook_paths_safe "$HOOKS_TARGET"
 }
 
 retire_managed_tools() {
@@ -1072,6 +1171,7 @@ preflight_workflow_role_compatibility
 
 SETTINGS_FILE="$AGENT_HOME/settings.json"
 HOOKS_TARGET="$AGENT_HOME/hooks/assistant"
+preflight_managed_file_writes
 
 echo "Installing Assistant Framework for: $AGENT"
 echo "  Source: $FRAMEWORK_DIR"
@@ -1196,9 +1296,8 @@ if [[ "$AGENT" == "codex" && -d "$AGENTS_SOURCE/codex" ]]; then
             dry "Install agent: $(basename "$toml") -> $AGENTS_TARGET/"
         done
     else
-        mkdir -p "$AGENTS_TARGET"
         for toml in "${toml_files[@]}"; do
-            cp "$toml" "$AGENTS_TARGET/"
+            replace_managed_file "$toml" "$AGENTS_TARGET/$(basename "$toml")" "Codex agent"
         done
         ok "Codex agents -> $AGENTS_TARGET/ (${#toml_files[@]} agents)"
     fi
@@ -1225,9 +1324,8 @@ if [[ "$AGENT" == "codex" && -d "$RULES_SOURCE" ]]; then
             dry "Install rule: $(basename "$rf") -> $RULES_TARGET/"
         done
     else
-        mkdir -p "$RULES_TARGET"
         for rf in "${rules_files[@]}"; do
-            cp "$rf" "$RULES_TARGET/"
+            replace_managed_file "$rf" "$RULES_TARGET/$(basename "$rf")" "execution policy rule"
         done
         ok "Execution policy rules -> $RULES_TARGET/ (${#rules_files[@]} rules)"
     fi
@@ -1250,9 +1348,8 @@ if [[ "$AGENT" == "claude" && -d "$AGENTS_SOURCE/claude" ]]; then
             dry "Install agent: $(basename "$md") -> $AGENTS_TARGET/"
         done
     else
-        mkdir -p "$AGENTS_TARGET"
         for md in "${md_files[@]}"; do
-            cp "$md" "$AGENTS_TARGET/"
+            replace_managed_file "$md" "$AGENTS_TARGET/$(basename "$md")" "Claude agent"
         done
         ok "Claude agents -> $AGENTS_TARGET/ (${#md_files[@]} agents)"
     fi
