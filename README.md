@@ -748,6 +748,11 @@ Windows Codex also mirrors progress into `~/.agents/tools/progress`, so
 `../../tools/progress/operating-guidance.md` from shared skills resolves with
 both default and custom `CODEX_HOME`. Existing installer safeguards preserve
 user files; full, single-skill, repeated and dry-run installs use the same route.
+In the shared `tools/` and `docs/evals/` roots both installers replace only the
+framework's own top-level entries and retire only exact obsolete tool paths, so
+files and folders you add beside them survive reinstalls. The Unix installer
+refuses, before any write, when one of those roots or an owned entry is a
+symlink or has the wrong type.
 
 The Codex and Claude installers each maintain one marker-managed, ASCII-only
 block (`~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`) that loads the common file

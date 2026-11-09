@@ -44,6 +44,8 @@ Options:
 
 Note: skill installation uses rsync --delete, which removes any files you
 added manually to installed skill directories. Back up customizations first.
+Files you add beside the framework's own entries in tools/ and docs/evals/
+are kept.
 
 Skills installed:
   Auto-discovered from skills/assistant-*/SKILL.md.
@@ -787,6 +789,169 @@ retire_installed_plugin_tool() {
     fi
 }
 
+# Shared roots such as ~/.<agent>/tools and ~/.<agent>/docs/evals also hold
+# user files. The installer writes only the framework's own top-level entries
+# there and retires only exact, explicitly owned obsolete paths.
+RETIRED_MANAGED_TOOLS=(cleanup-memory-graph.ps1 cleanup-memory-graph.sh)
+
+# Set the exclusions for one owned-entry sync kind (tools or eval-docs):
+# OWNED_SYNC_TOP_LEVEL_EXCLUDES are source entries never installed,
+# OWNED_SYNC_NAME_EXCLUDES apply at any depth inside an owned directory, and
+# OWNED_SYNC_EXACT_EXCLUDES are root-relative paths inside owned directories.
+set_owned_sync_exclusions() {
+    case "$1" in
+        tools)
+            OWNED_SYNC_TOP_LEVEL_EXCLUDES=(.DS_Store memory-graph context-budget-report.sh plugins)
+            OWNED_SYNC_NAME_EXCLUDES=(.DS_Store .publish bin obj __pycache__ '*.pyc')
+            OWNED_SYNC_EXACT_EXCLUDES=(
+                evals/run-codex-framework-evals.sh
+                evals/finalize-workflow-kernel-review.sh
+                evals/lib/context-budget-evidence.sh
+                evals/validate-promotion-decision-schema.cjs
+                evals/package.json
+                evals/package-lock.json
+                evals/node_modules
+            )
+            ;;
+        eval-docs)
+            OWNED_SYNC_TOP_LEVEL_EXCLUDES=(.DS_Store)
+            OWNED_SYNC_NAME_EXCLUDES=(.DS_Store)
+            OWNED_SYNC_EXACT_EXCLUDES=()
+            ;;
+        *)
+            fail "Unknown owned sync kind: $1"
+            ;;
+    esac
+}
+
+# Print the names of the source's top-level entries that the installer owns.
+list_owned_top_level_entries() {
+    local source="$1" entry name excluded pattern skip
+    for entry in "$source"/* "$source"/.[!.]* "$source"/..?*; do
+        [[ -e "$entry" || -L "$entry" ]] || continue
+        name="${entry##*/}"
+        skip=false
+        for excluded in "${OWNED_SYNC_TOP_LEVEL_EXCLUDES[@]}"; do
+            [[ "$name" != "$excluded" ]] || skip=true
+        done
+        # Name exclusions (build output such as bin, __pycache__, *.pyc) also
+        # apply at the top level, as in the former whole-root rsync.
+        for pattern in "${OWNED_SYNC_NAME_EXCLUDES[@]}"; do
+            # shellcheck disable=SC2053 # pattern match is intended
+            [[ $name != $pattern ]] || skip=true
+        done
+        $skip || printf '%s\n' "$name"
+    done
+}
+
+# Refuse a symlink or non-directory at any component from below AGENT_HOME
+# down to and including the target directory.
+assert_owned_root_chain_safe() {
+    local target="$1" label="$2" relative current component
+    local -a components=()
+
+    relative="${target#"$AGENT_HOME"/}"
+    current="$AGENT_HOME"
+    IFS='/' read -r -a components <<<"$relative"
+    for component in ${components[@]+"${components[@]}"}; do
+        current="$current/$component"
+        if [[ -L "$current" ]]; then
+            fail "Refusing $label sync through a symlink: $current"
+        elif [[ -e "$current" && ! -d "$current" ]]; then
+            fail "Refusing $label sync because a path component is not a directory: $current"
+        fi
+    done
+}
+
+# Refuse before any write when the root chain, an owned top-level target entry
+# or a retired tool path is a symlink or has the wrong type.
+assert_owned_sync_safe() {
+    local kind="$1" source="$2" target="$3" label="$4" name retired
+
+    set_owned_sync_exclusions "$kind"
+    assert_owned_root_chain_safe "$target" "$label"
+    while IFS= read -r name; do
+        if [[ -L "$target/$name" ]]; then
+            fail "Refusing to write $label entry through a symlink: $target/$name"
+        elif [[ -d "$source/$name" && ! -L "$source/$name" && -e "$target/$name" && ! -d "$target/$name" ]]; then
+            fail "Refusing to replace a non-directory with the $label directory: $target/$name"
+        elif [[ ( ! -d "$source/$name" || -L "$source/$name" ) && -d "$target/$name" ]]; then
+            fail "Refusing to replace a directory with the $label file: $target/$name"
+        fi
+    done < <(list_owned_top_level_entries "$source")
+
+    if [[ "$kind" == tools ]]; then
+        for retired in "${RETIRED_MANAGED_TOOLS[@]}"; do
+            if [[ -L "$target/$retired" ]]; then
+                fail "Refusing to remove a retired managed tool symlink: $target/$retired"
+            elif [[ -e "$target/$retired" && ! -f "$target/$retired" ]]; then
+                fail "Refusing to remove a retired managed tool that is not a file: $target/$retired"
+            fi
+        done
+    fi
+}
+
+# Sync each owned top-level entry on its own: owned directories are mirrored
+# with --delete inside themselves, owned files are copied, and unknown
+# siblings in the shared root are never touched.
+sync_owned_top_level_entries() {
+    local kind="$1" source="$2" target="$3" label="$4" name pattern exact
+    local -a rsync_excludes=()
+
+    assert_owned_sync_safe "$kind" "$source" "$target" "$label"
+    $DRY_RUN || mkdir -p "$target"
+    while IFS= read -r name; do
+        if [[ -d "$source/$name" && ! -L "$source/$name" ]]; then
+            rsync_excludes=()
+            for pattern in "${OWNED_SYNC_NAME_EXCLUDES[@]}"; do
+                rsync_excludes+=("--exclude=$pattern")
+            done
+            for exact in ${OWNED_SYNC_EXACT_EXCLUDES[@]+"${OWNED_SYNC_EXACT_EXCLUDES[@]}"}; do
+                [[ "$exact" != "$name/"* ]] || rsync_excludes+=("--exclude=/${exact#"$name/"}")
+            done
+            if $DRY_RUN; then
+                dry "rsync $source/$name/ -> $target/$name/"
+            else
+                mkdir -p "$target/$name"
+                rsync -a --delete "${rsync_excludes[@]}" "$source/$name/" "$target/$name/"
+            fi
+        elif $DRY_RUN; then
+            dry "Copy $source/$name -> $target/$name"
+        else
+            rsync -a "$source/$name" "$target/$name"
+        fi
+    done < <(list_owned_top_level_entries "$source")
+}
+
+# Make shell scripts directly inside owned tool directories executable.
+mark_owned_tool_scripts_executable() {
+    local source="$1" target="$2" name
+    set_owned_sync_exclusions tools
+    while IFS= read -r name; do
+        [[ -d "$source/$name" && ! -L "$source/$name" ]] || continue
+        if compgen -G "$target/$name/*.sh" >/dev/null 2>&1; then
+            chmod +x "$target/$name"/*.sh
+        fi
+    done < <(list_owned_top_level_entries "$source")
+}
+
+retire_managed_tools() {
+    local target="$1" retired path
+    for retired in "${RETIRED_MANAGED_TOOLS[@]}"; do
+        path="$target/$retired"
+        if [[ -L "$path" ]]; then
+            fail "Refusing to remove a retired managed tool symlink: $path"
+        elif [[ -f "$path" ]]; then
+            if $DRY_RUN; then
+                dry "Remove retired managed tool: $path"
+            else
+                rm -f -- "$path"
+                ok "Removed retired managed tool: $path"
+            fi
+        fi
+    done
+}
+
 # Print a path that may not exist yet in physical form. Existing components
 # resolve through `cd -P`, as the kernel would; the missing tail is appended
 # lexically, as `mkdir -p` would create it.
@@ -876,10 +1041,17 @@ assert_no_framework_target_overlap "$AGENT_HOME" "agent home"
 SKILLS_TARGET="$AGENT_HOME/skills"
 TOOLS_SOURCE="$FRAMEWORK_DIR/tools"
 TOOLS_TARGET="$AGENT_HOME/tools"
+EVAL_DOCS_SOURCE="$FRAMEWORK_DIR/docs/evals"
+EVAL_DOCS_TARGET="$AGENT_HOME/docs/evals"
 
-# Reject unsafe retired-tool parents before skill installation can mutate files.
+# Reject linked or wrong-type shared tool and eval-doc paths, and unsafe
+# retired-tool parents, before skill installation can mutate files.
 if [[ -d "$TOOLS_SOURCE" ]]; then
+    assert_owned_sync_safe tools "$TOOLS_SOURCE" "$TOOLS_TARGET" "tools"
     validate_installed_plugin_tool_cleanup "$TOOLS_TARGET"
+fi
+if [[ -d "$EVAL_DOCS_SOURCE" ]]; then
+    assert_owned_sync_safe eval-docs "$EVAL_DOCS_SOURCE" "$EVAL_DOCS_TARGET" "eval docs"
 fi
 
 # Select one root skill and its bundled hard-dependency closure if requested.
@@ -980,59 +1152,28 @@ fi
 if [[ -d "$TOOLS_SOURCE" ]]; then
     echo ""
     if $DRY_RUN; then
-        dry "rsync $TOOLS_SOURCE/ -> $TOOLS_TARGET/"
+        sync_owned_top_level_entries tools "$TOOLS_SOURCE" "$TOOLS_TARGET" "tools"
         remove_source_only_promotion_tools "$TOOLS_TARGET"
+        retire_managed_tools "$TOOLS_TARGET"
         retire_installed_plugin_tool "$TOOLS_TARGET"
         cleanup_installed_tool_build_artifacts "$TOOLS_TARGET" "$TOOLS_SOURCE"
     else
-        mkdir -p "$TOOLS_TARGET"
         retire_installed_plugin_tool "$TOOLS_TARGET"
-        rsync -a --delete \
-            --exclude='.DS_Store' \
-            --exclude='.publish' \
-            --exclude='bin' \
-            --exclude='obj' \
-            --exclude='__pycache__' \
-            --exclude='*.pyc' \
-            --exclude='/memory-graph' \
-            --exclude='/context-budget-report.sh' \
-            --exclude='/evals/run-codex-framework-evals.sh' \
-            --exclude='/evals/finalize-workflow-kernel-review.sh' \
-            --exclude='/evals/lib/context-budget-evidence.sh' \
-            --exclude='/evals/validate-promotion-decision-schema.cjs' \
-            --exclude='/evals/package.json' \
-            --exclude='/evals/package-lock.json' \
-            --exclude='/evals/node_modules' \
-            --exclude='/plugins/' \
-            "$TOOLS_SOURCE/" "$TOOLS_TARGET/"
+        sync_owned_top_level_entries tools "$TOOLS_SOURCE" "$TOOLS_TARGET" "tools"
         remove_source_only_promotion_tools "$TOOLS_TARGET"
+        retire_managed_tools "$TOOLS_TARGET"
         cleanup_installed_tool_build_artifacts "$TOOLS_TARGET" "$TOOLS_SOURCE"
-
-        # Make scripts executable
-        if compgen -G "$TOOLS_TARGET"/*/*.sh >/dev/null 2>&1; then
-            chmod +x "$TOOLS_TARGET"/*/*.sh
-        fi
-        ok "Tools -> $TOOLS_TARGET/"
+        mark_owned_tool_scripts_executable "$TOOLS_SOURCE" "$TOOLS_TARGET"
+        ok "Tools (framework-owned entries) -> $TOOLS_TARGET/"
     fi
 fi
 
 # ── Install eval fixtures/docs used by local tools ───────────────────────────
 
-EVAL_DOCS_SOURCE="$FRAMEWORK_DIR/docs/evals"
-EVAL_DOCS_TARGET="$AGENT_HOME/docs/evals"
-
 if [[ -d "$EVAL_DOCS_SOURCE" ]]; then
     echo ""
-    if $DRY_RUN; then
-        dry "rsync $EVAL_DOCS_SOURCE/ -> $EVAL_DOCS_TARGET/"
-    else
-        mkdir -p "$EVAL_DOCS_TARGET"
-        rsync -a --delete \
-            --exclude='.DS_Store' \
-            "$EVAL_DOCS_SOURCE/" "$EVAL_DOCS_TARGET/"
-
-        ok "Eval docs -> $EVAL_DOCS_TARGET/"
-    fi
+    sync_owned_top_level_entries eval-docs "$EVAL_DOCS_SOURCE" "$EVAL_DOCS_TARGET" "eval docs"
+    $DRY_RUN || ok "Eval docs (framework-owned entries) -> $EVAL_DOCS_TARGET/"
 fi
 
 # ── Install agents ────────────────────────────────────────────────────────
