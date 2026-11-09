@@ -801,8 +801,10 @@ physical_path_for_comparison() {
         if ! $missing && [[ -d "${current%/}/$component" ]]; then
             current="$(cd -P -- "${current%/}/$component" && pwd -P)" || return 1
         elif [[ "$component" == ".." ]]; then
-            missing=true
+            # Cancelling a missing component returns to its existing physical
+            # parent; mkdir -p would then follow later components physically.
             current="$(dirname -- "$current")"
+            if [[ -d "$current" ]]; then missing=false; else missing=true; fi
         else
             missing=true
             current="${current%/}/$component"

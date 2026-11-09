@@ -1419,6 +1419,8 @@ overlap_fw="$overlap_root/h/.claude"
 mkdir -p "$overlap_fw"
 rsync -a --exclude='.git' --exclude='node_modules' --exclude='/docs/plans/' "$FRAMEWORK_DIR/" "$overlap_fw/"
 ln -s "$overlap_fw" "$overlap_root/fw-link"
+mkdir -p "$overlap_root/outside"
+ln -s "$overlap_fw/skills" "$overlap_root/outside/link"
 overlap_failures=()
 overlap_cases=(
     "codex|$overlap_root/codex-home|$overlap_fw|CODEX_HOME equals the checkout"
@@ -1429,6 +1431,7 @@ overlap_cases=(
     "codex|$overlap_root/codex-home|$overlap_fw/skills/..|CODEX_HOME reaches the checkout through .."
     "codex|$overlap_root/codex-home|$overlap_root/fw-link|CODEX_HOME is a symlink to the checkout"
     "codex|$overlap_root/codex-home|$overlap_root/fw-link/missing/home|CODEX_HOME is inside the checkout through a symlink"
+    "codex|$overlap_root/codex-home|$overlap_root/outside/new/../link/..|CODEX_HOME reaches the checkout through a symlink after a cancelled missing component"
     "claude|$overlap_root/h||Claude home equals the checkout"
     "gemini|$overlap_fw/inner||Gemini home is inside the checkout"
 )
