@@ -779,4 +779,40 @@ for agent in claude codex gemini; do
 done
 if [[ "${#hook_hard_failures[@]}" == 0 ]]; then pass; else fail "hook shim replacement: ${hook_hard_failures[*]}"; fi
 
+test_start "legacy hook shim source stays in a private temporary directory (audit F2)"
+shim_private_failures=()
+shim_private_root="$(mktemp -d)"
+p0p4_register_cleanup "$shim_private_root"
+mkdir -p "$shim_private_root/bin" "$shim_private_root/tmp" "$shim_private_root/home/.claude/hooks/assistant"
+real_cp="$(command -v cp)"
+cat >"$shim_private_root/bin/cp" <<EOF
+#!/usr/bin/env bash
+for arg in "\$@"; do
+    case "\$arg" in
+        "$shim_private_root/tmp/"*)
+            parent="\${arg%/*}"
+            printf '%s %s\n' "\$parent" "\$(stat -f %Lp "\$parent" 2>/dev/null || stat -c %a "\$parent")" >>"$shim_private_root/cp-sources.log"
+            ;;
+    esac
+done
+exec "$real_cp" "\$@"
+EOF
+chmod +x "$shim_private_root/bin/cp"
+printf '#!/usr/bin/env bash\necho legacy\n' >"$shim_private_root/home/.claude/hooks/assistant/session-start.sh"
+if ! PATH="$shim_private_root/bin:$PATH" TMPDIR="$shim_private_root/tmp" \
+    run_agent_install claude "$shim_private_root/home" "" "$shim_private_root/out" "$shim_private_root/err"; then
+    shim_private_failures+=("install failed: $(tail -n 1 "$shim_private_root/err")")
+elif [[ ! -s "$shim_private_root/cp-sources.log" ]]; then
+    shim_private_failures+=("no shim copy from the temporary directory was observed")
+else
+    while read -r shim_parent shim_parent_mode; do
+        [[ "$shim_parent" != "$shim_private_root/tmp" ]] || shim_private_failures+=("shim source sat directly in the shared temporary directory")
+        [[ "$shim_parent_mode" == 700 ]] || shim_private_failures+=("shim source directory mode was $shim_parent_mode")
+    done <"$shim_private_root/cp-sources.log"
+    file_is_inert_shim "$shim_private_root/home/.claude/hooks/assistant/session-start.sh" \
+        "$shim_private_root/shim.out" "$shim_private_root/shim.err" || shim_private_failures+=("session-start.sh is not an inert shim")
+    find "$shim_private_root/tmp" -name 'assistant-hook-shim.*' | grep -q . && shim_private_failures+=("temporary shim directory was left behind")
+fi
+if [[ "${#shim_private_failures[@]}" == 0 ]]; then pass; else fail "hook shim source privacy: ${shim_private_failures[*]}"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

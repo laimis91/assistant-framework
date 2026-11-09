@@ -454,25 +454,30 @@ remove_legacy_framework_hook_helpers() {
 
 write_legacy_framework_hook_shims() {
     local hooks_target="$1"
-    local entrypoint shim_source
+    local entrypoint shim_dir shim_source
 
-    shim_source="$(mktemp "${TMPDIR:-/tmp}/assistant-hook-shim.XXXXXX")" \
-        || fail "Could not create a temporary hook shim"
-    printf '%s\n' \
-        '#!/usr/bin/env bash' \
-        '# Assistant Framework retired-hook compatibility shim.' \
-        'exit 0' > "$shim_source"
+    # mktemp -d creates a 0700 directory, so no other user can reach the source.
+    shim_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-hook-shim.XXXXXX")" \
+        || fail "Could not create a temporary hook shim directory"
+    shim_source="$shim_dir/shim"
     # cp applies the umask to new files, matching the former redirect-created shims.
-    chmod 0666 "$shim_source"
+    if ! printf '%s\n' \
+            '#!/usr/bin/env bash' \
+            '# Assistant Framework retired-hook compatibility shim.' \
+            'exit 0' > "$shim_source" \
+        || ! chmod 0666 "$shim_source"; then
+        rm -rf -- "$shim_dir"
+        fail "Could not prepare the temporary hook shim"
+    fi
     while IFS= read -r entrypoint; do
         [[ -n "$entrypoint" ]] || continue
         # A subshell lets the shim source be removed before a refusal exits.
         if ! ( replace_managed_file "$shim_source" "$hooks_target/$entrypoint" "legacy hook shim" true ); then
-            rm -f -- "$shim_source"
+            rm -rf -- "$shim_dir"
             exit 1
         fi
     done < <(legacy_framework_hook_entrypoints)
-    rm -f -- "$shim_source"
+    rm -rf -- "$shim_dir"
 }
 
 cleanup_legacy_framework_hooks() {
