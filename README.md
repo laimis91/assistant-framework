@@ -58,6 +58,8 @@ Claude Code, Codex, and Gemini CLI discover and route installed skills through t
 ./install.sh --agent gemini
 ```
 
+Both installers refuse, before any write and in dry-run, when the framework checkout and the agent home (including a configured `CODEX_HOME`) are the same directory or one contains the other. Keep the checkout outside `~/.claude`, `~/.codex` or `CODEX_HOME`, and `~/.gemini`.
+
 For one compatibility release, a normal install retires only older Assistant Framework lifecycle hook registrations. It removes only commands owned by this framework from the selected agent's existing settings, preserves unrelated custom configuration, and replaces detected stale framework entrypoints with silent exit-zero shims for already-running clients. It does not inspect or alter legacy Memory Graph configuration, runtime, or provider data. The deprecated `--no-hooks` option remains a warning-only no-op during this transition.
 
 ### Native Windows installation
