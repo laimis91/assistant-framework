@@ -134,6 +134,7 @@ Remove or reconcile outdated instructions with current behavior.
 
 ### Spike
 Explore feasibility; no unsupported claims.
+When feasibility needs an executed probe, use `assistant-spike`; its verdict enters as `constraints` and authorizes no production change.
 
 ## Required Agents
 

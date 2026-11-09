@@ -85,6 +85,10 @@ Do not reuse the post-code review rubric. Score before implementation with:
 - Objective fit: satisfies accepted criteria and required gates.
 - Verifiability: can be proven with tests, builds, inspections, or manual checks.
 - Feasibility: matches project architecture and available time/tooling.
+  When a candidate's Feasibility rests on an unverified assumption, Workflow may
+  run `assistant-spike` on it; the verdict is Feasibility evidence and enters
+  `candidate_search_constraints`. It never selects a candidate, changes an
+  approved plan or bypasses "Handle pivots after approval".
 - Risk: minimizes security, data, migration, operability, and scope risk.
 - Simplicity: smallest durable approach; avoids needless framework or dependency additions.
 - When an Architecture Decision Pack applies: preserves its boundary ownership,

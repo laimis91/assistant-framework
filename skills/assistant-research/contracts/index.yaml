@@ -55,6 +55,7 @@ load_sets:
       - five-lens-briefing.md
       - research.md
       - url-verify.md
+      - source-provenance.md
     selectors:
       - id: research-five-lens-method
         path: contracts/input.yaml

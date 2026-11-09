@@ -1,6 +1,6 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. 18 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools, research, security analysis, advisory triage, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), evidence-based verification selection and assessment, and exploratory UI QA.
+A Personal AI Assistant framework for developers. 19 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools, research, disposable feasibility spikes, security analysis, advisory triage, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), evidence-based verification selection and assessment, and exploratory UI QA.
 
 ## Documentation
 
@@ -23,7 +23,8 @@ Start with the [documentation map](docs/README.md) for task-specific guides, [du
 13. **Skill Creation** — Creates focused instructions, with schemas when a real consumer needs them
 14. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
 15. **Verification** — Selects proportionate checks and techniques, applies TDD only when appropriate, and assesses whether evidence supports the claim.
-16. **Exploratory UI QA** — Explores a running UI through the available browser tools and reports reproducible issues with severity and tested, not tested and blocked coverage; acceptance stays with the QA Evaluator
+16. **Feasibility Spike** — Answers one feasibility question with a small disposable experiment and a control, returning validated, partial or invalidated without authorizing production changes
+17. **Exploratory UI QA** — Explores a running UI through the available browser tools and reports reproducible issues with severity and tested, not tested and blocked coverage; acceptance stays with the QA Evaluator
 
 ## Installation
 
@@ -242,6 +243,11 @@ Six structured reasoning tools: clarify, perspectives, stress-test, deep-think, 
 
 Triggers on: architecture decisions, complex trade-offs, stress tests, debate, first principles, hypotheses
 
+### assistant-spike
+Answers one observable feasibility question with the smallest disposable probe outside tracked files. It checks source and docs first, asks once for a probe plan that binds a fresh directory and exact commands (installs, network calls, credentials and real data still ask separately), runs the decisive case plus a control, and returns validated, partial or invalidated with evidence, limits and the consequence for a real build. Its handoff to Workflow authorizes no production change.
+
+Triggers on: spike, try out, prove whether an approach can work, feasibility experiments that only execution can settle
+
 ### assistant-research
 Source-backed research with verified links, claim-specific evidence quality, and explicit conflicts and gaps. Selected five-lens decision briefings retain five independent lens handoffs and separate peer review.
 
@@ -361,7 +367,7 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 tools/evals/run-skill-evals.sh --activation-results /tmp/skill-activation-results.json
 ```
 
-The default eval inventory is 18 first-class `assistant-*` skills with fixtures.
+The default eval inventory is 19 first-class `assistant-*` skills with fixtures.
 Canonical first-class fixtures use schema `2.0` and include top-level
 `activation_cases`: exact `{user_request, should_activate}` objects with at
 least two normalized-distinct positive requests and one normalized-disjoint
@@ -515,12 +521,18 @@ skills/
     creative.md                    <- Low-probability sampling
     evals/cases.json               <- Pilot provider-neutral behavior eval fixtures
 
+  assistant-spike/
+    SKILL.md                       <- Question, probe plan, control, verdict and Workflow handoff
+    evals/cases.json               <- Provider-neutral behavior eval fixtures
+
   assistant-research/
     SKILL.md                       <- Tool descriptions and usage guidance
     research.md                    <- Direct source research scaled to the question
     five-lens-briefing.md          <- STORM-inspired decision briefing: perspective scan / contradictions / synthesis / peer review
     investigate.md                 <- Deep investigation with ethical framework
     url-verify.md                  <- URL verification protocol
+    source-provenance.md           <- Source register and citation check, loaded only for substantial reports
+    fetch-recovery.md              <- Bounded failed-fetch recovery and snapshot labelling, loaded only on a failed fetch
     legacy-compatibility.md        <- Pre-v5 records, loaded only for persisted history
 
   assistant-security/
@@ -727,7 +739,7 @@ configuration when reinstalling.
 
 ### Common guidance and unmatched activities
 
-All 18 first-class assistant skills reference
+All 19 first-class assistant skills reference
 `tools/progress/operating-guidance.md`. Unix installs put tools beside skills
 under `~/.claude`, configured `CODEX_HOME` (default `~/.codex`), or `~/.gemini`.
 Windows Codex also mirrors progress into `~/.agents/tools/progress`, so

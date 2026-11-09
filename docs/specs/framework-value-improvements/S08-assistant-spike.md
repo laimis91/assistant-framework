@@ -1,6 +1,6 @@
 # S08 — Disposable feasibility experiments (assistant-spike)
 
-Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Not implemented.
+Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented on branch `fvi/s08-assistant-spike` (2026-11-07), merged to main as 843a408 (#101); held-out refreeze pending integration. On 2026-11-08 the user waived the R-EVAL-3 review of the S08 activation cases (merged unreviewed; feedback may come later) and accepted the method text (plan T3).
 Source: report §2 "Recommend: assistant-spike" (docs/research/assistant-framework-value-assessment-2026-10-26.md:159-173), §6 row 10 (same file:278), order 5 (same file:215); slice map row S08 (docs/plans/framework-value-improvements/specification-index.md, "Full specification set").
 
 ## Problem and intended outcome
@@ -88,7 +88,7 @@ Out of scope and not imported (report :171, :278; comparator "/Users/laimis/Deve
 | Item | behavior_status | work_status | Evidence |
 |---|---|---|---|
 | Experiment-and-verdict method (R-S08-1–7) | new_behavior | implementation_gap | No spike skill; triage-rubric.md:135-136 has one line |
-| Source-inspection-first check (R-S08-2) | new_behavior | implementation_gap | Report :167 |
+| Source-inspection-first check (R-S08-2) | new_behavior | implementation_gap | Report :166 |
 | Boundaries not waived (R-S08-8, 10, 11) | existing_behavior_to_preserve | no_open_decision | ai-usage-policy.md:87-95; SKILL.md:37-41, 76-79, 87-90 |
 | Probe location outside tracked source (R-S08-9) | new_behavior | technical_design_decision | Comparator default is repo-root `spikes/` (comparator :188-190); repo rule docs/README.md:31 |
 | Workflow handoff via existing inputs (R-S08-12, 13) | new_behavior | no_open_decision | input.yaml:121-127, 404-410 |
@@ -97,7 +97,7 @@ Out of scope and not imported (report :171, :278; comparator "/Users/laimis/Deve
 | Activation description and cases (R-S08-16, 17) | new_behavior | implementation_gap | docs/specs/skill-activation.md R-DESC-1/2; skill-eval-fixtures.sh:915-930 |
 | Held-out activation cases and refreeze | explicit_change | implementation_gap | suite.py:139-145, 210-213; CI framework-validation.yml:56-57 |
 | Default bundle and `--skill` install (R-S08-18) | existing_behavior_to_preserve | no_open_decision | install.sh:800-805, 828-832; install.ps1:2471-2483 |
-| Expert-method derivation for the method | materially_unknown | evidence_gap | docs/skill-contract-design-guide.md:14-22 requires cue-to-method decisions from representative cases or an authoritative method; the comparator and report are the only sources |
+| Expert-method derivation for the method | new_behavior | implementation_gap | Derived per skills/assistant-skill-creator/references/expert-method-design.md from the comparator ("/Users/laimis/Developer/Comparable skills/software-development/spike/SKILL.md") and the report (:159-173). Cue → method: (1) question about existing repository behaviour, documented behaviour or existing test output → answer from inspection, no probe (source: report :166 for answering from inspection inside the spike; comparator :22 supports only "do not build when reading answers"); wrong-outcome check `retry-question-answered-from-source-no-probe`. (2) several assumptions → test first the one whose failure invalidates the idea (source: report :167; comparator :57 "most likely to kill the idea"); preferring the one with least evidence so far is inference; check `fts5-latency-returns-partial-with-control`. (3) control by question type: latency/memory → stated load plus a small baseline or cold-versus-warm run; compatibility → known-good baseline through the same harness; capacity → boundary input at and over the limit; rejection → one input that must fail (source: comparator :111 "never declare it works after one happy-path run" and report :168 "relevant control or limit"; the per-type mapping is inference, not a source recommendation); check: the fts5 case's fail signal "it works after one query". (4) verdict: validated only when the decisive observation holds under the stated constraints and the control behaves; partial when it holds only under narrower named conditions or the control exposes one; invalidated when the failure condition occurs or the observation is absent (source: comparator :156-158; the control clause is inference); check: fts5 case forbids `Verdict: validated` for a cold-start miss. Excluded comparator parts as listed under Scope and non-goals. Method text accepted by the user on 2026-11-08 (plan T3). |
 | Whether the new routing row lowers precision for Research/Workflow | materially_unknown | evidence_gap | No trial has run; R-RUN-7 needs fresh authorization |
 
 ## Unresolved decisions
@@ -133,6 +133,7 @@ Focused checks, no matched evaluation:
 - `./install.sh --agent {claude,codex,gemini} --dry-run`, plus `--skill assistant-spike --dry-run`; Windows installer contracts (`tests/windows/installer-contracts.ps1`) where a Windows host is available.
 - A focused content check that the SKILL.md states the three verdict values, the "no production change" handoff statement and the boundary-not-waived rule (same style as the clarify check in `tests/p0-p4/skill-instruction-quality-contracts.sh:38-60`).
 - R-DESC-7 listing check (no model call) that every first-class description survives in the crowded listing after the addition, with total description characters before and after reported as a measurement.
+  **Result 2026-11-08 (host 2.1.317, run at the user's request, merged with main after S06):** in the crowded condition (18 framework skills plus 40 stubs), a fresh home and the default listing budget, the listing kept all 18 framework descriptions word for word for `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5-1` and the two `[1m]` variants. The listing is 16,705 characters. Framework description total: 3,939 before S08, 4,343 after. No model call was made: the API base URL was a closed local port and the key a placeholder.
 
 ## Dependencies and overlap
 

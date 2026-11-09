@@ -32,6 +32,7 @@ DIMENSIONS = {
     "target": ("code", "skills", "specs", "tests"),
 }
 NEIGHBOUR_PAIRS = (
+    ("assistant-spike", "assistant-research"), ("assistant-spike", "assistant-workflow"),
     ("assistant-review", "assistant-skill-creator"), ("assistant-verification", "assistant-tdd"),
     ("assistant-ui-qa", "assistant-debugging"), ("assistant-ui-qa", "assistant-review"),
     ("assistant-debugging", "assistant-ci-audit"), ("assistant-debugging", "assistant-thinking"),

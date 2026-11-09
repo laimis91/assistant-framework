@@ -6,6 +6,7 @@
     "assistant-skill-creator": ["assistant-verification"],
     "assistant-advisory-triage": ["assistant-security", "assistant-workflow"],
     "assistant-security": ["assistant-advisory-triage"],
+    "assistant-spike": ["assistant-workflow"],
     "assistant-ui-qa": ["assistant-workflow", "assistant-debugging"]
   },
   "rows": {
@@ -28,6 +29,7 @@
     "ui_qa": {"situation": "Exploratory testing of a running UI or user flow", "required": ["assistant-ui-qa"], "optional": ["assistant-verification", "assistant-debugging"], "forbidden": []},
     "ci_audit": {"situation": "Weak, slow or false-passing CI and tests", "required": ["assistant-ci-audit"], "optional": [], "forbidden": ["assistant-debugging"]},
     "research": {"situation": "Source-backed research or option comparison", "required": ["assistant-research"], "optional": [], "forbidden": []},
+    "spike": {"situation": "Feasibility question settled by a disposable experiment before a real build", "required": ["assistant-spike"], "optional": ["assistant-research", "assistant-verification", "assistant-workflow"], "forbidden": []},
     "security_change": {"situation": "Change touching auth, external input, secrets, sensitive data, persistence, network or shell calls, dependencies or config, or external integrations", "required": ["assistant-workflow", "assistant-verification", "assistant-security"], "optional": ["assistant-tdd"], "forbidden": []},
     "security_audit": {"situation": "Threat model, vulnerability audit, dependency audit or attack-surface analysis", "required": ["assistant-security"], "optional": [], "forbidden": []},
     "advisory_triage": {"situation": "Triage of a security advisory or vulnerability report", "required": ["assistant-advisory-triage"], "optional": ["assistant-security"], "forbidden": []},
