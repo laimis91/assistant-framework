@@ -1482,4 +1482,153 @@ else
     fail "assert_no_framework_target_overlap must run in the main flow before any preflight or write (check line: ${overlap_check_line:-none}, first write: ${overlap_first_write_line:-none})"
 fi
 
+owned_sync_user_fingerprint() {
+    local entry
+    for entry in "$@"; do
+        if [[ -L "$entry" ]]; then
+            printf 'link %s %s\n' "$entry" "$(readlink "$entry")"
+        elif [[ -d "$entry" ]]; then
+            printf 'dir %s %s\n' "$(ls -ld "$entry" | awk '{print $1}')" "$entry"
+        elif [[ -f "$entry" ]]; then
+            printf 'file %s %s\n' "$(ls -ld "$entry" | awk '{print $1}')" "$(shasum -a 256 "$entry")"
+        else
+            printf 'missing %s\n' "$entry"
+        fi
+    done
+}
+
+test_start "tools and eval-docs installs write only framework-owned entries (audit F4)"
+owned_sync_home="$(mktemp -d)"
+owned_sync_logs="$(mktemp -d)"
+p0p4_register_cleanup "$owned_sync_home" "$owned_sync_logs"
+owned_sync_tools="$owned_sync_home/.codex/tools"
+owned_sync_eval_docs="$owned_sync_home/.codex/docs/evals"
+mkdir -p "$owned_sync_tools/company-dir" "$owned_sync_tools/evals" "$owned_sync_eval_docs/company-fixtures" "$owned_sync_eval_docs/fixtures"
+printf 'company custom tool\n' >"$owned_sync_tools/company-custom-tool.txt"
+chmod 0640 "$owned_sync_tools/company-custom-tool.txt"
+printf '#!/bin/sh\necho company\n' >"$owned_sync_tools/company-dir/run.sh"
+chmod 0644 "$owned_sync_tools/company-dir/run.sh"
+printf 'custom eval notes\n' >"$owned_sync_eval_docs/custom.md"
+printf '{"company": true}\n' >"$owned_sync_eval_docs/company-fixtures/case.json"
+printf 'stale owned tool file\n' >"$owned_sync_tools/evals/stale-owned.txt"
+printf 'stale owned eval fixture\n' >"$owned_sync_eval_docs/fixtures/stale-owned.txt"
+printf 'retired\n' >"$owned_sync_tools/cleanup-memory-graph.sh"
+printf 'retired\n' >"$owned_sync_tools/cleanup-memory-graph.ps1"
+owned_sync_user_entries=(
+    "$owned_sync_tools/company-custom-tool.txt"
+    "$owned_sync_tools/company-dir"
+    "$owned_sync_tools/company-dir/run.sh"
+    "$owned_sync_eval_docs/custom.md"
+    "$owned_sync_eval_docs/company-fixtures"
+    "$owned_sync_eval_docs/company-fixtures/case.json"
+)
+owned_sync_before="$(owned_sync_user_fingerprint "${owned_sync_user_entries[@]}")"
+owned_sync_failures=()
+if HOME="$owned_sync_home" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-thinking --dry-run >"$owned_sync_logs/dry.out" 2>&1; then
+    for owned_sync_retired in cleanup-memory-graph.sh cleanup-memory-graph.ps1; do
+        grep -Fq "Remove retired managed tool: $owned_sync_tools/$owned_sync_retired" "$owned_sync_logs/dry.out" \
+            || owned_sync_failures+=("dry-run did not report retiring $owned_sync_retired")
+        [[ -f "$owned_sync_tools/$owned_sync_retired" ]] || owned_sync_failures+=("dry-run removed $owned_sync_retired")
+    done
+    [[ -f "$owned_sync_tools/evals/stale-owned.txt" ]] || owned_sync_failures+=("dry-run removed a stale owned tool file")
+else
+    owned_sync_failures+=("dry-run failed: $(head -c 300 "$owned_sync_logs/dry.out")")
+fi
+for owned_sync_pass in first second; do
+    if ! HOME="$owned_sync_home" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-thinking >"$owned_sync_logs/$owned_sync_pass.out" 2>&1; then
+        owned_sync_failures+=("$owned_sync_pass install failed: $(head -c 300 "$owned_sync_logs/$owned_sync_pass.out")")
+        continue
+    fi
+    owned_sync_after="$(owned_sync_user_fingerprint "${owned_sync_user_entries[@]}")"
+    if [[ "$owned_sync_before" != "$owned_sync_after" ]]; then
+        ownership_install_fingerprint_difference "owned sync user entries ($owned_sync_pass)" "$owned_sync_before" "$owned_sync_after"
+        owned_sync_failures+=("$owned_sync_pass install changed user tool or eval-doc entries")
+    fi
+    [[ ! -e "$owned_sync_tools/evals/stale-owned.txt" ]] || owned_sync_failures+=("$owned_sync_pass install kept a stale file inside owned tools/evals")
+    [[ ! -e "$owned_sync_eval_docs/fixtures/stale-owned.txt" ]] || owned_sync_failures+=("$owned_sync_pass install kept a stale file inside owned docs/evals/fixtures")
+    [[ ! -e "$owned_sync_tools/cleanup-memory-graph.sh" && ! -e "$owned_sync_tools/cleanup-memory-graph.ps1" ]] \
+        || owned_sync_failures+=("$owned_sync_pass install kept a retired cleanup-memory-graph tool")
+    [[ -x "$owned_sync_tools/evals/run-skill-evals.sh" ]] || owned_sync_failures+=("$owned_sync_pass install did not install an executable owned eval runner")
+    [[ -f "$owned_sync_tools/smoke-test-codex-agents.sh" ]] || owned_sync_failures+=("$owned_sync_pass install did not install an owned top-level tool file")
+    cmp -s "$FRAMEWORK_DIR/docs/evals/README.md" "$owned_sync_eval_docs/README.md" || owned_sync_failures+=("$owned_sync_pass install did not install owned eval docs")
+    [[ -e "$owned_sync_eval_docs/fixtures/$(ls "$FRAMEWORK_DIR/docs/evals/fixtures" | head -n 1)" ]] || owned_sync_failures+=("$owned_sync_pass install did not install owned eval fixtures")
+    [[ ! -e "$owned_sync_tools/evals/package.json" && ! -e "$owned_sync_tools/context-budget-report.sh" && ! -e "$owned_sync_tools/plugins" ]] \
+        || owned_sync_failures+=("$owned_sync_pass install copied a source-only or excluded tool")
+done
+if [[ "${#owned_sync_failures[@]}" == 0 ]]; then pass; else fail "owned sync: ${owned_sync_failures[*]}"; fi
+
+test_start "tools and eval-docs installs refuse linked or wrong-type roots and owned entries before any write (audit F4)"
+owned_link_root="$(mktemp -d)"
+p0p4_register_cleanup "$owned_link_root"
+owned_link_external="$owned_link_root/external"
+mkdir -p "$owned_link_external/dir"
+printf 'external sentinel\n' >"$owned_link_external/dir/sentinel.txt"
+printf 'external file sentinel\n' >"$owned_link_external/file.txt"
+owned_link_failures=()
+for owned_link_kind in tools-root tools-dir-entry tools-file-entry tools-retired-leaf tools-retired-dir tools-wrong-type tools-file-is-dir docs-parent eval-docs-root eval-docs-dir-entry eval-docs-file-entry; do
+    for owned_link_mode in real dry-run; do
+        owned_link_home="$owned_link_root/$owned_link_kind-$owned_link_mode"
+        owned_link_codex="$owned_link_home/.codex"
+        mkdir -p "$owned_link_codex"
+        case "$owned_link_kind" in
+            tools-root) ln -s "$owned_link_external/dir" "$owned_link_codex/tools" ;;
+            tools-dir-entry) mkdir -p "$owned_link_codex/tools" && ln -s "$owned_link_external/dir" "$owned_link_codex/tools/evals" ;;
+            tools-file-entry) mkdir -p "$owned_link_codex/tools" && ln -s "$owned_link_external/file.txt" "$owned_link_codex/tools/smoke-test-codex-agents.sh" ;;
+            tools-retired-leaf) mkdir -p "$owned_link_codex/tools" && ln -s "$owned_link_external/file.txt" "$owned_link_codex/tools/cleanup-memory-graph.sh" ;;
+            tools-retired-dir) mkdir -p "$owned_link_codex/tools/cleanup-memory-graph.ps1" ;;
+            tools-wrong-type) mkdir -p "$owned_link_codex/tools" && printf 'not a directory\n' >"$owned_link_codex/tools/evals" ;;
+            tools-file-is-dir) mkdir -p "$owned_link_codex/tools/smoke-test-codex-agents.sh" ;;
+            docs-parent) ln -s "$owned_link_external/dir" "$owned_link_codex/docs" ;;
+            eval-docs-root) mkdir -p "$owned_link_codex/docs" && ln -s "$owned_link_external/dir" "$owned_link_codex/docs/evals" ;;
+            eval-docs-dir-entry) mkdir -p "$owned_link_codex/docs/evals" && ln -s "$owned_link_external/dir" "$owned_link_codex/docs/evals/fixtures" ;;
+            eval-docs-file-entry) mkdir -p "$owned_link_codex/docs/evals" && ln -s "$owned_link_external/file.txt" "$owned_link_codex/docs/evals/README.md" ;;
+        esac
+        owned_link_before="$(overlap_tree_fingerprint "$owned_link_root")"
+        owned_link_args=(--agent codex --skill assistant-thinking)
+        [[ "$owned_link_mode" == real ]] || owned_link_args+=(--dry-run)
+        owned_link_status=0
+        HOME="$owned_link_home" bash "$FRAMEWORK_DIR/install.sh" "${owned_link_args[@]}" >"$owned_link_root/out.log" 2>&1 || owned_link_status=$?
+        owned_link_after="$(overlap_tree_fingerprint "$owned_link_root" | grep -v "$owned_link_root/out.log" || true)"
+        owned_link_before="$(printf '%s\n' "$owned_link_before" | grep -v "$owned_link_root/out.log" || true)"
+        if [[ "$owned_link_status" == 0 ]]; then
+            owned_link_failures+=("$owned_link_kind ($owned_link_mode) was accepted")
+        elif ! grep -q 'Refusing' "$owned_link_root/out.log"; then
+            owned_link_failures+=("$owned_link_kind ($owned_link_mode) failed without a refusal: $(head -c 300 "$owned_link_root/out.log")")
+        fi
+        if [[ "$owned_link_before" != "$owned_link_after" ]]; then
+            ownership_install_fingerprint_difference "$owned_link_kind ($owned_link_mode)" "$owned_link_before" "$owned_link_after"
+            owned_link_failures+=("$owned_link_kind ($owned_link_mode) wrote before refusing")
+        fi
+        rm -f "$owned_link_root/out.log"
+    done
+done
+if [[ "${#owned_link_failures[@]}" == 0 ]]; then pass; else fail "owned sync safety: ${owned_link_failures[*]}"; fi
+
+test_start "tools sync skips top-level build output names like the former whole-root rsync (audit F4)"
+owned_build_root="$(mktemp -d)"
+p0p4_register_cleanup "$owned_build_root"
+owned_build_fw="$owned_build_root/framework"
+rsync -a --exclude='.git' --exclude='node_modules' --exclude='/docs/plans/' "$FRAMEWORK_DIR/" "$owned_build_fw/"
+mkdir -p "$owned_build_fw/tools/__pycache__" "$owned_build_fw/tools/bin" "$owned_build_fw/tools/obj" "$owned_build_fw/tools/.publish"
+printf 'cache\n' >"$owned_build_fw/tools/__pycache__/x.pyc"
+printf 'bytecode\n' >"$owned_build_fw/tools/stray.pyc"
+printf 'build\n' >"$owned_build_fw/tools/bin/tool.dll"
+mkdir -p "$owned_build_root/home"
+owned_build_status=0
+HOME="$owned_build_root/home" bash "$owned_build_fw/install.sh" --agent codex --skill assistant-thinking >"$owned_build_root/out.log" 2>&1 || owned_build_status=$?
+owned_build_tools="$owned_build_root/home/.codex/tools"
+if [[ "$owned_build_status" == 0 && -d "$owned_build_tools/evals" ]] \
+    && [[ ! -e "$owned_build_tools/__pycache__" && ! -e "$owned_build_tools/stray.pyc" && ! -e "$owned_build_tools/bin" && ! -e "$owned_build_tools/obj" && ! -e "$owned_build_tools/.publish" ]]; then
+    pass
+else
+    fail "tools sync must skip top-level build output and still install owned tools (status $owned_build_status): $(head -c 300 "$owned_build_root/out.log")"
+fi
+
+test_start "tools and eval-docs syncs never mirror a whole shared root with rsync --delete (audit F4)"
+if grep -nE '"\$[A-Z_]+/" "\$(TOOLS_TARGET|EVAL_DOCS_TARGET)/"|rsync .*"\$(TOOLS_TARGET|EVAL_DOCS_TARGET)/?"' "$FRAMEWORK_DIR/install.sh" | grep -q .; then
+    fail "install.sh still passes a whole shared tools or eval-docs root as an rsync destination: $(grep -nE '"\$[A-Z_]+/" "\$(TOOLS_TARGET|EVAL_DOCS_TARGET)/"|rsync .*"\$(TOOLS_TARGET|EVAL_DOCS_TARGET)/?"' "$FRAMEWORK_DIR/install.sh" | tr '\n' ' ')"
+else
+    pass
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"
