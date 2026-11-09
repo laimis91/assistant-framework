@@ -1631,4 +1631,108 @@ else
     pass
 fi
 
+test_start "agent and rule writes refuse linked or wrong-type paths before any write (audit F2)"
+link_write_root="$(mktemp -d)"
+link_write_logs="$(mktemp -d)"
+p0p4_register_cleanup "$link_write_root" "$link_write_logs"
+link_write_external="$link_write_root/external"
+mkdir -p "$link_write_external/dir"
+printf 'external sentinel\n' >"$link_write_external/dir/sentinel.txt"
+printf 'external file sentinel\n' >"$link_write_external/file.txt"
+link_write_claude_agent="$(basename "$(ls "$FRAMEWORK_DIR/agents/claude/"*.md | head -n 1)")"
+link_write_codex_agent="$(basename "$(ls "$FRAMEWORK_DIR/agents/codex/"*.toml | head -n 1)")"
+link_write_rule="$(basename "$(ls "$FRAMEWORK_DIR/codex-rules/"*.rules | head -n 1)")"
+link_write_failures=()
+for link_write_case in \
+    "claude|agents-dir" "claude|agent-leaf" "claude|agent-leaf-dir" \
+    "codex|agents-dir" "codex|agent-leaf" "codex|rules-dir" "codex|rules-leaf"; do
+    IFS='|' read -r link_write_agent link_write_kind <<<"$link_write_case"
+    for link_write_mode in real dry-run; do
+        link_write_home="$link_write_root/$link_write_agent-$link_write_kind-$link_write_mode"
+        link_write_agent_home="$link_write_home/.$link_write_agent"
+        mkdir -p "$link_write_agent_home"
+        case "$link_write_kind" in
+            agents-dir) ln -s "$link_write_external/dir" "$link_write_agent_home/agents" ;;
+            agent-leaf)
+                mkdir -p "$link_write_agent_home/agents"
+                if [[ "$link_write_agent" == claude ]]; then link_write_leaf="$link_write_claude_agent"; else link_write_leaf="$link_write_codex_agent"; fi
+                ln -s "$link_write_external/file.txt" "$link_write_agent_home/agents/$link_write_leaf"
+                ;;
+            agent-leaf-dir) mkdir -p "$link_write_agent_home/agents/$link_write_claude_agent" ;;
+            rules-dir) ln -s "$link_write_external/dir" "$link_write_agent_home/rules" ;;
+            rules-leaf) mkdir -p "$link_write_agent_home/rules" && ln -s "$link_write_external/file.txt" "$link_write_agent_home/rules/$link_write_rule" ;;
+        esac
+        link_write_args=(--agent "$link_write_agent" --skill assistant-thinking)
+        [[ "$link_write_mode" == real ]] || link_write_args+=(--dry-run)
+        link_write_before="$(overlap_tree_fingerprint "$link_write_root")"
+        link_write_status=0
+        HOME="$link_write_home" bash "$FRAMEWORK_DIR/install.sh" "${link_write_args[@]}" >"$link_write_logs/out.log" 2>&1 || link_write_status=$?
+        link_write_after="$(overlap_tree_fingerprint "$link_write_root")"
+        if [[ "$link_write_status" == 0 ]]; then
+            link_write_failures+=("$link_write_case ($link_write_mode) was accepted")
+        elif ! grep -q 'Refusing' "$link_write_logs/out.log"; then
+            link_write_failures+=("$link_write_case ($link_write_mode) failed without a refusal: $(head -c 300 "$link_write_logs/out.log")")
+        fi
+        if [[ "$link_write_before" != "$link_write_after" ]]; then
+            ownership_install_fingerprint_difference "$link_write_case ($link_write_mode)" "$link_write_before" "$link_write_after"
+            link_write_failures+=("$link_write_case ($link_write_mode) wrote before refusing")
+        fi
+        rm -f "$link_write_logs/out.log"
+    done
+done
+if [[ "${#link_write_failures[@]}" == 0 ]]; then pass; else fail "agent and rule link safety: ${link_write_failures[*]}"; fi
+
+test_start "agent and rule reinstalls replace files without writing through hard links and keep cp file modes (audit F2)"
+replace_root="$(mktemp -d)"
+p0p4_register_cleanup "$replace_root"
+replace_failures=()
+replace_claude_agent="$(basename "$(ls "$FRAMEWORK_DIR/agents/claude/"*.md | head -n 1)")"
+replace_claude_other="$(basename "$(ls "$FRAMEWORK_DIR/agents/claude/"*.md | sed -n 2p)")"
+replace_rule="$(basename "$(ls "$FRAMEWORK_DIR/codex-rules/"*.rules | head -n 1)")"
+replace_cp_probe="$replace_root/cp-probe"
+cp "$FRAMEWORK_DIR/agents/claude/$replace_claude_agent" "$replace_cp_probe"
+replace_expected_new_mode="$(p0p4_file_mode_octal "$replace_cp_probe")"
+mkdir -p "$replace_root/claude/.claude/agents" "$replace_root/codex/.codex/rules"
+printf 'external hard-link sentinel\n' >"$replace_root/external-agent.md"
+ln "$replace_root/external-agent.md" "$replace_root/claude/.claude/agents/$replace_claude_agent"
+printf 'old agent\n' >"$replace_root/claude/.claude/agents/$replace_claude_other"
+chmod 0600 "$replace_root/claude/.claude/agents/$replace_claude_other"
+printf 'external hard-link rule sentinel\n' >"$replace_root/external-rule.rules"
+ln "$replace_root/external-rule.rules" "$replace_root/codex/.codex/rules/$replace_rule"
+if ! HOME="$replace_root/claude" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-thinking >"$replace_root/claude.log" 2>&1; then
+    replace_failures+=("claude install failed: $(head -c 300 "$replace_root/claude.log")")
+else
+    [[ "$(cat "$replace_root/external-agent.md")" == "external hard-link sentinel" ]] || replace_failures+=("claude agent write went through a hard link")
+    cmp -s "$FRAMEWORK_DIR/agents/claude/$replace_claude_agent" "$replace_root/claude/.claude/agents/$replace_claude_agent" || replace_failures+=("claude agent was not installed over the hard link")
+    cmp -s "$FRAMEWORK_DIR/agents/claude/$replace_claude_other" "$replace_root/claude/.claude/agents/$replace_claude_other" || replace_failures+=("claude agent was not refreshed")
+    [[ "$(p0p4_file_mode_octal "$replace_root/claude/.claude/agents/$replace_claude_other")" == 600 ]] || replace_failures+=("claude agent refresh did not keep the existing file mode as cp does")
+    for replace_agent_file in "$FRAMEWORK_DIR/agents/claude/"*.md; do
+        replace_name="$(basename "$replace_agent_file")"
+        [[ "$replace_name" == "$replace_claude_other" ]] && continue
+        [[ "$(p0p4_file_mode_octal "$replace_root/claude/.claude/agents/$replace_name")" == "$replace_expected_new_mode" ]] \
+            || { replace_failures+=("new claude agent $replace_name mode differs from cp ($replace_expected_new_mode)"); break; }
+    done
+    ls -a "$replace_root/claude/.claude/agents" | grep -q '^\.assistant-install' && replace_failures+=("claude agents dir kept a temporary install file")
+fi
+if ! HOME="$replace_root/codex" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-thinking >"$replace_root/codex.log" 2>&1; then
+    replace_failures+=("codex install failed: $(head -c 300 "$replace_root/codex.log")")
+else
+    [[ "$(cat "$replace_root/external-rule.rules")" == "external hard-link rule sentinel" ]] || replace_failures+=("codex rule write went through a hard link")
+    cmp -s "$FRAMEWORK_DIR/codex-rules/$replace_rule" "$replace_root/codex/.codex/rules/$replace_rule" || replace_failures+=("codex rule was not installed over the hard link")
+    for replace_agent_file in "$FRAMEWORK_DIR/agents/codex/"*.toml; do
+        cmp -s "$replace_agent_file" "$replace_root/codex/.codex/agents/$(basename "$replace_agent_file")" || { replace_failures+=("codex agent $(basename "$replace_agent_file") not installed"); break; }
+    done
+fi
+if [[ "${#replace_failures[@]}" == 0 ]]; then pass; else fail "agent and rule replacement: ${replace_failures[*]}"; fi
+
+test_start "agent, rule and hook shim writes go through the link-safe replace helper (audit F2)"
+link_write_static="$(grep -nE 'cp "\$[a-z]+" "\$(AGENTS_TARGET|RULES_TARGET)/"|> "\$hooks_target/' "$FRAMEWORK_DIR/install.sh" || true)"
+link_write_preflight_line="$(grep -n '^preflight_managed_file_writes$' "$FRAMEWORK_DIR/install.sh" | head -n 1 | cut -d: -f1 || true)"
+link_write_first_skill_write="$(grep -n '^# ── Install skills' "$FRAMEWORK_DIR/install.sh" | head -n 1 | cut -d: -f1 || true)"
+if [[ -z "$link_write_static" && -n "$link_write_preflight_line" && -n "$link_write_first_skill_write" && "$link_write_preflight_line" -lt "$link_write_first_skill_write" ]]; then
+    pass
+else
+    fail "direct agent/rule cp or hook shim redirect remains, or the managed-file preflight does not run before skill installation: ${link_write_static:-none} (preflight line ${link_write_preflight_line:-none}, skills line ${link_write_first_skill_write:-none})"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"
