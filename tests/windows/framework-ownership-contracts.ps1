@@ -176,6 +176,13 @@ function Get-TreeSnapshot {
         # The child PowerShell processes keep their own startup cache and
         # telemetry id under HOME on Unix; they are not helper writes.
         if ($relative -match '[\\/]\.cache[\\/]powershell|[\\/]\.local[\\/]share[\\/]powershell|^[\\/]\.cache$|[\\/]home[\\/]\.cache$|^[\\/]\.local$|[\\/]\.local[\\/]share$|[\\/]home[\\/]\.local$') { continue }
+        # On Windows the child hosts resolve their profile folders from the
+        # disposable USERPROFILE: PowerShell 7 writes its startup cache under
+        # AppData\Local\Microsoft\PowerShell and Windows PowerShell 5.1 creates
+        # an empty AppData\Roaming. Only those host paths are skipped; any other
+        # file under AppData still counts as a change.
+        if ($relative -match '^([\\/]home)?[\\/]AppData[\\/]Local[\\/]Microsoft[\\/]PowerShell([\\/]|$)') { continue }
+        if ($item.PSIsContainer -and $relative -match '^([\\/]home)?[\\/]AppData([\\/]Local([\\/]Microsoft)?|[\\/]Roaming)?$') { continue }
         $isLink = (([int]$item.Attributes -band [int][System.IO.FileAttributes]::ReparsePoint) -ne 0)
         if ($isLink) { "$relative|link|$($item.LastWriteTimeUtc.Ticks)" }
         elseif ($item.PSIsContainer) { "$relative|dir" }
@@ -945,10 +952,14 @@ Invoke-Contract 'cleanup refuses Codex work while Codex runs' {
     if (-not $script:IsWindowsHost) { Skip-Contract 'cleanup refuses Codex work while Codex runs' 'the Codex process check runs only on Windows'; return }
     $h = New-TestHome
     Add-Reflexion $h 'codex' -Root (Join-Path $h.Home '.agents/skills')
+    # pwsh.exe cannot start away from its own folder, so the stand-in Codex
+    # process is a copy of the self-contained Windows PowerShell executable.
     $fake = Join-Path $h.Base 'codex.exe'
-    [System.IO.File]::Copy($script:PowerShellExecutable, $fake)
+    [System.IO.File]::Copy((Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'), $fake)
     $process = Start-Process -FilePath $fake -ArgumentList @('-NoProfile', '-Command', 'Start-Sleep -Seconds 120') -PassThru -WindowStyle Hidden
     try {
+        Start-Sleep -Seconds 2
+        Assert-True (-not $process.HasExited) 'the stand-in codex.exe process exited before the check'
         foreach ($arguments in @(@('dry-run', '-Agent', 'codex'), @('apply', '-Agent', 'codex', '-Manifest', 'x', '-ManifestDigest', 'y', '-Yes'))) {
             $result = Invoke-Helper $h $arguments
             Assert-Equal 2 $result.Code "$($arguments[0]) ran while Codex ran"
@@ -1024,17 +1035,43 @@ Invoke-Contract 'manifest digest canonical serialization matches Python' {
     Assert-True ($psItems.Count -ge 3) 'cross-check proved too few items'
 }
 
+Invoke-Contract 'directory walk hashes files in chunks and keeps no file bytes' {
+    $h = New-TestHome
+    $root = Join-Path $h.Base 'walk'
+    $chunk = 1048576
+    $boundary = New-Object byte[] ($chunk + 4)
+    for ($i = 0; $i -lt $chunk - 1; $i++) { $boundary[$i] = 97 }
+    $boundary[$chunk - 1] = 13; $boundary[$chunk] = 10; $boundary[$chunk + 1] = 98; $boundary[$chunk + 2] = 13; $boundary[$chunk + 3] = 10
+    $lateNul = New-Object byte[] ($chunk + 7)
+    for ($i = 0; $i -lt $lateNul.Length - 1; $i++) { $lateNul[$i] = if ($i % 3 -eq 1) { 13 } elseif ($i % 3 -eq 2) { 10 } else { 120 } }
+    Write-TestBytes (Join-Path $root 'boundary.md') $boundary
+    Write-TestBytes (Join-Path $root 'late-nul.bin') $lateNul
+    $command = "`$OwnershipCheckoutNoMain = `$true; . '$($script:CheckoutEntry)'; " +
+        "foreach (`$entry in (Get-OwnershipDirectoryEntries -LiteralPath '$root')) { if (`$entry.Type -ne 'file') { continue }; " +
+        "`$data = [System.IO.File]::ReadAllBytes((Join-Path '$root' `$entry.Relative)); " +
+        "Write-Output ((`$entry.Value -is [string]) -and `$entry.Value -ceq (Get-OwnershipSha256Hex -Bytes `$data) -and `$entry.Content -ceq (Get-OwnershipContentHash -Data `$data)) }"
+    $result = Invoke-TestScript -TestHome $h -Command $command
+    Assert-Equal 0 $result.Code $result.Err
+    $lines = @($result.Out.Split("`n") | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    Assert-Equal 'True|True' ($lines -join '|') 'streamed hashes differ from whole-file hashes'
+}
+
 Invoke-Contract 'PowerShell history derivation matches content-proof.json for seeded paths' {
     $h = New-TestHome
     $command = "`$OwnershipCheckoutNoMain = `$true; . '$($script:CheckoutEntry)'; " +
         "`$inventory = (Read-OwnershipJsonFile -LiteralPath '$($script:ToolDir)/retired-items.json' -Label 'inventory').Value; " +
         "`$proofs = Get-OwnershipHistoryFingerprints -Repository '$($script:FrameworkRoot)' -Items (Get-OwnershipProofItems -Inventory `$inventory) -Revisions @('refs/remotes/origin/main'); " +
         "`$committed = (Read-OwnershipJsonFile -LiteralPath '$($script:ToolDir)/content-proof.json' -Label 'proof').Value; " +
-        "Write-Output (Get-OwnershipCanonicalDigest -Value `$proofs); Write-Output (Get-OwnershipCanonicalDigest -Value `$committed['proofs']); Write-Output `$proofs.Count"
+        "Write-Output (Get-OwnershipCanonicalDigest -Value `$proofs); Write-Output (Get-OwnershipCanonicalDigest -Value `$committed['proofs']); Write-Output `$proofs.Count; " +
+        "foreach (`$key in @(`$committed['proofs'].Keys)) { foreach (`$relative in @(`$committed['proofs'][`$key]['files'].Keys)) { " +
+        "`$left = if (`$proofs.Contains(`$key) -and `$proofs[`$key]['files'].Contains(`$relative)) { Get-OwnershipCanonicalDigest -Value `$proofs[`$key]['files'][`$relative] } else { 'missing' }; " +
+        "if (`$left -cne (Get-OwnershipCanonicalDigest -Value `$committed['proofs'][`$key]['files'][`$relative])) { Write-Output ('differs: ' + `$key + ' :: ' + `$relative) } } }; " +
+        "foreach (`$key in @(`$proofs.Keys)) { foreach (`$relative in @(`$proofs[`$key]['files'].Keys)) { if (-not (`$committed['proofs'].Contains(`$key) -and `$committed['proofs'][`$key]['files'].Contains(`$relative))) { Write-Output ('extra: ' + `$key + ' :: ' + `$relative) } } }"
     $result = Invoke-TestScript -TestHome $h -Command $command
     Assert-Equal 0 $result.Code $result.Err
-    $lines = @($result.Out.Split("`n") | Where-Object { $_ })
-    Assert-Equal $lines[1] $lines[0] 'PowerShell history fingerprints differ from content-proof.json'
+    $lines = @($result.Out.Split("`n") | ForEach-Object { $_.TrimEnd("`r") } | Where-Object { $_ })
+    $differences = @($lines | Where-Object { $_ -like 'differs: *' -or $_ -like 'extra: *' } | Select-Object -First 10) -join '; '
+    Assert-Equal $lines[1] $lines[0] ('PowerShell history fingerprints differ from content-proof.json: ' + $differences)
     Assert-True ([int]$lines[2] -gt 10) 'too few proof keys derived'
 }
 

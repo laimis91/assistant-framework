@@ -387,7 +387,7 @@ class RetiredInChecks(unittest.TestCase):
 
     def test_side_branch_deletion_accepted_by_ancestry(self):
         # 2368e95 is not on main's first-parent chain; its parent still qualifies.
-        first_parent = git("rev-list", "--first-parent", "main").decode().split()
+        first_parent = git("rev-list", "--first-parent", checkout.main_ref(REPO)).decode().split()
         self.assertNotIn(git("rev-parse", "2368e95").decode().strip(), first_parent)
         self.assertEqual(self.problems_for("managed_tool/cleanup-memory-graph.sh", CLEANUP_TOOLS), [])
 
@@ -1136,6 +1136,71 @@ class CleanupHelper(unittest.TestCase):
         with open(settings, "rb") as stream:
             self.assertEqual(stream.read(), raw)
         self.assertIn("cannot be written back unchanged", applied)
+
+    def test_linked_agent_home_is_refused(self):
+        elsewhere = os.path.join(self.h.base, "elsewhere-home")
+        self.seed_reflexion(home=elsewhere)
+        os.symlink(elsewhere, self.claude())
+        code, _, err = helper(self.h, "dry-run", "--agent", "claude")
+        self.assertEqual(code, 2, err)
+        self.assertIn("symbolic link", err)
+        codex_link = os.path.join(self.h.base, "codex-link")
+        os.symlink(elsewhere, codex_link)
+        code, _, err = helper(self.h, "dry-run", "--agent", "codex", codex_home=codex_link)
+        self.assertEqual(code, 2, err)
+        self.assertIn("symbolic link", err)
+        with self.assertRaises(OSError):
+            ownership.remove_without_following(self.claude(), os.path.join(self.claude(), "skills", "assistant-reflexion", "SKILL.md"))
+        self.assertTrue(os.path.isfile(os.path.join(elsewhere, "skills", "assistant-reflexion", "SKILL.md")))
+
+    def test_case_variant_home_through_a_link_is_refused(self):
+        variant = os.path.join(os.path.dirname(self.h.home), os.path.basename(self.h.home).upper())
+        if variant == self.h.home or not os.path.exists(variant):
+            self.skipTest("the file system distinguishes case")
+        elsewhere = os.path.join(self.h.base, "elsewhere")
+        os.makedirs(os.path.join(elsewhere, ".codex"))
+        os.symlink(elsewhere, os.path.join(self.h.home, "dotlink"))
+        with self.assertRaises(ownership.Refusal) as caught:
+            ownership.resolve_homes("codex", {"HOME": self.h.home, "CODEX_HOME": os.path.join(variant, "dotlink", ".codex")})
+        self.assertIn("symbolic link", str(caught.exception))
+
+    def test_settings_with_duplicate_keys_are_preserved(self):
+        settings = os.path.join(self.claude(), "settings.json")
+        raw = (b'{"hooks": {"SessionStart": [{"hooks": [{"command": "$HOME/.claude/hooks/assistant/session-start.sh"}]}]}, '
+               b'"Hooks": {}}\n')
+        write(settings, raw)
+        out = self.dry_run()
+        self.assertNotIn("hook_registration: hooks/assistant/session-start.sh", out)
+        self.assertIn("duplicate", out)
+
+    def test_settings_with_repeated_keys_are_preserved(self):
+        settings = os.path.join(self.claude(), "settings.json")
+        raw = (b'{"mcpServers": {"first": {}}, "mcpServers": {"second": {}}, '
+               b'"hooks": {"SessionStart": [{"hooks": [{"command": "$HOME/.claude/hooks/assistant/session-start.sh"}]}]}}\n')
+        write(settings, raw)
+        out = self.dry_run()
+        self.assertNotIn("hook_registration: hooks/assistant/session-start.sh", out)
+        self.assertIn("duplicate", out)
+        path, digest = self.manifest_file(out)
+        self.apply(path, digest)
+        with open(settings, "rb") as stream:
+            self.assertEqual(stream.read(), raw)
+
+    def test_walked_files_are_hashed_without_keeping_their_bytes(self):
+        root = os.path.join(self.h.base, "walk")
+        chunk = 1 << 20
+        boundary = b"a" * (chunk - 1) + b"\r\n" + b"b\r\n"
+        late_nul = b"x\r\n" * (chunk // 3 + 5) + b"\x00"
+        write(os.path.join(root, "boundary.md"), boundary)
+        write(os.path.join(root, "late-nul.bin"), late_nul)
+        write(os.path.join(root, "nested", "plain.txt"), b"plain\r\ntext\n")
+        entries = ownership.walk_directory(root)
+        contents = {"boundary.md": boundary, "late-nul.bin": late_nul, "nested/plain.txt": b"plain\r\ntext\n"}
+        for relative, typ, value, _ in entries:
+            if typ != "file":
+                continue
+            self.assertNotIsInstance(value, (bytes, bytearray), relative)
+            self.assertEqual(value, (ownership.sha256_hex(contents[relative]), ownership.content_hash(contents[relative])), relative)
 
     def test_crlf_copy_is_proven(self):
         target = os.path.join(self.claude(), "skills", "assistant-reflexion")

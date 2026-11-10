@@ -1877,6 +1877,25 @@ else
     fail "install dry-run failed"
 fi
 
+test_start "install dry-run with TMPDIR inside the agent home leaves the home untouched"
+retired_tmp_home="$(mktemp -d)"
+p0p4_register_cleanup "$retired_tmp_home"
+retired_seed_skill reflexion claude "$retired_tmp_home/.claude/skills/assistant-reflexion"
+mkdir -p "$retired_tmp_home/.claude/tmp"
+retired_tmp_before="$(retired_tree_listing "$retired_tmp_home/.claude"; python3 -B -c 'import os, sys; [print(p, os.lstat(p).st_mtime_ns) for p in sys.argv[1:]]' "$retired_tmp_home/.claude" "$retired_tmp_home/.claude/tmp")"
+if HOME="$retired_tmp_home" TMPDIR="$retired_tmp_home/.claude/tmp" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-clarify --no-hooks --dry-run </dev/null >"$retired_tmp_home.out" 2>&1; then
+    p0p4_register_cleanup "$retired_tmp_home.out"
+    retired_tmp_after="$(retired_tree_listing "$retired_tmp_home/.claude"; python3 -B -c 'import os, sys; [print(p, os.lstat(p).st_mtime_ns) for p in sys.argv[1:]]' "$retired_tmp_home/.claude" "$retired_tmp_home/.claude/tmp")"
+    if [[ "$retired_tmp_before" == "$retired_tmp_after" ]]; then
+        pass
+    else
+        fail "dry-run with TMPDIR in the agent home changed it: $(diff <(printf '%s\n' "$retired_tmp_before") <(printf '%s\n' "$retired_tmp_after") | head -n 4)"
+    fi
+else
+    p0p4_register_cleanup "$retired_tmp_home.out"
+    fail "install dry-run failed: $(tail -n 3 "$retired_tmp_home.out")"
+fi
+
 test_start "install without Python keeps retired skills, retires source-only tools from the list and completes"
 retired_nopy_home="$(mktemp -d)"
 retired_nopy_bin="$(mktemp -d)"

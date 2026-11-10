@@ -14,7 +14,7 @@ This directory proves which files in an agent home the Assistant Framework insta
 | `installer-primitives.ps1` | Generated from `install.ps1`: path, reparse, atomic-write and JSON-identity functions the Windows helper reuses | yes |
 | `ownership-checkout.py`, `ownership-checkout.ps1` | Checkout-only entry points: installer mode, uninstall, data generation | **no** |
 
-The checkout-only entry points refuse to run outside a Git checkout that holds `install.sh` and `install.ps1`, from inside any agent home or `~/.agents` root,; `build-data` and `uninstall` also refuse a shallow clone. Installer mode runs in one, where missing history can only make fewer items provable. Both installers exclude them from the tools sync.
+The checkout-only entry points refuse to run outside a Git checkout that holds `install.sh` and `install.ps1`, from inside any agent home or `~/.agents` root; `build-data` and `uninstall` also refuse a shallow clone. Installer mode runs in one, where missing history can only make fewer items provable. Both installers exclude them from the tools sync.
 
 ## Proof rules
 
@@ -24,7 +24,9 @@ An item is removable only when all of these hold:
 - neither it nor any ancestor up to the home is a link, junction or reparse point, and no file has more than one hard link;
 - every file under it matches a fingerprint of framework content. Fingerprints are SHA-256 over the file bytes after replacing `{agent_state_dir}` in `.md`, `.yaml`, `.yml`, `.json`, `.conf` and `.toml` files and normalizing CRLF to LF in every file that has no NUL byte. Hook entrypoints also match the inert shim bytes;
 - a directory holds nothing outside its fingerprints. For uninstall, build output in current tool directories (`bin`, `obj`, `.publish`, `__pycache__`, `*.pyc`) also counts as owned;
-- a settings registration's first command token is exactly a known retired entrypoint path, and an instruction block is exactly one balanced marker pair.
+- a settings registration's first command token is exactly a known retired entrypoint path, and an instruction block is exactly one balanced marker pair. A settings file with a repeated JSON key, or two keys that differ only by case, is preserved unchanged.
+
+An agent home that is itself a link, or is reached through one below the user home, is refused before anything is checked. Files are hashed in chunks, so large build-output or `node_modules` trees are never held in memory.
 
 Anything else is kept and reported as ambiguous with its reason, or as unrelated when nothing framework-like is there. Exit status: 0 done, 1 internal error, 2 refused with nothing changed, 3 finished with items kept.
 

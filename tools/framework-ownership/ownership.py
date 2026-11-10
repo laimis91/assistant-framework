@@ -197,6 +197,23 @@ def same_or_inside(candidate, container):
 # ── Inventory and proof data ────────────────────────────────────────────────
 
 
+class DuplicateKeyError(ValueError):
+    pass
+
+
+def reject_duplicate_keys(pairs):
+    """json object_pairs_hook that refuses repeated keys instead of keeping the last."""
+    value = {}
+    folded = set()
+    for key, item in pairs:
+        # Keys equal ignoring case are refused too, as the Windows helper does.
+        if key in value or key.lower() in folded:
+            raise DuplicateKeyError(json.dumps(key))
+        value[key] = item
+        folded.add(key.lower())
+    return value
+
+
 def read_json_file(path, label):
     try:
         with open(path, "rb") as stream:
@@ -452,6 +469,32 @@ def build_installer_list(inventory, layout):
 # ── Agent homes ─────────────────────────────────────────────────────────────
 
 
+def refuse_linked_home(home, user_home):
+    """Refuse an agent home that is a link, or is reached through one below the user home.
+
+    Ancestors are matched to the user home by identity, so a spelling that
+    differs only by case or Unicode form is still checked. A home outside the
+    user home has only itself checked: system links such as macOS /var and
+    /tmp sit above it and are not the user's.
+    """
+    if os.path.islink(home):
+        raise Refusal(f"the agent home is a symbolic link; not followed: {home}")
+    links = []
+    current = os.path.dirname(home)
+    while True:
+        textual_home = os.path.normcase(current) == os.path.normcase(user_home)
+        if textual_home or (not os.path.islink(current) and same_path(current, user_home)):
+            break
+        if os.path.islink(current):
+            links.append(current)
+        parent = os.path.dirname(current)
+        if parent == current:
+            return
+        current = parent
+    if links:
+        raise Refusal(f"the agent home is reached through a symbolic link; not followed: {links[-1]}")
+
+
 def resolve_homes(agent, environ=None):
     """Return the inventory roots for one agent on Unix, refusing unsafe homes."""
     environ = os.environ if environ is None else environ
@@ -466,6 +509,7 @@ def resolve_homes(agent, environ=None):
         home = os.path.abspath(textual)
     else:
         home = os.path.join(os.path.abspath(user_home), "." + agent)
+    refuse_linked_home(home, os.path.abspath(user_home))
     real_home = os.path.realpath(home)
     if real_home == os.path.realpath(user_home) or same_path(real_home, user_home):
         raise Refusal("the agent home resolves to the user home itself")
@@ -509,15 +553,57 @@ def read_stable_file(path):
     return b"".join(chunks), before
 
 
+def hash_stable_file(path):
+    """Hash a regular file in chunks; return (raw sha256, content hash, lstat).
+
+    The content hash equals content_hash(data): CRLF normalized to LF unless
+    the file holds a NUL byte. File bytes are never retained.
+    """
+    before = os.lstat(path)
+    if not stat.S_ISREG(before.st_mode):
+        raise OSError("not a regular file")
+    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    raw = hashlib.sha256()
+    normalized = hashlib.sha256()
+    has_nul = False
+    pending_cr = False
+    try:
+        opened = os.fstat(descriptor)
+        while True:
+            chunk = os.read(descriptor, 1 << 20)
+            if not chunk:
+                break
+            raw.update(chunk)
+            has_nul = has_nul or b"\x00" in chunk
+            if pending_cr:
+                chunk = b"\r" + chunk
+            pending_cr = chunk.endswith(b"\r")
+            if pending_cr:
+                chunk = chunk[:-1]
+            normalized.update(chunk.replace(b"\r\n", b"\n"))
+        if pending_cr:
+            normalized.update(b"\r")
+    finally:
+        os.close(descriptor)
+    after = os.lstat(path)
+    if file_signature(before) != file_signature(after) or (opened.st_dev, opened.st_ino) != (before.st_dev, before.st_ino):
+        raise OSError("file changed while it was read")
+    raw_hex = raw.hexdigest()
+    return raw_hex, (raw_hex if has_nul else normalized.hexdigest()), before
+
+
 def locate(root, relative):
     """Find relative under root by exact directory-entry names, never following links.
 
     Returns ("absent", None), ("problem", reason) or ("ok", lstat result).
     """
     try:
-        if not stat.S_ISDIR(os.stat(root).st_mode):
-            return "absent", None
+        root_status = os.lstat(root)
     except OSError:
+        return "absent", None
+    if stat.S_ISLNK(root_status.st_mode):
+        return "problem", "the inventory root is a symbolic link; not followed"
+    if not stat.S_ISDIR(root_status.st_mode):
         return "absent", None
     current = root
     parts = relative.split("/")
@@ -564,8 +650,8 @@ def walk_directory(path):
                 entries.append((relative, "dir", "", file_signature(status)))
                 stack.append(relative)
             elif stat.S_ISREG(status.st_mode):
-                data, read_status = read_stable_file(absolute)
-                entries.append((relative, "file", data, file_signature(read_status)))
+                raw_hex, content_hex, read_status = hash_stable_file(absolute)
+                entries.append((relative, "file", (raw_hex, content_hex), file_signature(read_status)))
             else:
                 entries.append((relative, "other", "", file_signature(status)))
     entries.sort(key=lambda item: item[0])
@@ -576,7 +662,7 @@ def directory_digest(entries):
     listing = []
     for relative, kind, value, _ in entries:
         if kind == "file":
-            listing.append([relative, "file", sha256_hex(value)])
+            listing.append([relative, "file", value[0]])
         elif kind == "link":
             listing.append([relative, "link", value])
         else:
@@ -663,7 +749,10 @@ class SettingsSnapshot:
             return
         try:
             self.raw, _ = read_stable_file(path)
-            value = json.loads(self.raw.decode("utf-8"))
+            value = json.loads(self.raw.decode("utf-8"), object_pairs_hook=reject_duplicate_keys)
+        except DuplicateKeyError as error:
+            self.problem = f"duplicate JSON key {error}; preserved unchanged"
+            return
         except (OSError, UnicodeDecodeError, ValueError):
             self.problem = "invalid JSON; preserved unchanged"
             return
@@ -906,7 +995,7 @@ class Planner:
                 if sig[5] > 1:
                     problems.append(f"hard-linked file: {relative}")
                     content_only = False
-                elif content_hash(value) in known.get(relative, {}).get(self.agent, []):
+                elif value[1] in known.get(relative, {}).get(self.agent, []):
                     matched += 1
                 else:
                     problems.append(f"file does not match framework content: {relative}")
@@ -1251,7 +1340,7 @@ def remove_without_following(root, path, directory=False):
     if not supported:
         (os.rmdir if directory else os.unlink)(path)
         return
-    descriptor = os.open(root, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
+    descriptor = os.open(root, NOFOLLOW_DIRECTORY)
     try:
         for part in parts[:-1]:
             child = os.open(part, NOFOLLOW_DIRECTORY, dir_fd=descriptor)

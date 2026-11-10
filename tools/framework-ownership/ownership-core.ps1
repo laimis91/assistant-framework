@@ -1146,6 +1146,47 @@ function Read-OwnershipStableFile {
     return @{ Data = $data; Signature = $before.Signature; Links = $before.Links }
 }
 
+# Hash a regular file in chunks without keeping its bytes. Returns @{Raw; Content;
+# Signature; Links}: Content equals Get-OwnershipContentHash of the whole file.
+function Get-OwnershipStableFileHashes {
+    param([string]$LiteralPath)
+    $before = Get-OwnershipNodeInfo -LiteralPath $LiteralPath -WithHandle
+    if ($before.Type -ne 'file') { throw 'not a regular file' }
+    if ($before.Links -lt 1) { throw 'could not be opened for reading' }
+    $raw = [System.Security.Cryptography.SHA256]::Create()
+    $normalized = [System.Security.Cryptography.SHA256]::Create()
+    $stream = $null
+    try {
+        $stream = New-Object System.IO.FileStream($LiteralPath, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
+        $buffer = New-Object byte[] 1048576
+        $hasNul = $false
+        $pendingCr = $false
+        while (($count = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            [void]$raw.TransformBlock($buffer, 0, $count, $null, 0)
+            if (-not $hasNul -and [System.Array]::IndexOf($buffer, [byte]0, 0, $count) -ge 0) { $hasNul = $true }
+            $text = $script:OwnershipLatin1.GetString($buffer, 0, $count)
+            if ($pendingCr) { $text = "`r" + $text }
+            $pendingCr = $text.EndsWith("`r", [System.StringComparison]::Ordinal)
+            if ($pendingCr) { $text = $text.Substring(0, $text.Length - 1) }
+            $bytes = $script:OwnershipLatin1.GetBytes($text.Replace("`r`n", "`n"))
+            [void]$normalized.TransformBlock($bytes, 0, $bytes.Length, $null, 0)
+        }
+        $tail = New-Object byte[] ([int]$pendingCr)
+        if ($pendingCr) { $tail[0] = 13 }
+        [void]$normalized.TransformFinalBlock($tail, 0, $tail.Length)
+        [void]$raw.TransformFinalBlock((New-Object byte[] 0), 0, 0)
+        $rawHex = [System.BitConverter]::ToString($raw.Hash).Replace('-', '').ToLowerInvariant()
+        $content = if ($hasNul) { $rawHex } else { [System.BitConverter]::ToString($normalized.Hash).Replace('-', '').ToLowerInvariant() }
+    }
+    finally {
+        if ($null -ne $stream) { $stream.Dispose() }
+        $raw.Dispose(); $normalized.Dispose()
+    }
+    $after = Get-OwnershipNodeInfo -LiteralPath $LiteralPath -WithHandle
+    if ($before.Signature -cne $after.Signature) { throw 'file changed while it was read' }
+    return @{ Raw = $rawHex; Content = $content; Signature = $before.Signature; Links = $before.Links }
+}
+
 function Get-OwnershipDirectoryNames {
     param([string]$LiteralPath)
     $names = New-Object 'System.Collections.Generic.List[string]'
@@ -1215,8 +1256,8 @@ function Get-OwnershipDirectoryEntries {
                 $stack.Push($relative)
             }
             elseif ($info.Type -eq 'file') {
-                $read = Read-OwnershipStableFile -LiteralPath $absolute
-                [void]$entries.Add(@{ Relative = $relative; Type = 'file'; Value = $read.Data; Signature = $read.Signature; Links = $read.Links })
+                $read = Get-OwnershipStableFileHashes -LiteralPath $absolute
+                [void]$entries.Add(@{ Relative = $relative; Type = 'file'; Value = $read.Raw; Content = $read.Content; Signature = $read.Signature; Links = $read.Links })
             }
             elseif ($info.Type -eq 'absent') {
                 throw "entry disappeared while it was read: $relative"
@@ -1236,7 +1277,7 @@ function Get-OwnershipDirectoryDigest {
     foreach ($entry in $Entries) {
         $row = New-Object System.Collections.ArrayList
         [void]$row.Add($entry.Relative)
-        if ($entry.Type -eq 'file') { [void]$row.Add('file'); [void]$row.Add((Get-OwnershipSha256Hex -Bytes $entry.Value)) }
+        if ($entry.Type -eq 'file') { [void]$row.Add('file'); [void]$row.Add([string]$entry.Value) }
         elseif ($entry.Type -eq 'link') { [void]$row.Add('link'); [void]$row.Add([string]$entry.Value) }
         else { [void]$row.Add($entry.Type); [void]$row.Add('') }
         [void]$listing.Add($row)
@@ -1575,7 +1616,7 @@ function Get-OwnershipDirectoryFinding {
         }
         elseif ($entry.Type -eq 'file') {
             if ($entry.Links -gt 1) { [void]$problems.Add("hard-linked file: $relative"); $contentOnly = $false }
-            elseif (Test-OwnershipKnownHash -Files $known -Relative $relative -Agent $Planner.Agent -Hash (Get-OwnershipContentHash -Data $entry.Value)) { $matched++ }
+            elseif (Test-OwnershipKnownHash -Files $known -Relative $relative -Agent $Planner.Agent -Hash $entry.Content) { $matched++ }
             else { [void]$problems.Add("file does not match framework content: $relative") }
         }
         else { [void]$problems.Add("special file: $relative"); $contentOnly = $false }

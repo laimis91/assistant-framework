@@ -506,14 +506,15 @@ load_retired_item_list() {
 }
 
 read_retired_item_lists() {
-    local ownership_dir="$FRAMEWORK_DIR/tools/framework-ownership" list_text="" status=0 refusal="" errors
+    local ownership_dir="$FRAMEWORK_DIR/tools/framework-ownership" list_text="" status=0 refusal=""
 
     if supported_python3_version >/dev/null; then
-        errors="$(mktemp "${TMPDIR:-/tmp}/assistant-retired-list.XXXXXX")" || fail "Could not create a temporary file"
-        list_text="$(python3 "$ownership_dir/ownership.py" list-retired --layout unix 2>"$errors")" || status=$?
-        refusal="$(head -n 1 "$errors" 2>/dev/null || true)"
-        rm -f -- "$errors"
+        # No scratch file: TMPDIR may sit inside the agent home, and a dry run
+        # must not touch it. The list is deterministic, so a refusal is re-run
+        # once to read its first stderr line.
+        list_text="$(python3 "$ownership_dir/ownership.py" list-retired --layout unix 2>/dev/null)" || status=$?
         if (( status != 0 )); then
+            refusal="$(python3 "$ownership_dir/ownership.py" list-retired --layout unix 2>&1 >/dev/null | head -n 1 || true)"
             info "retired-item inventory ${refusal:-refused (exit $status)}; retired tool and hook removal skipped"
             return 0
         fi
