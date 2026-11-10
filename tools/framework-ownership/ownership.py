@@ -22,7 +22,6 @@ import os
 import re
 import stat
 import sys
-import tempfile
 import unicodedata
 
 EXIT_OK = 0
@@ -242,7 +241,7 @@ def read_json_file(path, label):
         raise Refusal(f"{label} unreadable: {path}: {error.strerror}")
     try:
         value = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError):
+    except (UnicodeDecodeError, ValueError, RecursionError):
         raise Refusal(f"{label} is not valid UTF-8 JSON: {path}")
     return value, raw
 
@@ -774,6 +773,10 @@ class SettingsSnapshot:
             return
         except NonFiniteNumberError as error:
             self.problem = f"number {error} cannot be written back unchanged; preserved unchanged"
+            return
+        except RecursionError:
+            # Nesting deeper than the parser can follow; never rewritten.
+            self.problem = "JSON nesting too deep to read; preserved unchanged"
             return
         except (OSError, UnicodeDecodeError, ValueError):
             self.problem = "invalid JSON; preserved unchanged"
@@ -1335,20 +1338,31 @@ def signatures_unchanged(detail):
     return True
 
 
-def fsync_directory(directory):
-    try:
-        descriptor = os.open(directory, os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))
-    except OSError:
-        return
-    try:
-        os.fsync(descriptor)
-    except OSError:
-        pass
-    finally:
-        os.close(descriptor)
-
-
 NOFOLLOW_DIRECTORY = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
+
+
+def open_parent_without_following(root, path, calls, action):
+    """Open path's parent from root one directory at a time without following links.
+
+    Returns (descriptor, name). Fails closed where the platform lacks dir_fd
+    support for os.open or any of calls.
+    """
+    relative = os.path.relpath(path, root)
+    parts = relative.split(os.sep)
+    if relative.startswith(os.pardir) or os.path.isabs(relative) or not parts or "" in parts:
+        raise OSError(f"outside the agent home: {path}")
+    if not all(call in os.supports_dir_fd for call in (os.open,) + tuple(calls)):
+        raise OSError(f"this platform cannot {action} without following links; kept: {path}")
+    descriptor = os.open(root, NOFOLLOW_DIRECTORY)
+    try:
+        for part in parts[:-1]:
+            child = os.open(part, NOFOLLOW_DIRECTORY, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = child
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor, parts[-1]
 
 
 def remove_without_following(root, path, directory=False):
@@ -1359,23 +1373,13 @@ def remove_without_following(root, path, directory=False):
     of redirecting the deletion. Where the platform lacks dir_fd support the
     deletion fails closed instead of following a path that may have changed.
     """
-    relative = os.path.relpath(path, root)
-    parts = relative.split(os.sep)
-    if relative.startswith(os.pardir) or os.path.isabs(relative) or not parts or "" in parts:
-        raise OSError(f"outside the agent home: {path}")
-    supported = os.unlink in os.supports_dir_fd and os.rmdir in os.supports_dir_fd and os.open in os.supports_dir_fd
-    if not supported:
-        raise OSError(f"this platform cannot delete without following links; kept: {path}")
-    descriptor = os.open(root, NOFOLLOW_DIRECTORY)
+    descriptor, name = open_parent_without_following(root, path, (os.unlink, os.rmdir), "delete")
+    parts = [name]
     try:
-        for part in parts[:-1]:
-            child = os.open(part, NOFOLLOW_DIRECTORY, dir_fd=descriptor)
-            os.close(descriptor)
-            descriptor = child
         if directory:
-            os.rmdir(parts[-1], dir_fd=descriptor)
+            os.rmdir(name, dir_fd=descriptor)
         else:
-            os.unlink(parts[-1], dir_fd=descriptor)
+            os.unlink(name, dir_fd=descriptor)
     finally:
         os.close(descriptor)
 
@@ -1391,31 +1395,72 @@ def delete_proven(detail, root):
         remove_without_following(root, absolute, directory=True)
 
 
-def atomic_rewrite(path, data, expected_bytes):
-    """Replace path with data only if its bytes still equal expected_bytes."""
-    status = os.lstat(path)
-    if not stat.S_ISREG(status.st_mode) or status.st_nlink > 1:
-        raise OSError("changed type or gained a hard link")
-    current, _ = read_stable_file(path)
-    if current != expected_bytes:
-        raise OSError("changed since it was read")
-    directory = os.path.dirname(path)
-    descriptor, temp_path = tempfile.mkstemp(prefix=".assistant-framework-ownership.", dir=directory)
+def read_file_at(descriptor, name):
+    """Read a regular file in an open directory without following a link."""
+    handle = os.open(name, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0), dir_fd=descriptor)
     try:
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(data)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.chmod(temp_path, stat.S_IMODE(status.st_mode))
-        current, _ = read_stable_file(path)
+        status = os.fstat(handle)
+        if not stat.S_ISREG(status.st_mode) or status.st_nlink > 1:
+            raise OSError("changed type or gained a hard link")
+        chunks = []
+        while True:
+            chunk = os.read(handle, 1 << 20)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        return b"".join(chunks), status
+    finally:
+        os.close(handle)
+
+
+def atomic_rewrite(root, path, data, expected_bytes):
+    """Replace path with data only if its bytes still equal expected_bytes.
+
+    The parent is opened from root without following links and every step
+    works through that descriptor, so a home or ancestor swapped for a link
+    after the checks cannot redirect the write.
+    """
+    descriptor, name = open_parent_without_following(root, path, (os.unlink, os.rename), "rewrite")
+    temp_name = None
+    try:
+        current, status = read_file_at(descriptor, name)
         if current != expected_bytes:
             raise OSError("changed since it was read")
-        os.replace(temp_path, path)
-        fsync_directory(directory)
-    except BaseException:
-        if os.path.exists(temp_path):
-            os.unlink(temp_path)
-        raise
+        for _ in range(100):
+            candidate = f".assistant-framework-ownership.{os.urandom(8).hex()}"
+            try:
+                handle = os.open(candidate, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600, dir_fd=descriptor)
+            except FileExistsError:
+                continue
+            temp_name = candidate
+            break
+        else:
+            raise OSError("no free temporary name")
+        try:
+            view = memoryview(data)
+            while view:
+                view = view[os.write(handle, view):]
+            os.fchmod(handle, stat.S_IMODE(status.st_mode))
+            os.fsync(handle)
+        finally:
+            os.close(handle)
+        current, _ = read_file_at(descriptor, name)
+        if current != expected_bytes:
+            raise OSError("changed since it was read")
+        # rename(2) replaces the target atomically on the Unix hosts this helper serves.
+        os.rename(temp_name, name, src_dir_fd=descriptor, dst_dir_fd=descriptor)
+        temp_name = None
+        try:
+            os.fsync(descriptor)
+        except OSError:
+            pass
+    finally:
+        if temp_name is not None:
+            try:
+                os.unlink(temp_name, dir_fd=descriptor)
+            except OSError:
+                pass
+        os.close(descriptor)
 
 
 class ApplyResult:
@@ -1479,12 +1524,12 @@ def apply_registrations(planner, items, result, before_delete):
     updated = remove_registrations(snapshot.value, targets)
     try:
         payload = (json.dumps(updated, indent=2, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
-    except (UnicodeEncodeError, ValueError):
+    except (UnicodeEncodeError, ValueError, RecursionError):
         for item in items:
             result.skipped.append((item, f"{snapshot.relative} holds text that cannot be written back unchanged; preserved"))
         return
     try:
-        atomic_rewrite(snapshot.path, payload, snapshot.raw)
+        atomic_rewrite(planner.roots["agent_home"], snapshot.path, payload, snapshot.raw)
     except OSError as error:
         for item in items:
             result.skipped.append((item, f"{snapshot.relative} {error}"))
@@ -1506,7 +1551,7 @@ def apply_block(planner, item, result, before_delete):
         _, removed, remaining = block_removal(data, markers["start"], markers["end"])
         if removed is None or sha256_hex(removed) != item["digest"]:
             raise OSError("changed since the report")
-        atomic_rewrite(absolute, remaining, data)
+        atomic_rewrite(planner.homes["roots"][finding.root], absolute, remaining, data)
     except OSError as error:
         result.skipped.append((item, str(error)))
         return

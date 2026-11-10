@@ -1202,6 +1202,28 @@ Invoke-Contract 'parent chain check refuses a linked parent before delete' {
     Assert-Equal "y`n" (Read-TestText (Join-Path $outside 'b/file.txt')) 'link target changed'
 }
 
+Invoke-Contract 'settings rewrite refuses a linked ancestor below the home' {
+    $h = New-TestHome
+    $root = Join-Path $h.Base 'root'
+    Write-TestBytes (Join-Path $root 'a/config/settings.json') "old`n"
+    $outside = Join-Path $h.Base 'outside'
+    Write-TestBytes (Join-Path $outside 'config/settings.json') "new`n"
+    $core = Join-Path $script:ToolDir 'ownership-core.ps1'
+    $primitives = Join-Path $script:ToolDir 'installer-primitives.ps1'
+    $linkType = if ($script:IsWindowsHost) { 'Junction' } else { 'SymbolicLink' }
+    $bytes = "([byte[]]@(110, 101, 119, 10))"
+    $command = "Set-StrictMode -Version 2.0; `$ErrorActionPreference = 'Stop'; . '$primitives'; . '$core'; " +
+        "Write-OwnershipRewrite -Root '$root' -LiteralPath '$root/a/config/settings.json' -Data $bytes -ExpectedBytes ([byte[]]@(111, 108, 100, 10)); Write-Output 'plain ok'; " +
+        "[IO.Directory]::Move('$root/a', '$root/a-moved'); [void](New-Item -ItemType $linkType -Path '$root/a' -Target '$outside'); " +
+        "try { Write-OwnershipRewrite -Root '$root' -LiteralPath '$root/a/config/settings.json' -Data ([byte[]]@(120, 10)) -ExpectedBytes $bytes; Write-Output 'linked ok' } catch { Write-Output ('linked refused: ' + `$_.Exception.Message) }"
+    $result = Invoke-TestScript -TestHome $h -Command $command
+    Assert-Equal 0 $result.Code $result.Err
+    Assert-Contains $result.Out 'plain ok' 'a plain rewrite failed'
+    Assert-Equal "new`n" (Read-TestText (Join-Path $root 'a-moved/config/settings.json')) 'plain rewrite wrote the wrong bytes'
+    Assert-Contains $result.Out 'linked refused: ' 'a rewrite through a linked ancestor was accepted'
+    Assert-Equal "new`n" (Read-TestText (Join-Path $outside 'config/settings.json')) 'link target changed'
+}
+
 Invoke-Contract 'settings rewrite that cannot be encoded strictly is skipped and leaves the file unchanged' {
     $h = New-TestHome
     $settingsFile = Join-Path (Get-AgentHome $h 'claude') 'settings.json'

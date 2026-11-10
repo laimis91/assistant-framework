@@ -1993,8 +1993,11 @@ function Remove-OwnershipProven {
 
 # Replace a file with UTF-8 text only if its bytes still equal ExpectedBytes.
 # Write-AtomicText keeps the Windows DACL of the replaced file.
+# The parent chain below Root is checked again just before the write, as for
+# deletion, so a home or ancestor swapped for a link is refused.
 function Write-OwnershipRewrite {
-    param([string]$LiteralPath, [byte[]]$Data, [byte[]]$ExpectedBytes)
+    param([string]$Root, [string]$LiteralPath, [byte[]]$Data, [byte[]]$ExpectedBytes)
+    Assert-OwnershipParentChain -Root $Root -LiteralPath $LiteralPath
     $info = Get-OwnershipNodeInfo -LiteralPath $LiteralPath -WithHandle
     if ($info.Type -ne 'file' -or $info.Links -ne 1) { throw 'changed type or gained a hard link' }
     $current = (Read-OwnershipStableFile -LiteralPath $LiteralPath).Data
@@ -2004,6 +2007,9 @@ function Write-OwnershipRewrite {
     if (-not (Test-OwnershipBytesEqual $script:OwnershipUtf8.GetBytes($text) $Data)) { throw 'cannot be rewritten byte for byte' }
     $current = (Read-OwnershipStableFile -LiteralPath $LiteralPath).Data
     if (-not (Test-OwnershipBytesEqual $current $ExpectedBytes)) { throw 'changed since it was read' }
+    Assert-OwnershipParentChain -Root $Root -LiteralPath $LiteralPath
+    $info = Get-OwnershipNodeInfo -LiteralPath $LiteralPath
+    if ($info.Type -ne 'file') { throw 'changed type' }
     Write-AtomicText -LiteralPath $LiteralPath -Content $text
 }
 
@@ -2076,7 +2082,7 @@ function Invoke-OwnershipApplyRegistrations {
         # never rewritten with replacement characters; the file stays unchanged.
         try { $payload = $script:OwnershipUtf8Strict.GetBytes((ConvertTo-OwnershipJson -Value $updated -Indent 2) + "`n") }
         catch { throw 'holds text that cannot be encoded as UTF-8; not rewritten' }
-        Write-OwnershipRewrite -LiteralPath $snapshot.Path -Data $payload -ExpectedBytes $snapshot.Raw
+        Write-OwnershipRewrite -Root $Planner.Roots['agent_home'] -LiteralPath $snapshot.Path -Data $payload -ExpectedBytes $snapshot.Raw
     }
     catch {
         if (Test-OwnershipRefusal $_) { throw }
@@ -2100,7 +2106,7 @@ function Invoke-OwnershipApplyBlock {
         $markers = $finding.Spec['markers']
         $removal = Get-OwnershipBlockRemoval -Data $data -StartMarker $markers['start'] -EndMarker $markers['end']
         if ($null -eq $removal.Removed -or (Get-OwnershipSha256Hex -Bytes $removal.Removed) -cne $Item['digest']) { throw 'changed since the report' }
-        Write-OwnershipRewrite -LiteralPath $absolute -Data $removal.Remaining -ExpectedBytes $data
+        Write-OwnershipRewrite -Root $Planner.Roots[$Item['root']] -LiteralPath $absolute -Data $removal.Remaining -ExpectedBytes $data
     }
     catch {
         if (Test-OwnershipRefusal $_) { throw }

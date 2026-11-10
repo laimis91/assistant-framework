@@ -1222,6 +1222,50 @@ class CleanupHelper(unittest.TestCase):
             with open(settings, "rb") as stream:
                 self.assertEqual(stream.read(), raw, number)
 
+    def test_settings_nested_beyond_the_parser_are_preserved(self):
+        settings = os.path.join(self.claude(), "settings.json")
+        depth = 200000
+        raw = (b'{"deep": ' + b"[" * depth + b"]" * depth + b', '
+               b'"hooks": {"SessionStart": [{"hooks": [{"command": "$HOME/.claude/hooks/assistant/session-start.sh"}]}]}}\n')
+        write(settings, raw)
+        code, out, err = helper(self.h, "dry-run", "--agent", "claude")
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("hook_registration: hooks/assistant/session-start.sh", out)
+        self.assertIn("JSON nesting too deep to read; preserved unchanged", out)
+        with open(settings, "rb") as stream:
+            self.assertEqual(stream.read(), raw)
+
+    def test_rewrite_is_anchored_to_the_checked_home(self):
+        root = os.path.join(self.h.base, "root")
+        target = os.path.join(root, "config", "settings.json")
+        write(target, b"old\n", mode=0o640)
+        ownership.atomic_rewrite(root, target, b"new\n", b"old\n")
+        with open(target, "rb") as stream:
+            self.assertEqual(stream.read(), b"new\n")
+        self.assertEqual(stat.S_IMODE(os.stat(target).st_mode), 0o640)
+        self.assertEqual(sorted(os.listdir(os.path.dirname(target))), ["settings.json"])
+        elsewhere = os.path.join(self.h.base, "elsewhere")
+        write(os.path.join(elsewhere, "settings.json"), b"new\n")
+        shutil.rmtree(os.path.join(root, "config"))
+        os.symlink(elsewhere, os.path.join(root, "config"))
+        with self.assertRaises(OSError):
+            ownership.atomic_rewrite(root, target, b"rewritten\n", b"new\n")
+        with open(os.path.join(elsewhere, "settings.json"), "rb") as stream:
+            self.assertEqual(stream.read(), b"new\n")
+        self.assertEqual(os.listdir(elsewhere), ["settings.json"])
+        os.unlink(os.path.join(root, "config"))
+        write(target, b"new\n")
+        os.symlink(os.path.join(elsewhere, "settings.json"), os.path.join(root, "linked.json"))
+        with self.assertRaises(OSError):
+            ownership.atomic_rewrite(root, os.path.join(root, "linked.json"), b"rewritten\n", b"new\n")
+        with open(os.path.join(elsewhere, "settings.json"), "rb") as stream:
+            self.assertEqual(stream.read(), b"new\n")
+        with mock.patch.object(os, "supports_dir_fd", set()):
+            with self.assertRaises(OSError):
+                ownership.atomic_rewrite(root, target, b"rewritten\n", b"new\n")
+        with open(target, "rb") as stream:
+            self.assertEqual(stream.read(), b"new\n")
+
     def test_deletion_fails_closed_without_dir_fd_support(self):
         root = os.path.join(self.h.base, "root")
         target = os.path.join(root, "skills", "x", "SKILL.md")
