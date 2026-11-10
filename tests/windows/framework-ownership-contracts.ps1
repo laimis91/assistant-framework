@@ -9,7 +9,8 @@ and uninstall invocation inherits a disposable USERPROFILE, HOME and (when
 applicable) CODEX_HOME under the suite temporary directory. Uninstall cases run
 from a temporary clone of this checkout, never from the checkout itself.
 Windows-only behaviour (reparse points, DACLs, autocrlf checkouts, the Codex
-process check and Windows PowerShell 5.1) skips elsewhere; -FailOnSkip makes
+process check and Windows PowerShell 5.1) skips elsewhere, and symbolic-link
+cases skip on a Windows account that cannot create links; -FailOnSkip makes
 every skip a failure.
 #>
 
@@ -102,6 +103,18 @@ function Skip-Contract {
 }
 
 # ── Files and Git ───────────────────────────────────────────────────────────
+
+# Create a symbolic link. On Windows an account without elevation or Developer
+# Mode cannot; return $false there so the caller skips (and -FailOnSkip fails).
+function New-TestSymbolicLink {
+    param([string]$Path, [string]$Target)
+    try { [void](New-Item -ItemType SymbolicLink -Path $Path -Target $Target -ErrorAction Stop) }
+    catch {
+        if ($script:IsWindowsHost) { return $false }
+        throw
+    }
+    return $true
+}
 
 function Write-TestBytes {
     param([string]$LiteralPath, $Data)
@@ -558,15 +571,17 @@ Invoke-Contract 'cleanup retired skill plus user file ambiguous' {
 }
 
 Invoke-Contract 'cleanup symbolic-link retired skill kept' {
-    if ($script:IsWindowsHost) { Skip-Contract 'cleanup symbolic-link retired skill kept' 'symbolic links need Developer Mode on Windows; the junction case covers Windows'; return }
     $h = New-TestHome
     $target = Join-Path $h.Base 'elsewhere'
     Add-Reflexion $h -Root $target
     $skills = Join-Path (Get-AgentHome $h 'claude') 'skills'
     [void][System.IO.Directory]::CreateDirectory($skills)
-    [void](New-Item -ItemType SymbolicLink -Path (Join-Path $skills 'assistant-reflexion') -Target (Join-Path $target 'assistant-reflexion'))
+    if (-not (New-TestSymbolicLink -Path (Join-Path $skills 'assistant-reflexion') -Target (Join-Path $target 'assistant-reflexion'))) {
+        Skip-Contract 'cleanup symbolic-link retired skill kept' 'this Windows account cannot create symbolic links (needs elevation or Developer Mode)'; return
+    }
+    $label = if ($script:IsWindowsHost) { 'reparse point' } else { 'symbolic link' }
     $out = Invoke-DryRun $h
-    Assert-Contains $out 'skills/assistant-reflexion: symbolic link at skills/assistant-reflexion; not followed' 'link not kept'
+    Assert-Contains $out "skills/assistant-reflexion: $label at skills/assistant-reflexion; not followed" 'link not kept'
     Assert-Contains $out 'Removable (0):' 'link offered'
 }
 
@@ -1065,7 +1080,10 @@ Invoke-Contract 'PowerShell history derivation matches content-proof.json for se
         "Write-Output (Get-OwnershipCanonicalDigest -Value `$proofs); Write-Output (Get-OwnershipCanonicalDigest -Value `$committed['proofs']); Write-Output `$proofs.Count; " +
         "foreach (`$key in @(`$committed['proofs'].Keys)) { foreach (`$relative in @(`$committed['proofs'][`$key]['files'].Keys)) { " +
         "`$left = if (`$proofs.Contains(`$key) -and `$proofs[`$key]['files'].Contains(`$relative)) { Get-OwnershipCanonicalDigest -Value `$proofs[`$key]['files'][`$relative] } else { 'missing' }; " +
-        "if (`$left -cne (Get-OwnershipCanonicalDigest -Value `$committed['proofs'][`$key]['files'][`$relative])) { Write-Output ('differs: ' + `$key + ' :: ' + `$relative) } } }; " +
+        "if (`$left -cne (Get-OwnershipCanonicalDigest -Value `$committed['proofs'][`$key]['files'][`$relative])) { " +
+        "`$shown = if (`$left -eq 'missing') { 'missing' } else { (@(foreach (`$agent in @(`$proofs[`$key]['files'][`$relative].Keys)) { `$agent + '=' + ((@(`$proofs[`$key]['files'][`$relative][`$agent]) | ForEach-Object { ([string]`$_).Substring(0, 8) }) -join ',') }) -join ' ') }; " +
+        "`$expected = (@(foreach (`$agent in @(`$committed['proofs'][`$key]['files'][`$relative].Keys)) { `$agent + '=' + ((@(`$committed['proofs'][`$key]['files'][`$relative][`$agent]) | ForEach-Object { ([string]`$_).Substring(0, 8) }) -join ',') }) -join ' '); " +
+        "Write-Output ('differs: ' + `$key + ' :: ' + `$relative + ' :: derived ' + `$shown + ' :: committed ' + `$expected) } } }; " +
         "foreach (`$key in @(`$proofs.Keys)) { foreach (`$relative in @(`$proofs[`$key]['files'].Keys)) { if (-not (`$committed['proofs'].Contains(`$key) -and `$committed['proofs'][`$key]['files'].Contains(`$relative))) { Write-Output ('extra: ' + `$key + ' :: ' + `$relative) } } }"
     $result = Invoke-TestScript -TestHome $h -Command $command
     Assert-Equal 0 $result.Code $result.Err
@@ -1142,11 +1160,12 @@ Invoke-Contract 'user home refusal compares path identity' {
 }
 
 Invoke-Contract 'manifest-out containment follows links into the agent home' {
-    if ($script:IsWindowsHost) { Skip-Contract 'manifest-out containment follows links into the agent home' 'covered by the junction case on Windows'; return }
     $h = New-TestHome
     Add-Reflexion $h
     $link = Join-Path $h.Base 'into-home'
-    [void](New-Item -ItemType SymbolicLink -Path $link -Target (Get-AgentHome $h 'claude'))
+    if (-not (New-TestSymbolicLink -Path $link -Target (Get-AgentHome $h 'claude'))) {
+        Skip-Contract 'manifest-out containment follows links into the agent home' 'this Windows account cannot create symbolic links (needs elevation or Developer Mode)'; return
+    }
     $result = Invoke-Helper $h @('dry-run', '-Agent', 'claude', '-ManifestOut', (Join-Path $link 'manifest.json'))
     Assert-Equal 2 $result.Code 'a manifest inside the home through a link was accepted'
     Assert-Contains $result.Err '-ManifestOut must be outside the agent home and every inventory root' 'wrong refusal'
