@@ -60,6 +60,49 @@ prefix_rule(
     justification="Recursive force delete is dangerous. Verify the target path is correct and no important files will be lost."
 )
 
+# Framework cleanup and uninstall delete installed files: always confirm
+prefix_rule(
+    pattern=["python3", "tools/framework-ownership/ownership.py", "apply"],
+    decision="prompt",
+    justification="Applies a confirmed retired-item cleanup to this agent home. Confirm the user approved this exact manifest digest after seeing the dry-run plan."
+)
+
+prefix_rule(
+    pattern=["pwsh", "-NoProfile", "-File", "tools/framework-ownership/ownership.ps1", "apply"],
+    decision="prompt",
+    justification="Applies a confirmed retired-item cleanup to this agent home. Confirm the user approved this exact manifest digest after seeing the dry-run plan."
+)
+
+prefix_rule(
+    pattern=["powershell", "-NoProfile", "-File", "tools/framework-ownership/ownership.ps1", "apply"],
+    decision="prompt",
+    justification="Applies a confirmed retired-item cleanup to this agent home. Confirm the user approved this exact manifest digest after seeing the dry-run plan."
+)
+
+prefix_rule(
+    pattern=["./uninstall.sh"],
+    decision="prompt",
+    justification="Uninstalls the Assistant Framework from one agent home. Confirm the user asked to uninstall and reviewed the dry-run plan and its digest."
+)
+
+prefix_rule(
+    pattern=["bash", "uninstall.sh"],
+    decision="prompt",
+    justification="Uninstalls the Assistant Framework from one agent home. Confirm the user asked to uninstall and reviewed the dry-run plan and its digest."
+)
+
+prefix_rule(
+    pattern=["pwsh", "-NoProfile", "-File", "uninstall.ps1"],
+    decision="prompt",
+    justification="Uninstalls the Assistant Framework from one agent home. Confirm the user asked to uninstall and reviewed the dry-run plan and its digest."
+)
+
+prefix_rule(
+    pattern=["powershell", "-NoProfile", "-File", "uninstall.ps1"],
+    decision="prompt",
+    justification="Uninstalls the Assistant Framework from one agent home. Confirm the user asked to uninstall and reviewed the dry-run plan and its digest."
+)
+
 # ── Build safety ────────────────────────────────────────────────────────────
 
 # Allow build and test commands freely (these are safe, read-mostly operations)

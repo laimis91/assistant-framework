@@ -26,6 +26,7 @@ research_skill="$FRAMEWORK_DIR/skills/assistant-research/SKILL.md"
 thinking_skill="$FRAMEWORK_DIR/skills/assistant-thinking/SKILL.md"
 clarify_skill="$FRAMEWORK_DIR/skills/assistant-clarify/SKILL.md"
 debugging_skill="$FRAMEWORK_DIR/skills/assistant-debugging/SKILL.md"
+cleanup_skill="$FRAMEWORK_DIR/skills/assistant-cleanup/SKILL.md"
 activation_failures=()
 
 for file_and_prompt in \
@@ -35,7 +36,8 @@ for file_and_prompt in \
     "$research_skill::compare source-backed options" \
     "$thinking_skill::stress test this complex architecture decision" \
     "$clarify_skill::clarify this ambiguous request and help me untangle it" \
-    "$debugging_skill::diagnose this unknown failure before fixing"; do
+    "$debugging_skill::diagnose this unknown failure before fixing" \
+    "$cleanup_skill::remove the retired framework skills from my claude install"; do
     file="${file_and_prompt%%::*}"
     prompt="${file_and_prompt#*::}"
     if [[ "$(description_prompt_anchor_count "$file" "$prompt")" -lt 2 ]]; then
@@ -59,7 +61,9 @@ for file_and_prompt in \
     "$ideate_skill::improve this function" \
     "$research_skill::what is this function doing" \
     "$research_skill::investigate failure in the payment test" \
-    "$thinking_skill::clarify my request"; do
+    "$thinking_skill::clarify my request" \
+    "$cleanup_skill::clean up this function's dead code" \
+    "$cleanup_skill::uninstall Docker Desktop"; do
     file="${file_and_prompt%%::*}"
     prompt="${file_and_prompt#*::}"
     if [[ "$(description_prompt_anchor_count "$file" "$prompt")" -ge 2 ]]; then

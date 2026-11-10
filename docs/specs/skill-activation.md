@@ -72,6 +72,7 @@ The ledger must include at least these easily lost use cases:
 | `assistant-ci-audit` | False passes, discovery gaps, stale fixtures, brittle or duplicate tests, cost |
 | `assistant-ideate` | Light mode for improvement scans, deep mode for brainstorming; must not claim "improve this function" |
 | `assistant-thinking` | Architecture trade-offs, stress tests, debate, first principles, hypotheses; must not claim clarification |
+| `assistant-cleanup` | Retired or legacy framework skills, agents, hooks and tools after an update; uninstall requests answered with the command only; must not claim code cleanup, refactoring, deleting project files or uninstalling other software |
 | `assistant-clarify`, `-docs`, `-diagrams`, `-onboard`, `-telos` | All current description clauses, plus body scope such as code explanation in docs, component diagrams, and Telos review |
 
 ### Descriptions
@@ -120,6 +121,7 @@ This table is the expected behavior the evals grade. "Required" means activated 
 | Diagram request | `assistant-diagrams` | `assistant-workflow` | |
 | Unfamiliar codebase | `assistant-onboard` | | |
 | Purpose, mission or goals | `assistant-telos` | | |
+| Remove retired or legacy framework items from an agent home, or uninstall the framework | `assistant-cleanup` | | |
 | Narrow question, or running an existing test command | None | | Every skill |
 | One-word typo | See [OD-1](#accepted-defaults) | | |
 

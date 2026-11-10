@@ -87,15 +87,21 @@ array_contains() {
     return 1
 }
 
+# Print the python3 version when it is 3.9 or later; fail quietly otherwise.
+supported_python3_version() {
+    local version=""
+    command -v python3 >/dev/null 2>&1 || return 1
+    version="$(python3 -B -c 'import sys; print("%d.%d.%d" % sys.version_info[:3]); sys.exit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null)" || return 1
+    [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || return 1
+    (( 10#${BASH_REMATCH[1]} > 3 || (10#${BASH_REMATCH[1]} == 3 && 10#${BASH_REMATCH[2]} >= 9) )) || return 1
+    printf '%s\n' "$version"
+}
+
 preflight_workflow_python() {
     array_contains assistant-workflow "${SKILLS[@]}" || return 0
     local version=""
-    if ! command -v python3 >/dev/null 2>&1 \
-        || ! version="$(python3 -B -c 'import sys; print("%d.%d.%d" % sys.version_info[:3]); sys.exit(0 if sys.version_info >= (3, 9) else 1)' 2>/dev/null)" \
-        || [[ ! "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] \
-        || ! (( 10#${BASH_REMATCH[1]} > 3 || (10#${BASH_REMATCH[1]} == 3 && 10#${BASH_REMATCH[2]} >= 9) )); then
-        fail "Python 3.9+ is required when the selected skill closure includes assistant-workflow. Install a supported python3 and rerun. No installation files have been changed."
-    fi
+    version="$(supported_python3_version)" \
+        || fail "Python 3.9+ is required when the selected skill closure includes assistant-workflow. Install a supported python3 and rerun. No installation files have been changed."
     info "Workflow Python 3.9+ invocation: python3 (Python $version)"
 }
 
@@ -385,47 +391,164 @@ metadata_preserving_temp() {
     printf '%s\n' "$temp_file"
 }
 
-# Canonical union of commands directly registered by released Assistant
-# Framework hook settings. Keep this cleanup inventory for one compatibility
-# release after hook retirement so plain installs can remove stale registrations.
-legacy_framework_hook_entrypoints() {
-    printf '%s\n' \
-        session-start.sh \
-        skill-router.sh \
-        learning-signals.sh \
-        workflow-enforcer.sh \
-        workflow-guard.sh \
-        stop-review.sh \
-        harness-gate.sh \
-        subagent-monitor.sh \
-        pre-compress.sh \
-        post-compact.sh \
-        session-end.sh \
-        post-tool-context.sh \
-        tool-failure-advisor.sh \
-        task-completed.sh
+# Retired tool and hook names come from the shared retired-item inventory
+# (tools/framework-ownership/retired-items.json). With Python 3.9+ the installed
+# helper validates the inventory and prints the installers' exact-name list;
+# without it, install.sh reads the generated installer-exact-removal.tsv. Each
+# line is kind, node type and path (tab separated); every line is validated
+# before any retired item is removed, and an invalid or missing list removes
+# no retired tool or hook that run.
+RETIRED_SOURCE_ONLY_PATHS=()
+RETIRED_SOURCE_ONLY_TYPES=()
+RETIRED_MANAGED_TOOLS=()
+RETIRED_EMPTY_TOOL_DIRECTORIES=()
+RETIRED_EMPTY_DIRECTORY_TOOLS=()
+LEGACY_HOOK_ENTRYPOINTS=()
+LEGACY_HOOK_HELPERS=()
+LEGACY_HOOK_MODULES=()
+
+# Print why one list path is unsafe, or nothing. Segments are ASCII letters,
+# digits, dot, underscore and hyphen, never empty, "." or "..".
+retired_list_path_problem() {
+    local path="$1" segment
+    local -a segments=()
+    case "$path" in
+        /*|*/|*//*) echo "path must be relative with non-empty segments"; return ;;
+    esac
+    IFS='/' read -r -a segments <<<"$path"
+    for segment in "${segments[@]}"; do
+        case "$segment" in
+            ''|.|..|*[!abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-]*)
+                echo "unsafe path segment"; return ;;
+        esac
+    done
 }
 
-# Internal helpers were never direct lifecycle entrypoints and must not receive
-# cached shims. They are still recognized as retired framework commands.
+# Validate the whole list, then fill the retired arrays. Any invalid line
+# leaves every array empty, so nothing retired is removed this run.
+load_retired_item_list() {
+    local list_text="$1" line kind node_type path rest reason number=0 slashes
+    local -a kinds=() types=() paths=()
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        number=$((number + 1))
+        reason=""
+        if [[ "$line" == *$'\r'* ]]; then
+            reason="carriage return in line"
+        elif [[ "$line" != *$'\t'*$'\t'* ]]; then
+            reason="expected three tab-separated fields"
+        else
+            kind="${line%%$'\t'*}"
+            rest="${line#*$'\t'}"
+            node_type="${rest%%$'\t'*}"
+            path="${rest#*$'\t'}"
+            if [[ "$path" == *$'\t'* ]]; then
+                reason="expected three tab-separated fields"
+            elif [[ -z "$kind" || -z "$node_type" || -z "$path" ]]; then
+                reason="empty field"
+            else
+                case "$kind:$node_type" in
+                    source_only_tool:file|source_only_tool:directory|managed_tool:file|managed_tool:directory|managed_tool_empty_directory:directory) ;;
+                    hook_entrypoint:file|hook_helper:file|hook_module:file) ;;
+                    *) reason="unknown kind or node type: $kind $node_type" ;;
+                esac
+                [[ -n "$reason" ]] || reason="$(retired_list_path_problem "$path")"
+                if [[ -z "$reason" ]]; then
+                    slashes="${path//[!\/]/}"
+                    case "$kind" in
+                        hook_entrypoint|hook_helper)
+                            [[ -z "$slashes" ]] || reason="$kind path must be one segment" ;;
+                        hook_module)
+                            [[ "${#slashes}" == 1 && "${path%%/*}" == *.d ]] || reason="hook_module path must be <name>.d/<file>" ;;
+                    esac
+                fi
+            fi
+        fi
+        if [[ -n "$reason" ]]; then
+            info "retired tool list invalid: line $number: $reason; kept"
+            return 0
+        fi
+        kinds+=("$kind")
+        types+=("$node_type")
+        paths+=("$path")
+    done <<<"$list_text"
+
+    local index empty
+    [[ ${#kinds[@]} -gt 0 ]] || return 0
+    for index in "${!kinds[@]}"; do
+        case "${kinds[$index]}" in
+            source_only_tool)
+                RETIRED_SOURCE_ONLY_PATHS+=("${paths[$index]}")
+                RETIRED_SOURCE_ONLY_TYPES+=("${types[$index]}") ;;
+            managed_tool_empty_directory)
+                RETIRED_EMPTY_TOOL_DIRECTORIES+=("${paths[$index]}") ;;
+            managed_tool)
+                if [[ "${types[$index]}" == directory ]]; then
+                    RETIRED_EMPTY_TOOL_DIRECTORIES+=("${paths[$index]}")
+                fi ;;
+            hook_entrypoint) LEGACY_HOOK_ENTRYPOINTS+=("${paths[$index]}") ;;
+            hook_helper) LEGACY_HOOK_HELPERS+=("${paths[$index]}") ;;
+            hook_module) LEGACY_HOOK_MODULES+=("${paths[$index]}") ;;
+        esac
+    done
+    # A retired tool file inside a retired empty-directory entry is retired with
+    # that directory's guards; any other retired tool file by exact path.
+    for index in "${!kinds[@]}"; do
+        [[ "${kinds[$index]}" == managed_tool && "${types[$index]}" == file ]] || continue
+        for empty in ${RETIRED_EMPTY_TOOL_DIRECTORIES[@]+"${RETIRED_EMPTY_TOOL_DIRECTORIES[@]}"}; do
+            if [[ "${paths[$index]}" == "$empty/"* ]]; then
+                RETIRED_EMPTY_DIRECTORY_TOOLS+=("${paths[$index]}")
+                continue 2
+            fi
+        done
+        RETIRED_MANAGED_TOOLS+=("${paths[$index]}")
+    done
+}
+
+read_retired_item_lists() {
+    local ownership_dir="$FRAMEWORK_DIR/tools/framework-ownership" list_text="" status=0 refusal="" errors
+
+    if supported_python3_version >/dev/null; then
+        errors="$(mktemp "${TMPDIR:-/tmp}/assistant-retired-list.XXXXXX")" || fail "Could not create a temporary file"
+        list_text="$(python3 "$ownership_dir/ownership.py" list-retired --layout unix 2>"$errors")" || status=$?
+        refusal="$(head -n 1 "$errors" 2>/dev/null || true)"
+        rm -f -- "$errors"
+        if (( status != 0 )); then
+            info "retired-item inventory ${refusal:-refused (exit $status)}; retired tool and hook removal skipped"
+            return 0
+        fi
+    elif [[ -f "$ownership_dir/installer-exact-removal.tsv" && ! -L "$ownership_dir/installer-exact-removal.tsv" ]]; then
+        list_text="$(cat "$ownership_dir/installer-exact-removal.tsv")" || {
+            info "retired tool list unreadable; retired tool and hook removal skipped"
+            return 0
+        }
+    else
+        info "retired tool list missing; retired tool and hook removal skipped"
+        return 0
+    fi
+    load_retired_item_list "$list_text"
+}
+
+# Exact names of retired hook entrypoints, internal helpers and modules.
+# Helpers were never direct lifecycle entrypoints and never receive shims.
+legacy_framework_hook_entrypoints() {
+    [[ ${#LEGACY_HOOK_ENTRYPOINTS[@]} -eq 0 ]] || printf '%s\n' "${LEGACY_HOOK_ENTRYPOINTS[@]}"
+}
+
 legacy_framework_hook_helpers() {
-    printf '%s\n' \
-        task-journal-resolver.sh \
-        workflow-phase-gates.sh \
-        hook-runtime.sh
+    [[ ${#LEGACY_HOOK_HELPERS[@]} -eq 0 ]] || printf '%s\n' "${LEGACY_HOOK_HELPERS[@]}"
 }
 
 legacy_framework_hook_modules() {
-    printf '%s\n' \
-        workflow-phase-gates.d/learning-controller.sh \
-        workflow-phase-gates.d/metrics.sh \
-        workflow-phase-gates.d/qa-controller.sh \
-        workflow-phase-gates.d/review-controller.sh \
-        workflow-phase-gates.d/subagent-evidence.sh \
-        workflow-phase-gates.d/subagent-orchestration.sh \
-        workflow-guard.d/path-policy.sh \
-        workflow-guard.d/shell-write-parser.sh \
-        workflow-guard.d/workflow-state-artifacts.sh
+    [[ ${#LEGACY_HOOK_MODULES[@]} -eq 0 ]] || printf '%s\n' "${LEGACY_HOOK_MODULES[@]}"
+}
+
+# The module directories (<name>.d) that hold retired hook modules.
+legacy_framework_hook_module_directories() {
+    local module
+    for module in ${LEGACY_HOOK_MODULES[@]+"${LEGACY_HOOK_MODULES[@]}"}; do
+        printf '%s\n' "${module%%/*}"
+    done | awk '!seen[$0]++'
 }
 
 legacy_framework_hook_files_exist() {
@@ -449,7 +572,10 @@ remove_legacy_framework_hook_helpers() {
         rm -f "$hooks_target/$relative_path"
     done < <({ legacy_framework_hook_helpers; legacy_framework_hook_modules; })
 
-    rmdir "$hooks_target/workflow-phase-gates.d" "$hooks_target/workflow-guard.d" 2>/dev/null || true
+    while IFS= read -r relative_path; do
+        [[ -n "$relative_path" ]] || continue
+        rmdir "$hooks_target/$relative_path" 2>/dev/null || true
+    done < <(legacy_framework_hook_module_directories)
 }
 
 write_legacy_framework_hook_shims() {
@@ -735,79 +861,87 @@ cleanup_installed_tool_build_artifacts() {
 }
 
 remove_source_only_promotion_tools() {
-    local tools_target="$1" relative_path
-    while IFS= read -r relative_path; do
-        [[ -n "$relative_path" ]] || continue
+    local tools_target="$1" index relative_path
+    for index in ${RETIRED_SOURCE_ONLY_PATHS[@]+"${!RETIRED_SOURCE_ONLY_PATHS[@]}"}; do
+        relative_path="${RETIRED_SOURCE_ONLY_PATHS[$index]}"
         if $DRY_RUN; then
             dry "Remove source-repository-only promotion tool: $tools_target/$relative_path"
-        elif [[ "$relative_path" == "evals/node_modules" ]]; then
+        elif [[ "${RETIRED_SOURCE_ONLY_TYPES[$index]}" == directory ]]; then
             rm -rf -- "$tools_target/$relative_path"
         else
             rm -f -- "$tools_target/$relative_path"
         fi
-    done <<'EOF'
-context-budget-report.sh
-evals/run-codex-framework-evals.sh
-evals/finalize-workflow-kernel-review.sh
-evals/lib/context-budget-evidence.sh
-evals/validate-promotion-decision-schema.cjs
-evals/package.json
-evals/package-lock.json
-evals/node_modules
-EOF
+    done
 }
 
+# Retired tool files that live in a retired empty-directory entry (the former
+# plugins/sync-plugin-skills.sh) are removed with link and type guards on the
+# file and its directory, then the directory is removed only when empty.
 validate_installed_plugin_tool_cleanup() {
-    local tools_target="$1"
-    local plugin_tools_directory="$tools_target/plugins"
-    local retired_tool="$plugin_tools_directory/sync-plugin-skills.sh"
+    local tools_target="$1" directory retired_tool
 
-    if [[ -L "$plugin_tools_directory" ]]; then
-        fail "Refusing retired plugin tool cleanup through a symlink: $plugin_tools_directory"
-    elif [[ -e "$plugin_tools_directory" && ! -d "$plugin_tools_directory" ]]; then
-        fail "Refusing retired plugin tool cleanup because the parent is not a directory: $plugin_tools_directory"
-    fi
+    for directory in ${RETIRED_EMPTY_TOOL_DIRECTORIES[@]+"${RETIRED_EMPTY_TOOL_DIRECTORIES[@]}"}; do
+        local plugin_tools_directory="$tools_target/$directory"
+        if [[ -L "$plugin_tools_directory" ]]; then
+            fail "Refusing retired plugin tool cleanup through a symlink: $plugin_tools_directory"
+        elif [[ -e "$plugin_tools_directory" && ! -d "$plugin_tools_directory" ]]; then
+            fail "Refusing retired plugin tool cleanup because the parent is not a directory: $plugin_tools_directory"
+        fi
+    done
 
-    if [[ -L "$retired_tool" ]]; then
-        fail "Refusing to remove a retired plugin tool symlink: $retired_tool"
-    elif [[ -e "$retired_tool" && ! -f "$retired_tool" ]]; then
-        fail "Refusing to remove a retired plugin tool that is not a file: $retired_tool"
-    fi
+    for retired_tool in ${RETIRED_EMPTY_DIRECTORY_TOOLS[@]+"${RETIRED_EMPTY_DIRECTORY_TOOLS[@]}"}; do
+        retired_tool="$tools_target/$retired_tool"
+        if [[ -L "$retired_tool" ]]; then
+            fail "Refusing to remove a retired plugin tool symlink: $retired_tool"
+        elif [[ -e "$retired_tool" && ! -f "$retired_tool" ]]; then
+            fail "Refusing to remove a retired plugin tool that is not a file: $retired_tool"
+        fi
+    done
 }
 
 retire_installed_plugin_tool() {
-    local tools_target="$1"
-    local plugin_tools_directory="$tools_target/plugins"
-    local retired_tool="$plugin_tools_directory/sync-plugin-skills.sh"
-    local projected_remaining_entry=""
+    local tools_target="$1" relative retired_tool directory plugin_tools_directory
+    local projected_remaining_entry="" name child
 
     validate_installed_plugin_tool_cleanup "$tools_target"
 
-    if [[ -f "$retired_tool" ]]; then
-        if $DRY_RUN; then
-            dry "Remove retired managed plugin tool: $retired_tool"
-        else
-            rm -f -- "$retired_tool"
-            ok "Removed retired managed plugin tool: $retired_tool"
+    for relative in ${RETIRED_EMPTY_DIRECTORY_TOOLS[@]+"${RETIRED_EMPTY_DIRECTORY_TOOLS[@]}"}; do
+        retired_tool="$tools_target/$relative"
+        if [[ -f "$retired_tool" ]]; then
+            if $DRY_RUN; then
+                dry "Remove retired managed plugin tool: $retired_tool"
+            else
+                rm -f -- "$retired_tool"
+                ok "Removed retired managed plugin tool: $retired_tool"
+            fi
         fi
-    fi
+    done
 
-    if [[ -d "$plugin_tools_directory" ]]; then
+    for directory in ${RETIRED_EMPTY_TOOL_DIRECTORIES[@]+"${RETIRED_EMPTY_TOOL_DIRECTORIES[@]}"}; do
+        plugin_tools_directory="$tools_target/$directory"
+        [[ -d "$plugin_tools_directory" ]] || continue
         if $DRY_RUN; then
-            projected_remaining_entry="$(find "$plugin_tools_directory" -mindepth 1 -maxdepth 1 ! -name 'sync-plugin-skills.sh' -print -quit)"
+            projected_remaining_entry=""
+            for child in "$plugin_tools_directory"/* "$plugin_tools_directory"/.[!.]* "$plugin_tools_directory"/..?*; do
+                [[ -e "$child" || -L "$child" ]] || continue
+                name="${child##*/}"
+                array_contains "$directory/$name" ${RETIRED_EMPTY_DIRECTORY_TOOLS[@]+"${RETIRED_EMPTY_DIRECTORY_TOOLS[@]}"} && continue
+                projected_remaining_entry="$child"
+                break
+            done
             if [[ -z "$projected_remaining_entry" ]]; then
                 dry "Remove empty retired plugin tools directory: $plugin_tools_directory"
             fi
         else
             rmdir -- "$plugin_tools_directory" 2>/dev/null || true
         fi
-    fi
+    done
 }
 
 # Shared roots such as ~/.<agent>/tools and ~/.<agent>/docs/evals also hold
 # user files. The installer writes only the framework's own top-level entries
-# there and retires only exact, explicitly owned obsolete paths.
-RETIRED_MANAGED_TOOLS=(cleanup-memory-graph.ps1 cleanup-memory-graph.sh)
+# there and retires only exact, explicitly owned obsolete paths
+# (RETIRED_MANAGED_TOOLS, read from the retired-item inventory).
 
 # Set the exclusions for one owned-entry sync kind (tools or eval-docs):
 # OWNED_SYNC_TOP_LEVEL_EXCLUDES are source entries never installed,
@@ -826,6 +960,8 @@ set_owned_sync_exclusions() {
                 evals/package.json
                 evals/package-lock.json
                 evals/node_modules
+                framework-ownership/ownership-checkout.py
+                framework-ownership/ownership-checkout.ps1
             )
             ;;
         eval-docs)
@@ -913,7 +1049,7 @@ assert_owned_sync_safe() {
     done < <(list_owned_top_level_entries "$source")
 
     if [[ "$kind" == tools ]]; then
-        for retired in "${RETIRED_MANAGED_TOOLS[@]}"; do
+        for retired in ${RETIRED_MANAGED_TOOLS[@]+"${RETIRED_MANAGED_TOOLS[@]}"}; do
             if [[ -L "$target/$retired" ]]; then
                 fail "Refusing to remove a retired managed tool symlink: $target/$retired"
             elif [[ -e "$target/$retired" && ! -f "$target/$retired" ]]; then
@@ -1011,9 +1147,10 @@ assert_legacy_hook_paths_safe() {
         [[ -n "$relative" ]] || continue
         assert_managed_path_safe "$hooks_target/$relative" file "legacy hook cleanup"
     done < <({ legacy_framework_hook_entrypoints; legacy_framework_hook_helpers; legacy_framework_hook_modules; })
-    for relative in workflow-phase-gates.d workflow-guard.d; do
+    while IFS= read -r relative; do
+        [[ -n "$relative" ]] || continue
         assert_managed_path_safe "$hooks_target/$relative" dir "legacy hook cleanup"
-    done
+    done < <(legacy_framework_hook_module_directories)
 }
 
 # Refuse, before any write and in dry-run, a linked or wrong-type path for
@@ -1041,7 +1178,7 @@ preflight_managed_file_writes() {
 
 retire_managed_tools() {
     local target="$1" retired path
-    for retired in "${RETIRED_MANAGED_TOOLS[@]}"; do
+    for retired in ${RETIRED_MANAGED_TOOLS[@]+"${RETIRED_MANAGED_TOOLS[@]}"}; do
         path="$target/$retired"
         if [[ -L "$path" ]]; then
             fail "Refusing to remove a retired managed tool symlink: $path"
@@ -1112,6 +1249,29 @@ assert_no_framework_target_overlap() {
     fi
 }
 
+# Remove proven-owned retired skills and agent files through the checkout-only
+# ownership entry point (never an installed copy). It plans, prints the plan and
+# its digest, then deletes with per-item re-proof; --dry-run prints the same plan.
+# A missing interpreter or a refusal keeps every retired skill and agent and
+# never fails the install.
+run_retired_item_installer_mode() {
+    local entry="$FRAMEWORK_DIR/tools/framework-ownership/ownership-checkout.py" status=0
+    local -a arguments=(install --agent "$AGENT")
+
+    echo ""
+    if ! supported_python3_version >/dev/null || [[ ! -f "$entry" ]]; then
+        info "Retired skills and agents: ownership helper unavailable; kept"
+        return 0
+    fi
+    $DRY_RUN && arguments+=(--dry-run)
+    python3 "$entry" "${arguments[@]}" || status=$?
+    case "$status" in
+        0|2|3) ;;
+        *) info "Retired skills and agents: ownership helper failed (exit $status); kept" ;;
+    esac
+    return 0
+}
+
 # ── Validate ──────────────────────────────────────────────────────────────────
 
 [[ -n "$AGENT" ]] || fail "Missing --agent. Supported: claude, codex, gemini"
@@ -1129,6 +1289,7 @@ while IFS= read -r skill_md; do
     SKILLS+=("$skill_name")
 done < <(find "$SKILLS_SOURCE" -maxdepth 2 -path "$SKILLS_SOURCE/assistant-*/SKILL.md" -type f | sort)
 command -v rsync >/dev/null 2>&1 || fail "rsync is required but not installed. Install with: apt install rsync / dnf install rsync / brew install rsync"
+read_retired_item_lists
 
 # Determine target base
 if [[ "$AGENT" == "codex" ]]; then
@@ -1181,6 +1342,9 @@ preflight_managed_file_writes
 echo "Installing Assistant Framework for: $AGENT"
 echo "  Source: $FRAMEWORK_DIR"
 echo "  Skills target: $SKILLS_TARGET"
+
+# ── Retired skills and agents (after every preflight, before the first write) ─
+run_retired_item_installer_mode
 echo ""
 
 # ── Install skills ────────────────────────────────────────────────────────────

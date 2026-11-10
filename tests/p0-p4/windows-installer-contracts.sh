@@ -42,10 +42,19 @@ if [[ -f "$installer" ]]; then
         || failures+=("missing deep JSON preservation")
     grep -Fq -- '[Environment]::OSVersion.Platform' "$installer" \
         || failures+=("security decisions do not use the host platform API")
-    grep -Fq -- "'cleanup-memory-graph.ps1'" "$installer" \
-        || failures+=("installer does not retire the exact PowerShell cleanup target")
-    grep -Fq -- "'cleanup-memory-graph.sh'" "$installer" \
-        || failures+=("installer does not retire the exact Bash cleanup target")
+    # SI-4: install.ps1 takes retired tool names from the shared inventory.
+    for retired_tool in cleanup-memory-graph.ps1 cleanup-memory-graph.sh; do
+        python3 - "$FRAMEWORK_DIR/tools/framework-ownership/retired-items.json" "tools/$retired_tool" <<'PY' \
+            || failures+=("inventory lacks windows exact removal for $retired_tool")
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as stream:
+    entries = json.load(stream)["entries"]
+sys.exit(0 if any(entry.get("path") == sys.argv[2] and entry.get("root") == "agent_home"
+                  and "windows" in entry.get("installer_exact_removal", []) for entry in entries) else 1)
+PY
+    done
+    grep -Fq -- 'Read-RetiredItemInventory' "$installer" \
+        || failures+=("installer does not read retired names from the inventory")
     if rg -n -e '^function .*(MemoryGraph|GraphSeed)' "$installer" >/tmp/p0p4-windows-retired-installer-functions.out; then
         failures+=("installer retains retired Memory Graph registration, build, or seed functions")
     fi
@@ -61,6 +70,18 @@ if [[ -f "$installer" ]]; then
         failures+=("contains a forbidden PowerShell execution or symlink surface")
     fi
 fi
+
+# The PowerShell ownership helpers and uninstall.ps1 share the installer's
+# forbidden-surface rule; the installer primitives are generated from install.ps1.
+[[ -f "$FRAMEWORK_DIR/tools/framework-ownership/installer-primitives.ps1" ]] \
+    || failures+=("missing generated tools/framework-ownership/installer-primitives.ps1")
+[[ -f "$FRAMEWORK_DIR/uninstall.ps1" ]] || failures+=("missing uninstall.ps1")
+for ownership_script in "$FRAMEWORK_DIR"/tools/framework-ownership/*.ps1 "$FRAMEWORK_DIR/uninstall.ps1"; do
+    [[ -f "$ownership_script" ]] || continue
+    if grep -Eqi -- 'Invoke-Expression|Set-ExecutionPolicy|ExecutionPolicy[[:space:]]+Bypass|Start-Process[^[:cntrl:]]*-Verb[[:space:]]+RunAs|New-Item[^[:cntrl:]]*SymbolicLink' "$ownership_script"; then
+        failures+=("${ownership_script#"$FRAMEWORK_DIR"/} contains a forbidden PowerShell execution or symlink surface")
+    fi
+done
 
 if [[ -f "$native_suite" ]]; then
     grep -Fq -- 'Claude writer transition definitions survive fresh upgrade and dry-run' "$native_suite" \

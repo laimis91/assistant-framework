@@ -46,38 +46,14 @@ $script:MaxJsonInputBytes = 4 * 1024 * 1024
 $script:MaxJsonIdentityDepth = 64
 $script:MaxJsonIdentityProperties = 10000
 $script:MaxJsonIdentityValues = 10000
-$script:LegacyHookEntrypoints = @(
-    'session-start.sh',
-    'skill-router.sh',
-    'learning-signals.sh',
-    'workflow-enforcer.sh',
-    'workflow-guard.sh',
-    'stop-review.sh',
-    'harness-gate.sh',
-    'subagent-monitor.sh',
-    'pre-compress.sh',
-    'post-compact.sh',
-    'session-end.sh',
-    'post-tool-context.sh',
-    'tool-failure-advisor.sh',
-    'task-completed.sh'
-)
-$script:LegacyHookHelpers = @(
-    'task-journal-resolver.sh',
-    'workflow-phase-gates.sh',
-    'hook-runtime.sh'
-)
-$script:LegacyHookModules = @(
-    'workflow-phase-gates.d/learning-controller.sh',
-    'workflow-phase-gates.d/metrics.sh',
-    'workflow-phase-gates.d/qa-controller.sh',
-    'workflow-phase-gates.d/review-controller.sh',
-    'workflow-phase-gates.d/subagent-evidence.sh',
-    'workflow-phase-gates.d/subagent-orchestration.sh',
-    'workflow-guard.d/path-policy.sh',
-    'workflow-guard.d/shell-write-parser.sh',
-    'workflow-guard.d/workflow-state-artifacts.sh'
-)
+# Exact names of retired hook entrypoints, internal helpers and modules. They
+# are filled from the shared retired-item inventory for each install
+# (Read-RetiredItemInventory); an unavailable inventory leaves them empty, so
+# no retired hook is removed or neutralized that run.
+$script:LegacyHookEntrypoints = @()
+$script:LegacyHookHelpers = @()
+$script:LegacyHookModules = @()
+$script:LegacyHookModuleDirectories = @()
 
 function Show-Usage {
     @'
@@ -2127,7 +2103,7 @@ function Assert-LegacyHookCleanupSafe {
             }
         }
     }
-    foreach ($relative in @('workflow-phase-gates.d', 'workflow-guard.d')) {
+    foreach ($relative in @($script:LegacyHookModuleDirectories)) {
         $candidate = Join-Path $HooksTarget $relative
         Assert-NoReparseTraversal -LiteralPath $candidate -Purpose 'legacy hook cleanup' -TraversalRoot $HooksTarget
         if (Test-Path -LiteralPath $candidate) {
@@ -2161,7 +2137,7 @@ function Retire-LegacyHooks {
         $shim = Join-Path $safeHooksTarget $entrypoint
         Write-AtomicText -LiteralPath $shim -Content ("#!/usr/bin/env bash`n# Assistant Framework retired-hook compatibility shim.`nexit 0`n")
     }
-    foreach ($directoryName in @('workflow-phase-gates.d', 'workflow-guard.d')) {
+    foreach ($directoryName in @($script:LegacyHookModuleDirectories)) {
         $directory = Join-Path $safeHooksTarget $directoryName
         if ((Test-Path -LiteralPath $directory -PathType Container) -and @(Get-ChildItem -LiteralPath $directory -Force).Count -eq 0) {
             Remove-Item -LiteralPath $directory -Force
@@ -2451,6 +2427,134 @@ function Assert-WorkflowRoleCompatibility {
     }
 }
 
+# Run one checkout PowerShell script in this PowerShell executable and return
+# its exit code with stdout lines and stderr lines kept apart.
+function Invoke-FrameworkOwnershipScript {
+    param([string]$ScriptPath, [string[]]$Arguments)
+    $executable = Get-CurrentPowerShellExecutable
+    $savedErrorActionPreference = $ErrorActionPreference
+    $nativeVariable = Get-Variable -Name PSNativeCommandUseErrorActionPreference -Scope Global -ErrorAction SilentlyContinue
+    $savedNative = $null
+    try {
+        $ErrorActionPreference = 'Continue'
+        if ($null -ne $nativeVariable) { $savedNative = $nativeVariable.Value; $global:PSNativeCommandUseErrorActionPreference = $false }
+        $records = @(& $executable -NoProfile -NonInteractive -File $ScriptPath @Arguments 2>&1)
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $savedErrorActionPreference
+        if ($null -ne $nativeVariable) { $global:PSNativeCommandUseErrorActionPreference = $savedNative }
+    }
+    $output = @($records | Where-Object { $_ -isnot [System.Management.Automation.ErrorRecord] } | ForEach-Object { [string]$_ })
+    $errors = @($records | Where-Object { $_ -is [System.Management.Automation.ErrorRecord] } | ForEach-Object { $_.ToString() })
+    return @{ ExitCode = $exitCode; Output = $output; Errors = $errors }
+}
+
+function Get-RetiredListPathProblem {
+    param([string]$Path)
+    if ([string]::IsNullOrEmpty($Path)) { return 'empty path' }
+    foreach ($segment in $Path.Split('/')) {
+        if ($segment -eq '' -or $segment -eq '.' -or $segment -eq '..' -or $segment -cnotmatch '^[A-Za-z0-9._-]+$') { return "unsafe path: $Path" }
+    }
+    return $null
+}
+
+# Retired tool and hook names from the shared retired-item inventory
+# (tools/framework-ownership/retired-items.json), read through the checkout's
+# ownership helper. Returns $null when the inventory is unavailable or the list
+# is invalid; the caller then removes no retired tool or hook this run.
+function Read-RetiredItemInventory {
+    param([string]$FrameworkDir)
+    $helper = Join-Path (Join-Path (Join-Path $FrameworkDir 'tools') 'framework-ownership') 'ownership.ps1'
+    if (-not (Test-Path -LiteralPath $helper -PathType Leaf)) {
+        Write-Info 'Retired-item inventory unavailable (ownership helper missing); retired tool and hook removal skipped'
+        return $null
+    }
+    $result = Invoke-FrameworkOwnershipScript -ScriptPath $helper -Arguments @('list-retired', '-Layout', 'windows', '-Json')
+    if ($result.ExitCode -ne 0) {
+        $reason = if ($result.Errors.Count -gt 0) { $result.Errors[0] } else { "exit $($result.ExitCode)" }
+        Write-Info "Retired-item inventory unavailable ($reason); retired tool and hook removal skipped"
+        return $null
+    }
+    try { $document = ($result.Output -join "`n") | ConvertFrom-Json }
+    catch { $document = $null }
+    if ($null -eq $document -or $document.schema_version -cnotmatch '^1\.[0-9]+$' -or $document.layout -cne 'windows' -or $null -eq $document.PSObject.Properties['items']) {
+        Write-Info 'Retired-item inventory unavailable (invalid retired-item list); retired tool and hook removal skipped'
+        return $null
+    }
+    $lists = @{
+        SourceOnlyFiles = @(); SourceOnlyDirectories = @(); ManagedTools = @(); EmptyDirectories = @()
+        HookEntrypoints = @(); HookHelpers = @(); HookModules = @(); HookModuleDirectories = @()
+    }
+    $number = 0
+    foreach ($item in @($document.items)) {
+        $number++
+        $kind = [string]$item.kind
+        $nodeType = [string]$item.node_type
+        $path = [string]$item.path
+        $reason = Get-RetiredListPathProblem -Path $path
+        $slashes = $path.Length - $path.Replace('/', '').Length
+        if (-not $reason) {
+            switch -CaseSensitive ("${kind}:$nodeType") {
+                'source_only_tool:file' { $lists.SourceOnlyFiles += $path }
+                'source_only_tool:directory' { $lists.SourceOnlyDirectories += $path }
+                'managed_tool:file' { $lists.ManagedTools += $path }
+                'managed_tool:directory' { $lists.EmptyDirectories += $path }
+                'managed_tool_empty_directory:directory' { $lists.EmptyDirectories += $path }
+                'hook_entrypoint:file' { if ($slashes -ne 0) { $reason = 'hook_entrypoint path must be one segment' } else { $lists.HookEntrypoints += $path } }
+                'hook_helper:file' { if ($slashes -ne 0) { $reason = 'hook_helper path must be one segment' } else { $lists.HookHelpers += $path } }
+                'hook_module:file' {
+                    $directory = $path.Split('/')[0]
+                    if ($slashes -ne 1 -or -not $directory.EndsWith('.d', [System.StringComparison]::Ordinal)) { $reason = 'hook_module path must be <name>.d/<file>' }
+                    else {
+                        $lists.HookModules += $path
+                        if ($lists.HookModuleDirectories -cnotcontains $directory) { $lists.HookModuleDirectories += $directory }
+                    }
+                }
+                default { $reason = "unknown kind or node type: $kind $nodeType" }
+            }
+        }
+        if ($reason) {
+            Write-Info "Retired-item inventory unavailable (invalid retired-item list: item ${number}: $reason); retired tool and hook removal skipped"
+            return $null
+        }
+    }
+    return $lists
+}
+
+# Names of retired managed tool files directly inside one retired directory,
+# which the empty-directory cleanup may treat as already removed.
+function Get-RetiredDirectoryChildNames {
+    param([string]$Directory, [string[]]$ManagedTools)
+    $names = @()
+    foreach ($path in @($ManagedTools)) {
+        if ($path.StartsWith($Directory + '/', [System.StringComparison]::Ordinal)) {
+            $name = $path.Substring($Directory.Length + 1)
+            if (-not $name.Contains('/')) { $names += $name }
+        }
+    }
+    return ,$names
+}
+
+# Installer mode of the checkout ownership entry point: remove proven-owned
+# retired skills and agent files. Never fatal; kept items stay in place.
+function Invoke-RetiredItemInstallerMode {
+    param([string]$FrameworkDir, [string]$AgentName)
+    $entry = Join-Path (Join-Path (Join-Path $FrameworkDir 'tools') 'framework-ownership') 'ownership-checkout.ps1'
+    Write-Host ''
+    if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) {
+        Write-Info 'Retired skills and agents: ownership helper unavailable; kept'
+        return
+    }
+    $arguments = @('install', '-Agent', $AgentName)
+    if ($DryRun) { $arguments += '-DryRun' }
+    $result = Invoke-FrameworkOwnershipScript -ScriptPath $entry -Arguments $arguments
+    foreach ($line in $result.Output) { Write-Host $line }
+    if (@(0, 2, 3) -notcontains $result.ExitCode) {
+        Write-Info "Retired skills and agents: ownership helper failed (exit $($result.ExitCode)); kept"
+    }
+}
+
 function Invoke-AssistantFrameworkInstall {
     if ([string]::IsNullOrWhiteSpace($Agent)) { throw 'Missing -Agent. Supported: claude, codex, gemini.' }
     $agentName = $Agent.Trim().ToLowerInvariant()
@@ -2548,23 +2652,36 @@ function Invoke-AssistantFrameworkInstall {
     $progressToolsSource = Join-Path $toolsSource 'progress'
     $toolExclusions = @('.DS_Store', '.publish', 'bin', 'obj', '__pycache__', '*.pyc')
     $evalDocsSource = Join-Path (Join-Path $script:FrameworkDir 'docs') 'evals'
-    $sourceOnlyFiles = @(
+    # Source paths never synced into an agent home. Static, so the sync never
+    # depends on the retired-item inventory being readable.
+    $toolSyncExcludedExactPaths = @(
         'context-budget-report.sh',
         'evals/run-codex-framework-evals.sh',
         'evals/finalize-workflow-kernel-review.sh',
         'evals/lib/context-budget-evidence.sh',
         'evals/validate-promotion-decision-schema.cjs',
         'evals/package.json',
-        'evals/package-lock.json'
+        'evals/package-lock.json',
+        'evals/node_modules',
+        'framework-ownership/ownership-checkout.ps1',
+        'framework-ownership/ownership-checkout.py'
     )
-    $sourceOnlyDirectories = @('evals/node_modules')
-    $sourceOnly = @($sourceOnlyFiles + $sourceOnlyDirectories)
-    $retiredManagedTools = @(
-        'cleanup-memory-graph.ps1',
-        'cleanup-memory-graph.sh',
-        'plugins/sync-plugin-skills.sh'
-    )
-    $retiredManagedEmptyToolDirectories = @('plugins')
+    # Retired tool and hook names come from the shared retired-item inventory.
+    $sourceOnlyFiles = @()
+    $sourceOnlyDirectories = @()
+    $retiredManagedTools = @()
+    $retiredManagedEmptyToolDirectories = @()
+    $retiredInventory = Read-RetiredItemInventory -FrameworkDir $script:FrameworkDir
+    if ($null -ne $retiredInventory) {
+        $sourceOnlyFiles = @($retiredInventory.SourceOnlyFiles)
+        $sourceOnlyDirectories = @($retiredInventory.SourceOnlyDirectories)
+        $retiredManagedTools = @($retiredInventory.ManagedTools)
+        $retiredManagedEmptyToolDirectories = @($retiredInventory.EmptyDirectories)
+        $script:LegacyHookEntrypoints = @($retiredInventory.HookEntrypoints)
+        $script:LegacyHookHelpers = @($retiredInventory.HookHelpers)
+        $script:LegacyHookModules = @($retiredInventory.HookModules)
+        $script:LegacyHookModuleDirectories = @($retiredInventory.HookModuleDirectories)
+    }
     # Legacy hook retirement is the only remaining operation that reads agent
     # configuration. Do not inspect unrelated user-owned files such as Codex
     # config.toml or Claude's top-level .claude.json.
@@ -2578,7 +2695,7 @@ function Invoke-AssistantFrameworkInstall {
         }
     }
     if (Test-Path -LiteralPath $toolsSource -PathType Container) {
-        Assert-ManagedTopLevelEntriesSafe -Source $toolsSource -Target $toolsTarget -ManagedRoot $agentHome -ExcludedNames $toolExclusions -ExcludedExactPaths $sourceOnly -Label 'Tools'
+        Assert-ManagedTopLevelEntriesSafe -Source $toolsSource -Target $toolsTarget -ManagedRoot $agentHome -ExcludedNames $toolExclusions -ExcludedExactPaths $toolSyncExcludedExactPaths -Label 'Tools'
     }
     if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $changeImpactToolsSource -PathType Container)) {
         [void](Assert-ManagedDirectoryCopySafe -Source $changeImpactToolsSource -Target (Join-Path $codexCommonToolsTarget 'change-impact') -ManagedRoot $agentsRoot -ExcludedNames @('.DS_Store', '__pycache__', '*.pyc') -Label 'Codex common change-impact checker')
@@ -2600,20 +2717,31 @@ function Invoke-AssistantFrameworkInstall {
     Assert-ProtocolCompatibility -SkillsSource $skillsSource -SkillsTarget $skillsTarget -SelectedSkills $selectedSkills
     Assert-WorkflowRoleCompatibility -AgentName $agentName -SkillsTarget $skillsTarget -SelectedSkills $selectedSkills
 
+    # Retired skills and agents: after every preflight, before the first write.
+    Invoke-RetiredItemInstallerMode -FrameworkDir $script:FrameworkDir -AgentName $agentName
+
     $installedAgentFiles = @()
     try {
         if (Test-Path -LiteralPath $toolsSource -PathType Container) {
-            Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnlyFiles -Label 'source-only tools'
-            Remove-ExactManagedDirectories -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnlyDirectories -Label 'source-only tools'
-            Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $retiredManagedTools -Label 'retired managed tools'
-            Remove-ExactManagedEmptyDirectories -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $retiredManagedEmptyToolDirectories -ProjectedRemovedChildNames @('sync-plugin-skills.sh') -Label 'retired managed tools'
+            if ($sourceOnlyFiles.Count -gt 0) {
+                Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnlyFiles -Label 'source-only tools'
+            }
+            if ($sourceOnlyDirectories.Count -gt 0) {
+                Remove-ExactManagedDirectories -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $sourceOnlyDirectories -Label 'source-only tools'
+            }
+            if ($retiredManagedTools.Count -gt 0) {
+                Remove-ExactManagedFiles -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths $retiredManagedTools -Label 'retired managed tools'
+            }
+            foreach ($retiredDirectory in $retiredManagedEmptyToolDirectories) {
+                Remove-ExactManagedEmptyDirectories -TargetRoot $toolsTarget -ManagedRoot $agentHome -RelativePaths @($retiredDirectory) -ProjectedRemovedChildNames (Get-RetiredDirectoryChildNames -Directory $retiredDirectory -ManagedTools $retiredManagedTools) -Label 'retired managed tools'
+            }
         }
 
         Install-Skills -SkillNames $selectedSkills -SourceRoot $skillsSource -TargetRoot $skillsTarget -AgentName $agentName
         Write-DependencyNotes -SkillNames $selectedSkills -SourceRoot $skillsSource -TargetRoot $skillsTarget
 
         if (Test-Path -LiteralPath $toolsSource -PathType Container) {
-            Sync-ManagedTopLevelEntries -Source $toolsSource -Target $toolsTarget -ManagedRoot $agentHome -ExcludedNames $toolExclusions -ExcludedExactPaths $sourceOnly -Label 'Tools'
+            Sync-ManagedTopLevelEntries -Source $toolsSource -Target $toolsTarget -ManagedRoot $agentHome -ExcludedNames $toolExclusions -ExcludedExactPaths $toolSyncExcludedExactPaths -Label 'Tools'
         }
         if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $changeImpactToolsSource -PathType Container)) {
             Sync-ManagedDirectory -Source $changeImpactToolsSource -Target (Join-Path $codexCommonToolsTarget 'change-impact') -ManagedRoot $agentsRoot -ExcludedNames @('.DS_Store', '__pycache__', '*.pyc') -Label 'Codex common change-impact checker'

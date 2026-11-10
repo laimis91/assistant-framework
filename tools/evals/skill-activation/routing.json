@@ -40,6 +40,7 @@
     "diagrams": {"situation": "Diagram request", "required": ["assistant-diagrams"], "optional": ["assistant-workflow"], "forbidden": []},
     "onboard": {"situation": "Unfamiliar codebase", "required": ["assistant-onboard"], "optional": [], "forbidden": []},
     "telos": {"situation": "Purpose, mission or goals", "required": ["assistant-telos"], "optional": [], "forbidden": []},
+    "cleanup": {"situation": "Remove retired or legacy framework items from an agent home, or uninstall the framework", "required": ["assistant-cleanup"], "optional": [], "forbidden": []},
     "none": {"situation": "Narrow question, or running an existing test command", "required": [], "optional": [], "forbidden": "*"},
     "typo": {"situation": "One-word typo", "required": [], "optional": ["assistant-workflow"], "forbidden": []}
   }

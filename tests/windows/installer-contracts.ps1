@@ -2911,6 +2911,102 @@ worker_stage_protocol:
         }
     }
 
+    # S11 T5: retired items come from the shared inventory through the
+    # ownership helpers; install.ps1 itself never hashes content.
+    Invoke-Contract 'install removes a proven retired skill from the shared Codex skills root' {
+        Use-IsolatedEnvironment 'retired skill installer mode' {
+            param($root, $isolatedUserProfile)
+            $stage = Join-Path $root 'retired-stage'
+            $archive = Join-Path $root 'retired.zip'
+            $fdff = 'fdff2dc7cf5719e3c231e5c17f34c9207239c343'
+            & git -C $script:FrameworkRoot archive --format=zip -o $archive $fdff 'skills/assistant-reflexion'
+            Assert-Equal 0 $LASTEXITCODE 'git archive of the retired skill failed'
+            Expand-Archive -LiteralPath $archive -DestinationPath $stage
+            $sharedSkills = Join-Path (Join-Path $isolatedUserProfile '.agents') 'skills'
+            [void][System.IO.Directory]::CreateDirectory($sharedSkills)
+            [System.IO.Directory]::Move((Join-Path (Join-Path $stage 'skills') 'assistant-reflexion'), (Join-Path $sharedSkills 'assistant-reflexion'))
+            $retired = Join-Path $sharedSkills 'assistant-reflexion'
+
+            $dryRun = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-DryRun')
+            Assert-Equal 0 $dryRun.ExitCode "Retired-skill dry run failed: $($dryRun.Output)"
+            Assert-Contains $dryRun.Output 'Retired skills and agents for codex:' 'Dry run omitted the retired-item installer mode'
+            Assert-Contains $dryRun.Output 'remove: <agents_skills>/assistant-reflexion (skill_directory)' 'Dry run did not plan the proven retired skill'
+            Assert-True (Test-Path -LiteralPath $retired -PathType Container) 'Dry run removed the retired skill'
+
+            $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
+            Assert-Equal 0 $result.ExitCode "Retired-skill install failed: $($result.Output)"
+            Assert-Contains $result.Output 'removed: assistant-reflexion' 'Install did not report the retired skill removal'
+            Assert-False (Test-Path -LiteralPath $retired) 'assistant-reflexion still present under .agents/skills'
+        }
+    }
+
+    Invoke-Contract 'install keeps a modified retired skill and points to the cleanup skill' {
+        Use-IsolatedEnvironment 'modified retired skill installer mode' {
+            param($root, $isolatedUserProfile)
+            $retired = Join-Path (Join-Path (Join-Path $isolatedUserProfile '.gemini') 'skills') 'assistant-reflexion'
+            [void][System.IO.Directory]::CreateDirectory($retired)
+            $userBytes = [byte[]](109, 105, 110, 101, 10)
+            [System.IO.File]::WriteAllBytes((Join-Path $retired 'SKILL.md'), $userBytes)
+            $result = Invoke-Installer -Arguments @('-Agent', 'gemini', '-Skill', 'assistant-workflow')
+            Assert-Equal 0 $result.ExitCode "Modified retired-skill install failed: $($result.Output)"
+            Assert-Contains $result.Output 'kept (unrelated): skills/assistant-reflexion: content matches no framework revision' 'Install did not report the kept retired skill'
+            Assert-Contains $result.Output 'Kept items stay in place; run the assistant-cleanup skill to review kept items.' 'Install did not point to the cleanup skill'
+            Assert-Equal $userBytes ([System.IO.File]::ReadAllBytes((Join-Path $retired 'SKILL.md'))) 'Install changed a modified retired skill'
+        }
+    }
+
+    Invoke-Contract 'install without the ownership helpers reports the inventory unavailable and removes no retired item' {
+        $fixtureFrameworkRoot = Join-Path $script:SuiteRoot ('inventory-unavailable-' + [Guid]::NewGuid().ToString('N'))
+        $fixtureName = 'assistant-inventory-fixture'
+        try {
+            $fixtureSkill = Join-Path (Join-Path $fixtureFrameworkRoot 'skills') $fixtureName
+            [void][System.IO.Directory]::CreateDirectory($fixtureSkill)
+            [System.IO.File]::Copy($script:InstallerPath, (Join-Path $fixtureFrameworkRoot 'install.ps1'))
+            Copy-RequiredWriterProfilesFixture -FixtureRoot $fixtureFrameworkRoot
+            [System.IO.File]::WriteAllText((Join-Path $fixtureSkill 'SKILL.md'), "---`nname: $fixtureName`ndescription: Inventory-unavailable installer fixture.`n---`n", (New-Object System.Text.UTF8Encoding($false)))
+            [void][System.IO.Directory]::CreateDirectory((Join-Path $fixtureFrameworkRoot 'tools'))
+            [System.IO.File]::WriteAllText((Join-Path (Join-Path $fixtureFrameworkRoot 'tools') 'fixture-tool.txt'), 'fixture tool', (New-Object System.Text.UTF8Encoding($false)))
+            Use-IsolatedEnvironment 'inventory unavailable' {
+                param($root, $isolatedUserProfile)
+                $retiredTool = Join-Path (Join-Path (Join-Path $isolatedUserProfile '.codex') 'tools') 'cleanup-memory-graph.ps1'
+                [void][System.IO.Directory]::CreateDirectory((Split-Path -Parent $retiredTool))
+                [System.IO.File]::WriteAllText($retiredTool, 'legacy tool', (New-Object System.Text.UTF8Encoding($false)))
+                $result = Invoke-PowerShellFile -LiteralPath (Join-Path $fixtureFrameworkRoot 'install.ps1') -Arguments @('-Agent', 'codex', '-Skill', $fixtureName)
+                Assert-Equal 0 $result.ExitCode "Inventory-unavailable install failed: $($result.Output)"
+                Assert-Contains $result.Output 'Retired-item inventory unavailable (ownership helper missing); retired tool and hook removal skipped' 'Install did not report the unavailable inventory'
+                Assert-Contains $result.Output 'Retired skills and agents: ownership helper unavailable; kept' 'Install did not report the unavailable installer mode'
+                Assert-True (Test-Path -LiteralPath $retiredTool -PathType Leaf) 'Install removed a retired tool without the inventory'
+            }
+        }
+        finally {
+            if (Test-Path -LiteralPath $fixtureFrameworkRoot) { Remove-Item -LiteralPath $fixtureFrameworkRoot -Recurse -Force -ErrorAction SilentlyContinue }
+        }
+    }
+
+    Invoke-Contract 'install.ps1 takes retired names from the inventory, never hashes, and never syncs the checkout entry point' {
+        $installerText = [System.IO.File]::ReadAllText($script:InstallerPath)
+        foreach ($forbidden in @('Get-FileHash', 'SHA256', 'sha256')) {
+            Assert-NotContains $installerText $forbidden "install.ps1 hashes content: $forbidden"
+        }
+        foreach ($literal in @("'cleanup-memory-graph.ps1'", "'sync-plugin-skills.sh'", "'workflow-phase-gates.d/metrics.sh'", "'session-start.sh'")) {
+            Assert-NotContains $installerText $literal "install.ps1 still lists a retired name literally: $literal"
+        }
+        Assert-Contains $installerText "'framework-ownership/ownership-checkout.ps1'" 'install.ps1 does not exclude the checkout-only PowerShell entry point'
+        Assert-Contains $installerText "'framework-ownership/ownership-checkout.py'" 'install.ps1 does not exclude the checkout-only Python entry point'
+        Use-IsolatedEnvironment 'ownership sync exclusion' {
+            param($root, $isolatedUserProfile)
+            $result = Invoke-Installer -Arguments @('-Agent', 'claude', '-Skill', 'assistant-workflow')
+            Assert-Equal 0 $result.ExitCode "Install failed: $($result.Output)"
+            $installedOwnership = Join-Path (Join-Path (Join-Path $isolatedUserProfile '.claude') 'tools') 'framework-ownership'
+            foreach ($name in @('ownership.ps1', 'ownership-core.ps1', 'installer-primitives.ps1', 'retired-items.json', 'content-proof.json')) {
+                Assert-True (Test-Path -LiteralPath (Join-Path $installedOwnership $name) -PathType Leaf) "Installed helper lacks $name"
+            }
+            foreach ($name in @('ownership-checkout.ps1', 'ownership-checkout.py')) {
+                Assert-False (Test-Path -LiteralPath (Join-Path $installedOwnership $name)) "Checkout-only entry point was installed: $name"
+            }
+        }
+    }
+
 }
 finally {
     if (Test-Path -LiteralPath $script:SuiteRoot) {
