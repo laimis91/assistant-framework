@@ -113,6 +113,19 @@ SEEDED_IDS = frozenset({
 # set_owned_sync_exclusions; install.ps1 $toolExclusions and source-only paths).
 TOOL_TOP_LEVEL_EXCLUDES = (".DS_Store", "memory-graph", "context-budget-report.sh", "plugins")
 TOOL_NAME_EXCLUDES = (".DS_Store", ".publish", "bin", "obj", "__pycache__")
+# Tool-relative source paths the installers never sync (install.sh
+# OWNED_SYNC_EXACT_EXCLUDES for tools; install.ps1 $toolSyncExcludedExactPaths).
+TOOL_EXACT_EXCLUDES = (
+    "evals/run-codex-framework-evals.sh",
+    "evals/finalize-workflow-kernel-review.sh",
+    "evals/lib/context-budget-evidence.sh",
+    "evals/validate-promotion-decision-schema.cjs",
+    "evals/package.json",
+    "evals/package-lock.json",
+    "evals/node_modules",
+    "framework-ownership/ownership-checkout.py",
+    "framework-ownership/ownership-checkout.ps1",
+)
 CURRENT_BLOCK_MARKERS = {
     "start": "<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_START -->",
     "end": "<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_END -->",
@@ -222,10 +235,16 @@ def read_blobs(repo, blobs):
     data = process.stdout
     position = 0
     for blob in unique:
-        newline = data.index(b"\n", position)
-        header = data[position:newline].decode("ascii").split()
+        newline = data.find(b"\n", position)
+        if newline < 0:
+            raise Refusal(f"git cat-file returned no header for {blob}")
+        header = data[position:newline].decode("ascii", "replace").split(" ")
+        if len(header) != 3 or header[0] != blob or header[1] != "blob":
+            raise Refusal(f"git cat-file did not return blob {blob}: {' '.join(header)}")
         size = int(header[2])
         start = newline + 1
+        if start + size > len(data):
+            raise Refusal(f"git cat-file returned a short body for {blob}")
         contents[blob] = data[start:start + size]
         position = start + size + 1
     return contents
@@ -558,7 +577,19 @@ def current_fingerprints(repo, agent, specs):
     items = [(spec["content_proof"], spec["source"], spec["node_type"], [agent], False) for spec in specs if "source" in spec]
     main = main_ref(repo, required=False)
     revisions = [main] if main else ["HEAD"]
-    return fingerprint_items(repo, items, revisions)
+    proofs = fingerprint_items(repo, items, revisions)
+    # A source file the installers never sync proves nothing about the home,
+    # even when a byte-identical copy sits there.
+    for spec in specs:
+        if spec.get("kind") != "current_tool_entry" or spec["content_proof"] not in proofs:
+            continue
+        name = spec["source"][len("tools/"):]
+        files = proofs[spec["content_proof"]]["files"]
+        for relative in list(files):
+            tool_relative = f"{name}/{relative}" if relative else name
+            if helper.inside_any(tool_relative, TOOL_EXACT_EXCLUDES):
+                del files[relative]
+    return proofs
 
 
 def assert_no_checkout_overlap(home, repo):

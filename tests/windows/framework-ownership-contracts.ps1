@@ -1216,6 +1216,21 @@ Invoke-Contract 'settings rewrite that cannot be encoded strictly is skipped and
     Assert-True ([System.Linq.Enumerable]::SequenceEqual([byte[]]$before, [byte[]][System.IO.File]::ReadAllBytes($settingsFile))) 'settings file changed'
 }
 
+Invoke-Contract 'settings with non-finite numbers are preserved' {
+    $h = New-TestHome
+    $settingsFile = Join-Path (Get-AgentHome $h 'claude') 'settings.json'
+    foreach ($number in @('1e9999', '-1e9999')) {
+        $text = '{"limit": ' + $number + ', "hooks": {"Stop": [{"hooks": [{"command": "$HOME/.claude/hooks/assistant/stop-review.sh"}]}]}}'
+        Write-TestBytes $settingsFile $text
+        $before = [System.IO.File]::ReadAllBytes($settingsFile)
+        $out = Invoke-DryRun $h
+        Assert-True (-not $out.Contains('hook_registration: hooks/assistant/stop-review.sh (registration')) "registration offered with $number"
+        Assert-Contains $out "number $number cannot be written back unchanged" "non-finite $number not reported"
+        $result = Invoke-Apply $h (Save-Manifest $h $out)
+        Assert-True ([System.Linq.Enumerable]::SequenceEqual([byte[]]$before, [byte[]][System.IO.File]::ReadAllBytes($settingsFile))) "settings file changed with $number"
+    }
+}
+
 Invoke-Contract 'uninstall checkout overlap compares path identity' {
     $h = New-TestHome
     $fw = Get-CheckoutClone
@@ -1382,6 +1397,70 @@ Invoke-Contract 'uninstall of a used tool directory' {
     Assert-Equal 3 $result.Code ($result.Out + $result.Err)
     Assert-True (Test-Path -LiteralPath (Join-Path $tool 'notes.md')) 'user file removed'
     Assert-Contains $result.Out 'file does not match framework content: notes.md' 'user file not reported'
+}
+
+Invoke-Contract 'placeholder variants only for skill files' {
+    $h = New-TestHome
+    $command = "`$OwnershipCheckoutNoMain = `$true; . '$($script:CheckoutEntry)'; " +
+        "`$data = `$script:OwnershipUtf8.GetBytes('state lives in {agent_state_dir}/memory' + [char]10); " +
+        "foreach (`$name in @('skills/assistant-docs/SKILL.md', 'tools/framework-ownership/README.md', 'docs/evals/notes.md', 'agents/claude/x.md')) { " +
+        "Write-Output (`$name + '=' + (Get-OwnershipBlobFingerprints -Name `$name -Data `$data -Agents @('claude'))['claude'].Count) }"
+    $result = Invoke-TestScript -TestHome $h -Command $command
+    Assert-Equal 0 $result.Code $result.Err
+    Assert-Contains $result.Out 'skills/assistant-docs/SKILL.md=2' 'skill file lost its substituted variant'
+    foreach ($name in @('tools/framework-ownership/README.md', 'docs/evals/notes.md', 'agents/claude/x.md')) {
+        Assert-Contains $result.Out "$name=1" "$name gained a substituted variant"
+    }
+}
+
+Invoke-Contract 'blob reader refuses a missing blob' {
+    $h = New-TestHome
+    $command = "`$OwnershipCheckoutNoMain = `$true; . '$($script:CheckoutEntry)'; " +
+        "try { [void](Read-OwnershipBlobs -Repository '$($script:FrameworkRoot)' -Blobs @('$('0' * 39)1')); Write-Output 'read' } catch { Write-Output ('refused: ' + `$_.Exception.Message) }"
+    $result = Invoke-TestScript -TestHome $h -Command $command
+    Assert-Equal 0 $result.Code $result.Err
+    Assert-Contains $result.Out 'refused: ' 'a missing blob was read as empty'
+    Assert-Contains $result.Out 'did not return blob' 'wrong refusal'
+}
+
+Invoke-Contract 'uninstall keeps a linked evals node_modules' {
+    $h = New-TestHome
+    [void](Invoke-TestInstall $h 'claude')
+    $evals = Join-Path (Get-AgentHome $h 'claude') 'tools/evals'
+    Assert-True ([System.IO.Directory]::Exists($evals)) 'tools/evals not installed'
+    $modules = Join-Path $evals 'node_modules'
+    if (Test-Path -LiteralPath $modules) { Remove-Item -LiteralPath $modules -Recurse -Force }
+    $elsewhere = Join-Path $h.Base 'shared-node-modules'
+    Write-TestBytes (Join-Path $elsewhere 'pkg/index.js') "user`n"
+    $linkType = if ($script:IsWindowsHost) { 'Junction' } else { 'SymbolicLink' }
+    [void](New-Item -ItemType $linkType -Path $modules -Target $elsewhere)
+    $result = Invoke-ConfirmedUninstall $h 'claude'
+    Assert-Equal 3 $result.Code ($result.Out + $result.Err)
+    Assert-Contains $result.Out 'symbolic link inside the item: node_modules' 'linked node_modules not reported'
+    Assert-True (Test-Path -LiteralPath $modules) 'linked node_modules removed'
+    Assert-Equal "user`n" (Read-TestText (Join-Path $elsewhere 'pkg/index.js')) 'link target changed'
+}
+
+Invoke-Contract 'uninstall keeps never-synced or edited tool files' {
+    $h = New-TestHome
+    [void](Invoke-TestInstall $h 'claude')
+    $tool = Join-Path (Get-AgentHome $h 'claude') 'tools/framework-ownership'
+    Assert-True ([System.IO.Directory]::Exists($tool)) 'tools/framework-ownership not installed'
+    $copied = Join-Path $tool 'ownership-checkout.ps1'
+    Write-TestBytes $copied ([System.IO.File]::ReadAllBytes((Join-Path (Get-CheckoutClone) 'tools/framework-ownership/ownership-checkout.ps1')))
+    $result = Invoke-ConfirmedUninstall $h 'claude'
+    Assert-Equal 3 $result.Code ($result.Out + $result.Err)
+    Assert-Contains $result.Out 'tools/framework-ownership: file does not match framework content: ownership-checkout.ps1' 'checkout-only copy proven'
+    Assert-True (Test-Path -LiteralPath $copied) 'checkout-only copy removed'
+    Remove-Item -LiteralPath $copied -Force
+    $readme = Join-Path $tool 'README.md'
+    $text = Read-TestText $readme
+    Assert-True ($text.Contains('{agent_state_dir}')) 'README holds no placeholder'
+    Write-TestBytes $readme ($text.Replace('{agent_state_dir}', '.claude'))
+    $result = Invoke-ConfirmedUninstall $h 'claude'
+    Assert-Equal 3 $result.Code ($result.Out + $result.Err)
+    Assert-Contains $result.Out 'tools/framework-ownership: file does not match framework content: README.md' 'edited README proven'
+    Assert-True (Test-Path -LiteralPath $readme) 'edited README removed'
 }
 
 Invoke-Contract 'uninstall removes registration and shim in one run' {

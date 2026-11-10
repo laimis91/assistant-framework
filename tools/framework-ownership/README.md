@@ -22,11 +22,11 @@ An item is removable only when all of these hold:
 
 - its name matches the inventory exactly (case and Unicode variants are ambiguous);
 - neither it nor any ancestor up to the home is a link, junction or reparse point, and no file has more than one hard link;
-- every file under it matches a fingerprint of framework content. Fingerprints are SHA-256 over the file bytes after replacing `{agent_state_dir}` in `.md`, `.yaml`, `.yml`, `.json`, `.conf` and `.toml` files and normalizing CRLF to LF in every file that has no NUL byte. Hook entrypoints also match the inert shim bytes;
-- a directory holds nothing outside its fingerprints. For uninstall, build output in current tool directories (`bin`, `obj`, `.publish`, `__pycache__`, `*.pyc`) also counts as owned;
-- a settings registration's first command token is exactly a known retired entrypoint path, and an instruction block is exactly one balanced marker pair. A settings file with a repeated JSON key, or two keys that differ only by case, is preserved unchanged.
+- every file under it matches a fingerprint of framework content. Fingerprints are SHA-256 over the file bytes after replacing `{agent_state_dir}` in `.md`, `.yaml`, `.yml`, `.json`, `.conf` and `.toml` files under `skills/` (the only files the installers rewrite) and normalizing CRLF to LF in every file that has no NUL byte. Hook entrypoints also match the inert shim bytes;
+- a directory holds nothing outside its fingerprints. For uninstall, build output in current tool directories (`bin`, `obj`, `.publish`, `__pycache__`, `*.pyc`) also counts as owned, and a source file the installers never sync (such as `ownership-checkout.py`) is not a fingerprint. A `node_modules` root that is itself a link keeps `tools/evals`;
+- a settings registration's first command token is exactly a known retired entrypoint path, and an instruction block is exactly one balanced marker pair. A settings file with a repeated JSON key, or two keys that differ only by case, is preserved unchanged, and so is one holding a number outside the float range or a `NaN`/`Infinity` token, which a rewrite could not write back.
 
-An agent home that is itself a link, or is reached through one below the user home, is refused before anything is checked. Files are hashed in chunks, so large build-output or `node_modules` trees are never held in memory.
+An agent home that is itself a link, or is reached through one below the user home, is refused before anything is checked. Files are hashed in chunks, so large build-output or `node_modules` trees are never held in memory. Deletion opens each directory below the home without following links; on a Unix platform without descriptor-relative calls it fails closed and keeps the item. A `git cat-file` reply that does not name the requested blob refuses the run instead of hashing an empty file.
 
 Anything else is kept and reported as ambiguous with its reason, or as unrelated when nothing framework-like is there. Exit status: 0 done, 1 internal error, 2 refused with nothing changed, 3 finished with items kept.
 

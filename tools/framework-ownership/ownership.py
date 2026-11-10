@@ -132,7 +132,8 @@ def fingerprints_for_blob(name, data, agents):
     base = normalize_text(data)
     identity = sha256_hex(base)
     result = {agent: {identity} for agent in agents}
-    if name.lower().endswith(SUBSTITUTED_EXTENSIONS) and PLACEHOLDER in base:
+    # The installers substitute the placeholder only in copied skill files.
+    if name.startswith("skills/") and name.lower().endswith(SUBSTITUTED_EXTENSIONS) and PLACEHOLDER in base:
         for agent in agents:
             result[agent].add(sha256_hex(base.replace(PLACEHOLDER, ("." + agent).encode("ascii"))))
     return result
@@ -212,6 +213,23 @@ def reject_duplicate_keys(pairs):
         value[key] = item
         folded.add(key.lower())
     return value
+
+
+class NonFiniteNumberError(ValueError):
+    pass
+
+
+def reject_non_finite_float(text):
+    """json parse_float that refuses numbers outside the float range (1e9999)."""
+    value = float(text)
+    if value != value or value in (float("inf"), float("-inf")):
+        raise NonFiniteNumberError(text)
+    return value
+
+
+def reject_non_standard_constant(text):
+    """json parse_constant that refuses the non-standard NaN and Infinity tokens."""
+    raise NonFiniteNumberError(text)
 
 
 def read_json_file(path, label):
@@ -749,9 +767,13 @@ class SettingsSnapshot:
             return
         try:
             self.raw, _ = read_stable_file(path)
-            value = json.loads(self.raw.decode("utf-8"), object_pairs_hook=reject_duplicate_keys)
+            value = json.loads(self.raw.decode("utf-8"), object_pairs_hook=reject_duplicate_keys,
+                               parse_float=reject_non_finite_float, parse_constant=reject_non_standard_constant)
         except DuplicateKeyError as error:
             self.problem = f"duplicate JSON key {error}; preserved unchanged"
+            return
+        except NonFiniteNumberError as error:
+            self.problem = f"number {error} cannot be written back unchanged; preserved unchanged"
             return
         except (OSError, UnicodeDecodeError, ValueError):
             self.problem = "invalid JSON; preserved unchanged"
@@ -983,6 +1005,11 @@ class Planner:
             if inside_any(relative, location_prefixes) or (spec.get("build_artifacts") and typ == "file" and sig[5] <= 1 and relative.endswith(".pyc")):
                 if typ == "other":
                     problems.append(f"special file: {relative}")
+                    content_only = False
+                elif typ == "link" and relative in location_prefixes:
+                    # A linked location root (such as node_modules) is not an
+                    # installer-made subtree; keep it and the item.
+                    problems.append(f"symbolic link inside the item: {relative}")
                     content_only = False
                 continue
             if typ == "link":
@@ -1329,8 +1356,8 @@ def remove_without_following(root, path, directory=False):
 
     Every directory below root is opened without following links, so an
     ancestor swapped for a link after the proof makes the open fail instead
-    of redirecting the deletion. Falls back to a plain call where the
-    platform lacks dir_fd support.
+    of redirecting the deletion. Where the platform lacks dir_fd support the
+    deletion fails closed instead of following a path that may have changed.
     """
     relative = os.path.relpath(path, root)
     parts = relative.split(os.sep)
@@ -1338,8 +1365,7 @@ def remove_without_following(root, path, directory=False):
         raise OSError(f"outside the agent home: {path}")
     supported = os.unlink in os.supports_dir_fd and os.rmdir in os.supports_dir_fd and os.open in os.supports_dir_fd
     if not supported:
-        (os.rmdir if directory else os.unlink)(path)
-        return
+        raise OSError(f"this platform cannot delete without following links; kept: {path}")
     descriptor = os.open(root, NOFOLLOW_DIRECTORY)
     try:
         for part in parts[:-1]:
@@ -1452,8 +1478,8 @@ def apply_registrations(planner, items, result, before_delete):
         return
     updated = remove_registrations(snapshot.value, targets)
     try:
-        payload = (json.dumps(updated, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-    except UnicodeEncodeError:
+        payload = (json.dumps(updated, indent=2, ensure_ascii=False, allow_nan=False) + "\n").encode("utf-8")
+    except (UnicodeEncodeError, ValueError):
         for item in items:
             result.skipped.append((item, f"{snapshot.relative} holds text that cannot be written back unchanged; preserved"))
         return

@@ -44,6 +44,19 @@ $script:OwnershipPrimitiveConstants = @(
 # set_owned_sync_exclusions; install.ps1 $toolExclusions and source-only paths).
 $script:OwnershipToolTopLevelExcludes = @('.DS_Store', 'memory-graph', 'context-budget-report.sh', 'plugins')
 $script:OwnershipToolNameExcludes = @('.DS_Store', '.publish', 'bin', 'obj', '__pycache__')
+# Tool-relative source paths the installers never sync (install.ps1
+# $toolSyncExcludedExactPaths; install.sh OWNED_SYNC_EXACT_EXCLUDES for tools).
+$script:OwnershipToolExactExcludes = @(
+    'evals/run-codex-framework-evals.sh',
+    'evals/finalize-workflow-kernel-review.sh',
+    'evals/lib/context-budget-evidence.sh',
+    'evals/validate-promotion-decision-schema.cjs',
+    'evals/package.json',
+    'evals/package-lock.json',
+    'evals/node_modules',
+    'framework-ownership/ownership-checkout.py',
+    'framework-ownership/ownership-checkout.ps1'
+)
 $script:OwnershipCodexCommonTools = @('change-impact', 'progress')
 $script:OwnershipCurrentBlockStart = '<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_START -->'
 $script:OwnershipCurrentBlockEnd = '<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_END -->'
@@ -115,8 +128,26 @@ function Invoke-OwnershipGit {
     $startInfo.RedirectStandardInput = $true
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
+    # Windows PowerShell (.NET Framework) wraps the child's stdin in a writer
+    # using the console input encoding and writes its preamble at start, so a
+    # UTF-8 console sends a BOM before InputBytes. Use a BOM-free encoding with
+    # the same code page while the process starts, then restore it.
+    $savedInputEncoding = $null
+    if ($PSVersionTable.PSEdition -ne 'Core') {
+        try {
+            $current = [Console]::InputEncoding
+            if ($current.GetPreamble().Length -gt 0 -and $current.CodePage -eq 65001) {
+                [Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
+                $savedInputEncoding = $current
+            }
+        }
+        catch { $savedInputEncoding = $null }
+    }
     try { $process = [System.Diagnostics.Process]::Start($startInfo) }
     catch { Stop-OwnershipRefusal "git is unavailable: $($_.Exception.Message)" }
+    finally {
+        if ($null -ne $savedInputEncoding) { try { [Console]::InputEncoding = $savedInputEncoding } catch { } }
+    }
     $buffer = New-Object System.IO.MemoryStream
     $copy = $process.StandardOutput.BaseStream.CopyToAsync($buffer)
     $errorTask = $process.StandardError.ReadToEndAsync()
@@ -190,9 +221,14 @@ function Read-OwnershipBlobs {
     $position = 0
     foreach ($blob in $unique) {
         $newline = [System.Array]::IndexOf($data, [byte]10, $position)
+        if ($newline -lt 0) { Stop-OwnershipRefusal "git cat-file returned no header for $blob" }
         $header = [System.Text.Encoding]::ASCII.GetString($data, $position, $newline - $position).Split(' ')
+        if ($header.Count -ne 3 -or $header[0] -cne $blob -or $header[1] -cne 'blob') {
+            Stop-OwnershipRefusal "git cat-file did not return blob ${blob}: $($header -join ' ')"
+        }
         $size = [int]$header[2]
         $start = $newline + 1
+        if ($start + $size -gt $data.Length) { Stop-OwnershipRefusal "git cat-file returned a short body for $blob" }
         $bytes = New-Object byte[] $size
         [System.Array]::Copy($data, $start, $bytes, 0, $size)
         $contents[$blob] = $bytes
@@ -511,7 +547,19 @@ function Get-OwnershipCurrentFingerprints {
     }
     $main = Get-OwnershipMainRef -Repository $Repository -Optional
     $revisions = if ($main) { @($main) } else { @('HEAD') }
-    return (Get-OwnershipHistoryFingerprints -Repository $Repository -Items $items -Revisions $revisions)
+    $proofs = Get-OwnershipHistoryFingerprints -Repository $Repository -Items $items -Revisions $revisions
+    # A source file the installers never sync proves nothing about the home,
+    # even when a byte-identical copy sits there.
+    foreach ($spec in $Specs) {
+        if ($spec['kind'] -ne 'current_tool_entry' -or -not $proofs.Contains($spec['content_proof'])) { continue }
+        $name = ([string]$spec['source']).Substring('tools/'.Length)
+        $files = $proofs[$spec['content_proof']]['files']
+        foreach ($relative in @($files.Keys)) {
+            $toolRelative = if ($relative) { "$name/$relative" } else { $name }
+            if (Test-OwnershipInsideAny $toolRelative $script:OwnershipToolExactExcludes) { $files.Remove($relative) }
+        }
+    }
+    return ,$proofs
 }
 
 function New-OwnershipUninstallPlanner {

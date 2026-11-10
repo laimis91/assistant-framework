@@ -224,10 +224,11 @@ function Get-OwnershipBlobFingerprints {
         $result[$agent] = $set
     }
     $lower = $Name.ToLowerInvariant()
+    # The installers substitute the placeholder only in copied skill files.
     $substituted = $false
-    foreach ($extension in $script:OwnershipSubstitutedExtensions) {
+    if ($Name.StartsWith('skills/', [System.StringComparison]::Ordinal)) { foreach ($extension in $script:OwnershipSubstitutedExtensions) {
         if ($lower.EndsWith($extension, [System.StringComparison]::Ordinal)) { $substituted = $true }
-    }
+    } }
     if ($substituted) {
         $text = $script:OwnershipLatin1.GetString($base)
         if ($text.Contains($script:OwnershipPlaceholder)) {
@@ -259,6 +260,8 @@ function Test-OwnershipJsonNumber {
     param($Value)
     return ($Value -is [System.Management.Automation.PSCustomObject] -and $null -ne $Value.PSObject.Properties['OwnershipJsonNumber'])
 }
+
+$script:OwnershipNonFiniteMarker = 'non-finite JSON number: '
 
 # Python repr() of the double parsed from Text.
 function Format-OwnershipPythonFloat {
@@ -339,7 +342,14 @@ function Read-OwnershipJsonValue {
             if ($text -eq '-0') { $text = '0' }
             return (New-OwnershipJsonNumber -Text $text)
         }
-        return (New-OwnershipJsonNumber -Text (Format-OwnershipPythonFloat -Text $text))
+        # A number outside the double range overflows on .NET Framework and
+        # becomes Infinity on .NET; neither can be written back as JSON.
+        $formatted = $null
+        try { $formatted = Format-OwnershipPythonFloat -Text $text } catch { $formatted = $null }
+        if ($null -eq $formatted -or $formatted -eq 'Infinity' -or $formatted -eq '-Infinity') {
+            throw (New-Object System.FormatException ($script:OwnershipNonFiniteMarker + $text))
+        }
+        return (New-OwnershipJsonNumber -Text $formatted)
     }
     if ($kind -eq 3) {
         if ($text -eq 'true') { return $true }
@@ -1356,7 +1366,16 @@ function Read-OwnershipSettingsSnapshot {
         $text = $script:OwnershipUtf8Strict.GetString($read.Data)
         $value = ConvertFrom-OwnershipJson -Text $text
     }
-    catch { $snapshot.Problem = 'invalid JSON; preserved unchanged'; return $snapshot }
+    catch {
+        $message = $_.Exception.Message
+        $at = $message.IndexOf($script:OwnershipNonFiniteMarker, [System.StringComparison]::Ordinal)
+        if ($at -ge 0) {
+            $number = $message.Substring($at + $script:OwnershipNonFiniteMarker.Length)
+            $snapshot.Problem = "number $number cannot be written back unchanged; preserved unchanged"
+        }
+        else { $snapshot.Problem = 'invalid JSON; preserved unchanged' }
+        return $snapshot
+    }
     try { Assert-JsonTextPropertyIdentitySafe -Text $text }
     catch { $snapshot.Problem = 'duplicate, case-colliding or oversized JSON properties; preserved unchanged'; return $snapshot }
     $hooks = Get-OwnershipValue $value 'hooks'
@@ -1604,6 +1623,10 @@ function Get-OwnershipDirectoryFinding {
         $relative = $entry.Relative
         if (Test-OwnershipInsideAny $relative $locationPrefixes) {
             if ($entry.Type -eq 'other') { [void]$problems.Add("special file: $relative"); $contentOnly = $false }
+            elseif ($entry.Type -eq 'link' -and $locationPrefixes.Contains($relative)) {
+                # A linked location root (such as node_modules) is not an installer-made subtree.
+                [void]$problems.Add("symbolic link inside the item: $relative"); $contentOnly = $false
+            }
             continue
         }
         if ((Get-OwnershipValue $Spec 'build_artifacts') -and $entry.Type -eq 'file' -and $entry.Links -le 1 -and $relative.EndsWith('.pyc', [System.StringComparison]::Ordinal)) {

@@ -22,6 +22,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 sys.dont_write_bytecode = True
 
@@ -360,6 +361,27 @@ class InstallerList(unittest.TestCase):
                 self.assertTrue(f"\n                {name}\n" in block or (("/" not in name) and f" {top}" in block), f"install.sh sync exclusions miss {name}")
         self.assertIn("framework-ownership/ownership-checkout.py", block)
         self.assertIn("framework-ownership/ownership-checkout.ps1", block)
+
+    def test_current_tool_proof_exclusions_equal_the_installer_sync_exclusions(self):
+        import re
+        with open(os.path.join(REPO, "install.sh"), encoding="utf-8") as stream:
+            unix = stream.read()
+        block = unix[unix.index("set_owned_sync_exclusions() {"):]
+        block = block[block.index("OWNED_SYNC_EXACT_EXCLUDES=(") + len("OWNED_SYNC_EXACT_EXCLUDES=("):]
+        unix_list = block[: block.index(")")].split()
+        with open(os.path.join(REPO, "install.ps1"), encoding="utf-8") as stream:
+            windows = stream.read()
+        block = windows[windows.index("$toolSyncExcludedExactPaths = @("):]
+        windows_list = re.findall(r"'([^']+)'", block[: block.index(")")])
+        with open(os.path.join(TOOL_DIR, "ownership-checkout.ps1"), encoding="utf-8") as stream:
+            helper_ps = stream.read()
+        block = helper_ps[helper_ps.index("$script:OwnershipToolExactExcludes = @("):]
+        helper_ps_list = re.findall(r"'([^']+)'", block[: block.index(")")])
+        expected = sorted(checkout.TOOL_EXACT_EXCLUDES)
+        self.assertEqual(sorted(unix_list), expected)
+        # install.ps1 lists the top-level context-budget-report.sh here; the helpers skip it as a top-level name.
+        self.assertEqual(sorted(name for name in windows_list if "/" in name), expected)
+        self.assertEqual(sorted(helper_ps_list), expected)
 
 
 @unittest.skipIf(git("rev-parse", "--is-shallow-repository").decode().strip() == "true", "needs full history")
@@ -1186,6 +1208,45 @@ class CleanupHelper(unittest.TestCase):
         with open(settings, "rb") as stream:
             self.assertEqual(stream.read(), raw)
 
+    def test_settings_with_non_finite_numbers_are_preserved(self):
+        settings = os.path.join(self.claude(), "settings.json")
+        for number in (b"1e9999", b"-1e9999", b"NaN", b"Infinity"):
+            raw = (b'{"limit": ' + number + b', '
+                   b'"hooks": {"SessionStart": [{"hooks": [{"command": "$HOME/.claude/hooks/assistant/session-start.sh"}]}]}}\n')
+            write(settings, raw)
+            out = self.dry_run()
+            self.assertNotIn("hook_registration: hooks/assistant/session-start.sh", out, number)
+            self.assertIn("cannot be written back unchanged", out, number)
+            path, digest = self.manifest_file(out)
+            self.apply(path, digest)
+            with open(settings, "rb") as stream:
+                self.assertEqual(stream.read(), raw, number)
+
+    def test_deletion_fails_closed_without_dir_fd_support(self):
+        root = os.path.join(self.h.base, "root")
+        target = os.path.join(root, "skills", "x", "SKILL.md")
+        write(target, b"framework\n")
+        with mock.patch.object(os, "supports_dir_fd", set()):
+            with self.assertRaises(OSError):
+                ownership.remove_without_following(root, target)
+            with self.assertRaises(OSError):
+                ownership.remove_without_following(root, os.path.dirname(target), directory=True)
+        self.assertTrue(os.path.isfile(target))
+
+    def test_placeholder_variants_only_for_skill_files(self):
+        data = b"state lives in {agent_state_dir}/memory\n"
+        identity = ownership.sha256_hex(data)
+        substituted = ownership.sha256_hex(data.replace(b"{agent_state_dir}", b".claude"))
+        self.assertEqual(ownership.fingerprints_for_blob("skills/assistant-docs/SKILL.md", data, ["claude"]),
+                         {"claude": {identity, substituted}})
+        for name in ("tools/framework-ownership/README.md", "docs/evals/notes.md", "agents/claude/x.md"):
+            self.assertEqual(ownership.fingerprints_for_blob(name, data, ["claude"]), {"claude": {identity}}, name)
+
+    def test_blob_reader_refuses_a_missing_blob(self):
+        with self.assertRaises(checkout.Refusal) as caught:
+            checkout.read_blobs(REPO, ["0" * 39 + "1"])
+        self.assertIn("did not return blob", str(caught.exception))
+
     def test_walked_files_are_hashed_without_keeping_their_bytes(self):
         root = os.path.join(self.h.base, "walk")
         chunk = 1 << 20
@@ -1464,6 +1525,44 @@ class Uninstall(unittest.TestCase):
         self.assertEqual(code, 3)
         self.assertTrue(os.path.exists(os.path.join(tool, "notes.md")))
         self.assertIn("file does not match framework content: notes.md", out)
+
+    def test_uninstall_keeps_a_linked_evals_node_modules(self):
+        self.install("claude")
+        evals = os.path.join(self.h.agent_home("claude"), "tools", "evals")
+        self.assertTrue(os.path.isdir(evals))
+        modules = os.path.join(evals, "node_modules")
+        if os.path.lexists(modules):
+            shutil.rmtree(modules)
+        elsewhere = os.path.join(self.h.base, "shared-node-modules")
+        write(os.path.join(elsewhere, "pkg", "index.js"), b"user\n")
+        os.symlink(elsewhere, modules)
+        code, out, _ = self.confirmed("claude")
+        self.assertEqual(code, 3, out)
+        self.assertIn("symbolic link inside the item: node_modules", out)
+        self.assertTrue(os.path.islink(modules))
+        self.assertTrue(os.path.isfile(os.path.join(elsewhere, "pkg", "index.js")))
+
+    def test_uninstall_keeps_never_synced_or_edited_tool_files(self):
+        self.install("claude")
+        tool = os.path.join(self.h.agent_home("claude"), "tools", "framework-ownership")
+        self.assertTrue(os.path.isdir(tool))
+        copied = os.path.join(tool, "ownership-checkout.py")
+        with open(os.path.join(self.fw, "tools", "framework-ownership", "ownership-checkout.py"), "rb") as stream:
+            write(copied, stream.read())
+        code, out, _ = self.confirmed("claude")
+        self.assertEqual(code, 3, out)
+        self.assertIn("tools/framework-ownership: file does not match framework content: ownership-checkout.py", out)
+        self.assertTrue(os.path.isfile(copied))
+        os.unlink(copied)
+        readme = os.path.join(tool, "README.md")
+        with open(readme, "rb") as stream:
+            text = stream.read()
+        self.assertIn(b"{agent_state_dir}", text)
+        write(readme, text.replace(b"{agent_state_dir}", b".claude"))
+        code, out, _ = self.confirmed("claude")
+        self.assertEqual(code, 3, out)
+        self.assertIn("tools/framework-ownership: file does not match framework content: README.md", out)
+        self.assertTrue(os.path.isfile(readme))
 
     def test_uninstall_removes_registration_and_shim_in_one_run(self):
         claude = self.h.agent_home("claude")
