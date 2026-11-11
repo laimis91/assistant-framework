@@ -499,12 +499,17 @@ def run_install(agent, dry_run, out, after_plan=None):
         if kept:
             out.write(f"  Kept items stay in place; {helper.CLEANUP_POINTER}.\n")
         return helper.EXIT_KEPT if kept else helper.EXIT_OK
-    result = helper.apply_items(planner, manifest["items"])
+    result = helper.apply_items(planner, manifest["items"], kinds=helper.INSTALL_MODE_KINDS)
     for item in result.removed:
         out.write(f"  removed: {item['path']}\n")
     for item, reason in result.skipped:
         out.write(f"  skipped: {item['path']}: {reason}\n")
-    total_kept = len(kept) + len(result.skipped)
+    # An item already printed as kept that became removable is counted once.
+    kept_ids = {finding.id for finding in kept}
+    late = [finding for finding in result.unlisted if finding.id not in kept_ids]
+    for finding in late:
+        out.write(f"  kept (not in the printed plan): {helper.display_path(planner, finding)}\n")
+    total_kept = len(kept) + len(result.skipped) + len(late)
     out.write(f"  Retired items: {len(result.removed)} removed, {total_kept} kept.\n")
     if total_kept:
         out.write(f"  Kept items stay in place; {helper.CLEANUP_POINTER}.\n")

@@ -1118,6 +1118,24 @@ Invoke-Contract 'installer mode removes proven retired skills and keeps others' 
     Assert-True (Test-Path -LiteralPath (Join-Path (Get-AgentHome $h 'claude') 'skills/assistant-memory/SKILL.md')) 'other product removed'
 }
 
+Invoke-Contract 'installer mode reports a retired item that appears after the plan as kept' {
+    $h = New-TestHome
+    $staged = Join-Path $h.Base 'staged-skills'
+    Add-Reflexion $h -Root $staged
+    $target = Join-Path (Get-AgentHome $h 'claude') 'skills'
+    [void][System.IO.Directory]::CreateDirectory($target)
+    $command = "`$OwnershipCheckoutNoMain = `$true; . '$($script:CheckoutEntry)'; " +
+        "`$code = Invoke-OwnershipInstall -Arguments @('-Agent', 'claude') -AfterPlan { param(`$manifest) [IO.Directory]::Move('$staged/assistant-reflexion', '$target/assistant-reflexion') }; " +
+        "Write-Output ('exit ' + `$code)"
+    $result = Invoke-TestScript -TestHome $h -Command $command
+    Assert-Equal 0 $result.Code $result.Err
+    Assert-Contains $result.Out 'exit 3' ('wrong installer-mode status: ' + $result.Out)
+    Assert-NotContains $result.Out 'remove: skills/assistant-reflexion' 'the late item was planned'
+    Assert-Contains $result.Out '  kept (not in the printed plan): skills/assistant-reflexion' 'the late item was not reported'
+    Assert-Contains $result.Out '  Retired items: 0 removed, 1 kept.' 'wrong summary'
+    Assert-True (Test-Path -LiteralPath (Join-Path $target 'assistant-reflexion/SKILL.md') -PathType Leaf) 'the late item was removed'
+}
+
 # Review fixes: path identity, deletes, strict rewrites, inventory ids.
 
 function Get-CaseVariant {
@@ -1238,16 +1256,28 @@ Invoke-Contract 'settings rewrite that cannot be encoded strictly is skipped and
     Assert-True ([System.Linq.Enumerable]::SequenceEqual([byte[]]$before, [byte[]][System.IO.File]::ReadAllBytes($settingsFile))) 'settings file changed'
 }
 
-Invoke-Contract 'settings with non-finite numbers are preserved' {
+Invoke-Contract 'settings with exact decimals are still rewritten' {
     $h = New-TestHome
     $settingsFile = Join-Path (Get-AgentHome $h 'claude') 'settings.json'
-    foreach ($number in @('1e9999', '-1e9999')) {
+    Write-TestBytes $settingsFile '{"ratio": 0.1, "scale": 1.10, "small": 2.5e-3, "hooks": {"Stop": [{"hooks": [{"command": "$HOME/.claude/hooks/assistant/stop-review.sh"}]}]}}'
+    $out = Invoke-DryRun $h
+    Assert-Contains $out 'hook_registration: hooks/assistant/stop-review.sh (registration' 'registration not offered with exact decimals'
+    $result = Invoke-Apply $h (Save-Manifest $h $out)
+    Assert-Equal 0 $result.Code ($result.Out + $result.Err)
+    $text = Read-TestText $settingsFile
+    foreach ($expected in @('"ratio": 0.1', '"scale": 1.1', '"small": 0.0025')) { Assert-Contains $text $expected "rewrite changed a value: $expected" }
+}
+
+Invoke-Contract 'settings with numbers that cannot round-trip are preserved' {
+    $h = New-TestHome
+    $settingsFile = Join-Path (Get-AgentHome $h 'claude') 'settings.json'
+    foreach ($number in @('1e9999', '-1e9999', '1.234567890123456789', '1e-400', '123456789012345678.0')) {
         $text = '{"limit": ' + $number + ', "hooks": {"Stop": [{"hooks": [{"command": "$HOME/.claude/hooks/assistant/stop-review.sh"}]}]}}'
         Write-TestBytes $settingsFile $text
         $before = [System.IO.File]::ReadAllBytes($settingsFile)
         $out = Invoke-DryRun $h
         Assert-True (-not $out.Contains('hook_registration: hooks/assistant/stop-review.sh (registration')) "registration offered with $number"
-        Assert-Contains $out "number $number cannot be written back unchanged" "non-finite $number not reported"
+        Assert-Contains $out "number $number cannot be written back unchanged" "unrepresentable $number not reported"
         $result = Invoke-Apply $h (Save-Manifest $h $out)
         Assert-True ([System.Linq.Enumerable]::SequenceEqual([byte[]]$before, [byte[]][System.IO.File]::ReadAllBytes($settingsFile))) "settings file changed with $number"
     }

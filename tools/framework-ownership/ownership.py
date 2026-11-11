@@ -214,21 +214,38 @@ def reject_duplicate_keys(pairs):
     return value
 
 
-class NonFiniteNumberError(ValueError):
+class UnrepresentableNumberError(ValueError):
     pass
 
 
-def reject_non_finite_float(text):
-    """json parse_float that refuses numbers outside the float range (1e9999)."""
+def decimal_value_key(text):
+    """(sign, significant digits, exponent) of a JSON number's exact decimal value."""
+    sign = text.startswith("-")
+    body = text.lstrip("-")
+    mantissa, _, exponent = body.lower().partition("e")
+    whole, _, fraction = mantissa.partition(".")
+    digits = (whole + fraction).lstrip("0")
+    if not digits:
+        return (sign, "0", 0)
+    stripped = digits.rstrip("0")
+    return (sign, stripped, int(exponent or "0") - len(fraction) + len(digits) - len(stripped))
+
+
+def reject_unrepresentable_float(text):
+    """json parse_float that refuses a number the rewrite would not write back
+    with the same value: outside the float range (1e9999), or with more
+    precision than a float holds (1.234567890123456789)."""
     value = float(text)
     if value != value or value in (float("inf"), float("-inf")):
-        raise NonFiniteNumberError(text)
+        raise UnrepresentableNumberError(text)
+    if decimal_value_key(repr(value)) != decimal_value_key(text):
+        raise UnrepresentableNumberError(text)
     return value
 
 
 def reject_non_standard_constant(text):
     """json parse_constant that refuses the non-standard NaN and Infinity tokens."""
-    raise NonFiniteNumberError(text)
+    raise UnrepresentableNumberError(text)
 
 
 def read_json_file(path, label):
@@ -767,11 +784,11 @@ class SettingsSnapshot:
         try:
             self.raw, _ = read_stable_file(path)
             value = json.loads(self.raw.decode("utf-8"), object_pairs_hook=reject_duplicate_keys,
-                               parse_float=reject_non_finite_float, parse_constant=reject_non_standard_constant)
+                               parse_float=reject_unrepresentable_float, parse_constant=reject_non_standard_constant)
         except DuplicateKeyError as error:
             self.problem = f"duplicate JSON key {error}; preserved unchanged"
             return
-        except NonFiniteNumberError as error:
+        except UnrepresentableNumberError as error:
             self.problem = f"number {error} cannot be written back unchanged; preserved unchanged"
             return
         except RecursionError:
@@ -1474,11 +1491,13 @@ class ApplyResult:
         return EXIT_KEPT if self.skipped else EXIT_OK
 
 
-def apply_items(planner, items, before_delete=None):
-    """Remove the listed items with per-item re-proof. Returns an ApplyResult."""
+def apply_items(planner, items, before_delete=None, kinds=None):
+    """Remove the listed items with per-item re-proof. Returns an ApplyResult.
+    Removable items of the planned kinds that the manifest does not list are
+    left in place and reported as unlisted."""
     result = ApplyResult()
     listed_ids = {item["id"] for item in items}
-    start_plan = planner.plan()
+    start_plan = planner.plan(kinds=kinds)
     for finding in start_plan:
         if finding.status == "removable" and finding.id not in listed_ids:
             result.unlisted.append(finding)

@@ -2955,6 +2955,27 @@ worker_stage_protocol:
         }
     }
 
+    Invoke-Contract 'install from a checkout copy without .git reports the refusal, keeps retired skills and completes' {
+        Use-IsolatedEnvironment 'retired skill refusal without git' {
+            param($root, $isolatedUserProfile)
+            $archive = Join-Path $root 'checkout.zip'
+            $copy = Join-Path $root 'checkout copy'
+            & git -C $script:FrameworkRoot archive --format=zip -o $archive HEAD
+            Assert-Equal 0 $LASTEXITCODE 'git archive of the checkout failed'
+            Expand-Archive -LiteralPath $archive -DestinationPath $copy
+            Assert-False (Test-Path -LiteralPath (Join-Path $copy '.git')) 'checkout copy still has .git'
+            $retired = Join-Path (Join-Path (Join-Path $isolatedUserProfile '.gemini') 'skills') 'assistant-reflexion'
+            [void][System.IO.Directory]::CreateDirectory($retired)
+            $userBytes = [byte[]](109, 105, 110, 101, 10)
+            [System.IO.File]::WriteAllBytes((Join-Path $retired 'SKILL.md'), $userBytes)
+            $result = Invoke-PowerShellFile -LiteralPath (Join-Path $copy 'install.ps1') -Arguments @('-Agent', 'gemini', '-Skill', 'assistant-workflow')
+            Assert-Equal 0 $result.ExitCode "No-.git install failed: $($result.Output)"
+            Assert-Contains $result.Output 'ownership helper refused: not inside a Git checkout' 'Install did not report the refusal reason'
+            Assert-Contains $result.Output '; kept' 'Install did not report that retired items were kept'
+            Assert-Equal $userBytes ([System.IO.File]::ReadAllBytes((Join-Path $retired 'SKILL.md'))) 'Install changed a retired skill after a refusal'
+        }
+    }
+
     Invoke-Contract 'install without the ownership helpers reports the inventory unavailable and removes no retired item' {
         $fixtureFrameworkRoot = Join-Path $script:SuiteRoot ('inventory-unavailable-' + [Guid]::NewGuid().ToString('N'))
         $fixtureName = 'assistant-inventory-fixture'

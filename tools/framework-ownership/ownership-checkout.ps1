@@ -392,7 +392,7 @@ function Invoke-OwnershipBuildPrimitives {
 # ── Installer mode ──────────────────────────────────────────────────────────
 
 function Invoke-OwnershipInstall {
-    param([string[]]$Arguments)
+    param([string[]]$Arguments, [scriptblock]$AfterPlan = $null)
     $values = ConvertFrom-OwnershipArguments -Arguments $Arguments -Spec @{ '-Agent' = $true; '-DryRun' = $false }
     $agent = Get-OwnershipRequiredAgent $values
     Assert-OwnershipLocation
@@ -414,17 +414,22 @@ function Invoke-OwnershipInstall {
     }
     [void]$builder.Append("  Retired-item plan digest: $($manifest['manifest_digest'])`n")
     Write-OwnershipOut $builder.ToString()
+    if ($null -ne $AfterPlan) { & $AfterPlan $manifest }
     if ($dryRun) {
         Write-OwnershipOut "  [dry-run] Retired items: $($removable.Count) to remove, $($kept.Count) kept.`n"
         if ($kept.Count -gt 0) { Write-OwnershipOut "  Kept items stay in place; $($script:OwnershipCleanupPointer).`n" }
         if ($kept.Count -gt 0) { return $script:OwnershipExitKept }
         return $script:OwnershipExitOk
     }
-    $result = Invoke-OwnershipApply -Planner $planner -Items $manifest['items']
+    $result = Invoke-OwnershipApply -Planner $planner -Items $manifest['items'] -Kinds $script:OwnershipInstallModeKinds
     $builder = New-Object System.Text.StringBuilder
     foreach ($item in $result.Removed) { [void]$builder.Append("  removed: $($item['path'])`n") }
     foreach ($pair in $result.Skipped) { [void]$builder.Append("  skipped: $($pair[0]['path']): $($pair[1])`n") }
-    $totalKept = $kept.Count + $result.Skipped.Count
+    # An item already printed as kept that became removable is counted once.
+    $keptIds = @($kept | ForEach-Object { $_.Id })
+    $late = @($result.Unlisted | Where-Object { -not (Test-OwnershipContainsOrdinal $keptIds $_.Id) })
+    foreach ($finding in $late) { [void]$builder.Append("  kept (not in the printed plan): $(Get-OwnershipDisplayPath $finding)`n") }
+    $totalKept = $kept.Count + $result.Skipped.Count + $late.Count
     [void]$builder.Append("  Retired items: $($result.Removed.Count) removed, $totalKept kept.`n")
     if ($totalKept -gt 0) { [void]$builder.Append("  Kept items stay in place; $($script:OwnershipCleanupPointer).`n") }
     Write-OwnershipOut $builder.ToString()

@@ -1208,9 +1208,9 @@ class CleanupHelper(unittest.TestCase):
         with open(settings, "rb") as stream:
             self.assertEqual(stream.read(), raw)
 
-    def test_settings_with_non_finite_numbers_are_preserved(self):
+    def test_settings_with_numbers_that_cannot_round_trip_are_preserved(self):
         settings = os.path.join(self.claude(), "settings.json")
-        for number in (b"1e9999", b"-1e9999", b"NaN", b"Infinity"):
+        for number in (b"1e9999", b"-1e9999", b"NaN", b"Infinity", b"1.234567890123456789", b"1e-400", b"123456789012345678.0"):
             raw = (b'{"limit": ' + number + b', '
                    b'"hooks": {"SessionStart": [{"hooks": [{"command": "$HOME/.claude/hooks/assistant/session-start.sh"}]}]}}\n')
             write(settings, raw)
@@ -1221,6 +1221,29 @@ class CleanupHelper(unittest.TestCase):
             self.apply(path, digest)
             with open(settings, "rb") as stream:
                 self.assertEqual(stream.read(), raw, number)
+
+    def test_settings_with_exact_decimals_are_still_rewritten(self):
+        settings = os.path.join(self.claude(), "settings.json")
+        write(settings, b'{"ratio": 0.1, "scale": 1.10, "small": 2.5e-3, '
+                        b'"hooks": {"SessionStart": [{"hooks": [{"command": "$HOME/.claude/hooks/assistant/session-start.sh"}]}]}}\n')
+        out = self.dry_run()
+        self.assertIn("hook_registration: hooks/assistant/session-start.sh", out)
+        path, digest = self.manifest_file(out)
+        code, applied, err = self.apply(path, digest)
+        self.assertEqual(code, 0, applied + err)
+        self.assertEqual({k: v for k, v in read_json(settings).items() if k != "hooks"}, {"ratio": 0.1, "scale": 1.1, "small": 0.0025})
+
+    def test_installer_mode_reports_a_retired_item_that_appears_after_the_plan_as_kept(self):
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, self.h.env(), clear=True):
+            code = checkout.run_install("claude", False, out, after_plan=lambda manifest: self.seed_reflexion())
+        text = out.getvalue()
+        self.assertEqual(code, 3, text)
+        self.assertNotIn("remove: skills/assistant-reflexion", text)
+        self.assertIn("  kept (not in the printed plan): skills/assistant-reflexion\n", text)
+        self.assertIn("  Retired items: 0 removed, 1 kept.\n", text)
+        self.assertIn("Kept items stay in place;", text)
+        self.assertTrue(os.path.isfile(os.path.join(self.claude(), "skills", "assistant-reflexion", "SKILL.md")))
 
     def test_settings_nested_beyond_the_parser_are_preserved(self):
         settings = os.path.join(self.claude(), "settings.json")

@@ -261,7 +261,22 @@ function Test-OwnershipJsonNumber {
     return ($Value -is [System.Management.Automation.PSCustomObject] -and $null -ne $Value.PSObject.Properties['OwnershipJsonNumber'])
 }
 
-$script:OwnershipNonFiniteMarker = 'non-finite JSON number: '
+$script:OwnershipUnrepresentableMarker = 'unrepresentable JSON number: '
+
+# Sign, significant digits and exponent of a JSON number's exact decimal value.
+function Get-OwnershipDecimalValueKey {
+    param([string]$Text)
+    $negative = $Text.StartsWith('-')
+    $body = $Text.TrimStart('-').ToLowerInvariant()
+    $parts = $body.Split('e')
+    $mantissa = $parts[0].Split('.')
+    $fraction = if ($mantissa.Count -gt 1) { $mantissa[1] } else { '' }
+    $digits = ($mantissa[0] + $fraction).TrimStart('0')
+    if ($digits.Length -eq 0) { return "$negative|0|0" }
+    $stripped = $digits.TrimEnd('0')
+    $exponent = if ($parts.Count -gt 1) { [long]::Parse($parts[1], [System.Globalization.NumberStyles]::AllowLeadingSign, $script:OwnershipInvariant) } else { 0 }
+    return "$negative|$stripped|$($exponent - $fraction.Length + $digits.Length - $stripped.Length)"
+}
 
 # Python repr() of the double parsed from Text.
 function Format-OwnershipPythonFloat {
@@ -343,11 +358,18 @@ function Read-OwnershipJsonValue {
             return (New-OwnershipJsonNumber -Text $text)
         }
         # A number outside the double range overflows on .NET Framework and
-        # becomes Infinity on .NET; neither can be written back as JSON.
+        # becomes Infinity on .NET; neither can be written back as JSON. A
+        # number with more precision than a double holds would be written
+        # back with a different value.
         $formatted = $null
-        try { $formatted = Format-OwnershipPythonFloat -Text $text } catch { $formatted = $null }
-        if ($null -eq $formatted -or $formatted -eq 'Infinity' -or $formatted -eq '-Infinity') {
-            throw (New-Object System.FormatException ($script:OwnershipNonFiniteMarker + $text))
+        $sameValue = $false
+        try {
+            $formatted = Format-OwnershipPythonFloat -Text $text
+            $sameValue = (Get-OwnershipDecimalValueKey -Text $formatted) -ceq (Get-OwnershipDecimalValueKey -Text $text)
+        }
+        catch { $formatted = $null }
+        if ($null -eq $formatted -or $formatted -eq 'Infinity' -or $formatted -eq '-Infinity' -or -not $sameValue) {
+            throw (New-Object System.FormatException ($script:OwnershipUnrepresentableMarker + $text))
         }
         return (New-OwnershipJsonNumber -Text $formatted)
     }
@@ -1368,9 +1390,9 @@ function Read-OwnershipSettingsSnapshot {
     }
     catch {
         $message = $_.Exception.Message
-        $at = $message.IndexOf($script:OwnershipNonFiniteMarker, [System.StringComparison]::Ordinal)
+        $at = $message.IndexOf($script:OwnershipUnrepresentableMarker, [System.StringComparison]::Ordinal)
         if ($at -ge 0) {
-            $number = $message.Substring($at + $script:OwnershipNonFiniteMarker.Length)
+            $number = $message.Substring($at + $script:OwnershipUnrepresentableMarker.Length)
             $snapshot.Problem = "number $number cannot be written back unchanged; preserved unchanged"
         }
         else { $snapshot.Problem = 'invalid JSON; preserved unchanged' }
@@ -2029,11 +2051,11 @@ function Get-OwnershipApplyExitCode {
 
 # Remove the listed items with per-item re-proof.
 function Invoke-OwnershipApply {
-    param($Planner, $Items, [scriptblock]$BeforeDelete = $null)
+    param($Planner, $Items, [scriptblock]$BeforeDelete = $null, [string[]]$Kinds = $null)
     $result = New-OwnershipApplyResult
     $listed = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::Ordinal)
     foreach ($item in $Items) { [void]$listed.Add($item['id']) }
-    foreach ($finding in (Invoke-OwnershipPlan -Planner $Planner)) {
+    foreach ($finding in (Invoke-OwnershipPlan -Planner $Planner -Kinds $Kinds)) {
         if ($finding.Status -eq 'removable' -and -not $listed.Contains($finding.Id)) { [void]$result.Unlisted.Add($finding) }
     }
     $registrationItems = @($Items | Where-Object { $_['kind'] -eq 'hook_registration' })
