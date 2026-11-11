@@ -1735,4 +1735,308 @@ else
     fail "direct agent/rule cp or hook shim redirect remains, or the managed-file preflight does not run before skill installation: ${link_write_static:-none} (preflight line ${link_write_preflight_line:-none}, skills line ${link_write_first_skill_write:-none})"
 fi
 
+# ── S11 retired-item installer mode ───────────────────────────────────────────
+# Every case installs into a disposable HOME (and CODEX_HOME); cases that alter
+# the framework tree use a temporary copy of the checkout, never the checkout.
+
+retired_seed_skill() {
+    # Write the last released assistant-<name> skill as an install would have.
+    local name="$1" agent="$2" target="$3"
+    (cd "$FRAMEWORK_DIR" && python3 -B - "$name" "$agent" "$target" <<'SEED'
+import os, subprocess, sys
+name, agent, target = sys.argv[1:]
+rev = "fdff2dc7cf5719e3c231e5c17f34c9207239c343^"
+source = f"skills/assistant-{name}"
+files = subprocess.run(["git", "ls-tree", "-r", "--name-only", rev, source], check=True, capture_output=True, text=True).stdout.split()
+for path in files:
+    data = subprocess.run(["git", "show", f"{rev}:{path}"], check=True, capture_output=True).stdout
+    if os.path.splitext(path)[1] in (".md", ".yaml", ".yml", ".json", ".conf", ".toml"):
+        data = data.replace(b"{agent_state_dir}", ("." + agent).encode())
+    out = os.path.join(target, os.path.relpath(path, source))
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "wb") as handle:
+        handle.write(data)
+SEED
+    )
+}
+
+retired_checkout_copy() {
+    # Copy the tracked and untracked-unignored tree without .git.
+    local target="$1"
+    mkdir -p "$target"
+    (cd "$FRAMEWORK_DIR" && git ls-files -co --exclude-standard -z | rsync -a --from0 --files-from=- ./ "$target/")
+}
+
+retired_path_without_python() {
+    local target="$1" directory file name
+    mkdir -p "$target"
+    for directory in /bin /usr/bin /usr/sbin /sbin /opt/homebrew/bin /usr/local/bin; do
+        [[ -d "$directory" ]] || continue
+        for file in "$directory"/*; do
+            name="$(basename "$file")"
+            case "$name" in python*) continue ;; esac
+            [[ -e "$target/$name" ]] || ln -s "$file" "$target/$name" 2>/dev/null || true
+        done
+    done
+}
+
+retired_tree_listing() {
+    # Portable listing (path, mode, size, mtime) without BSD or GNU stat flags.
+    python3 -B - "$1" <<'LISTING'
+import os, sys
+root = sys.argv[1]
+for directory, names, files in sorted(os.walk(root)):
+    for name in sorted(names + files):
+        path = os.path.join(directory, name)
+        info = os.lstat(path)
+        print(os.path.relpath(path, root), oct(info.st_mode), info.st_size, info.st_mtime_ns)
+LISTING
+}
+
+test_start "install removes byte-identical retired skills and keeps modified, user, other-product and linked items"
+retired_failures=()
+retired_home="$(mktemp -d)"
+p0p4_register_cleanup "$retired_home"
+retired_skills="$retired_home/.claude/skills"
+retired_seed_skill reflexion claude "$retired_skills/assistant-reflexion"
+retired_seed_skill memory claude "$retired_skills/assistant-memory"
+printf '\nlocal edit\n' >>"$retired_skills/assistant-memory/SKILL.md"
+mkdir -p "$retired_home/.claude/tools/memory-graph"
+printf 'graph\n' >"$retired_home/.claude/tools/memory-graph/data.json"
+printf '<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->\nold\n<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->\n' >"$retired_home/.claude/CLAUDE.md"
+if HOME="$retired_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-clarify --no-hooks </dev/null >"$retired_home/install.out" 2>"$retired_home/install.err"; then
+    [[ ! -e "$retired_skills/assistant-reflexion" ]] || retired_failures+=("byte-identical assistant-reflexion was kept")
+    [[ -f "$retired_skills/assistant-memory/SKILL.md" ]] || retired_failures+=("modified assistant-memory was removed")
+    [[ -f "$retired_home/.claude/tools/memory-graph/data.json" ]] || retired_failures+=("memory-graph data was removed")
+    grep -Fq 'ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START' "$retired_home/.claude/CLAUDE.md" || retired_failures+=("retired memory protocol block was removed by install")
+    grep -Fq 'Retired skills and agents for claude' "$retired_home/install.out" || retired_failures+=("install printed no retired-item plan")
+    grep -Eq 'Retired-item plan digest: [0-9a-f]{64}' "$retired_home/install.out" || retired_failures+=("install printed no plan digest")
+    [[ -z "$(find "$retired_home" -name 'ownership-checkout.*' -print -quit)" ]] || retired_failures+=("checkout-only entry point was installed")
+else
+    retired_failures+=("install failed: $(tail -n 2 "$retired_home/install.err")")
+fi
+# Other product: a same-named skill that is not framework content is kept as unrelated.
+retired_other_home="$(mktemp -d)"
+p0p4_register_cleanup "$retired_other_home"
+mkdir -p "$retired_other_home/.claude/skills/assistant-memory"
+printf -- '---\nname: assistant-memory\ndescription: another product\n---\n' >"$retired_other_home/.claude/skills/assistant-memory/SKILL.md"
+if HOME="$retired_other_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-clarify --no-hooks </dev/null >"$retired_other_home/install.out" 2>"$retired_other_home/install.err"; then
+    [[ -f "$retired_other_home/.claude/skills/assistant-memory/SKILL.md" ]] || retired_failures+=("other-product assistant-memory was removed")
+    grep -Fq 'skills/assistant-memory' "$retired_other_home/install.out" || retired_failures+=("other-product assistant-memory was not reported")
+else
+    retired_failures+=("other-product install failed: $(tail -n 2 "$retired_other_home/install.err")")
+fi
+# Linked item: a symlinked retired skill is always kept.
+retired_link_home="$(mktemp -d)"
+p0p4_register_cleanup "$retired_link_home"
+mkdir -p "$retired_link_home/.claude/skills" "$retired_link_home/target"
+retired_seed_skill reflexion claude "$retired_link_home/target/assistant-reflexion"
+ln -s "$retired_link_home/target/assistant-reflexion" "$retired_link_home/.claude/skills/assistant-reflexion"
+if HOME="$retired_link_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-clarify --no-hooks </dev/null >"$retired_link_home/install.out" 2>"$retired_link_home/install.err"; then
+    [[ -L "$retired_link_home/.claude/skills/assistant-reflexion" && -f "$retired_link_home/target/assistant-reflexion/SKILL.md" ]] \
+        || retired_failures+=("linked retired skill or its target was removed")
+else
+    retired_failures+=("linked install failed: $(tail -n 2 "$retired_link_home/install.err")")
+fi
+if [[ "${#retired_failures[@]}" == 0 ]]; then pass; else fail "${retired_failures[*]}"; fi
+
+test_start "Codex install removes a byte-identical retired skill under CODEX_HOME"
+retired_codex_home="$(mktemp -d)"
+p0p4_register_cleanup "$retired_codex_home"
+retired_seed_skill reflexion codex "$retired_codex_home/active/skills/assistant-reflexion"
+mkdir -p "$retired_codex_home/.codex/skills"
+retired_seed_skill reflexion codex "$retired_codex_home/.codex/skills/assistant-reflexion"
+if HOME="$retired_codex_home" CODEX_HOME="$retired_codex_home/active" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-clarify --no-hooks </dev/null >"$retired_codex_home/install.out" 2>"$retired_codex_home/install.err" \
+    && [[ ! -e "$retired_codex_home/active/skills/assistant-reflexion" ]] \
+    && [[ -f "$retired_codex_home/.codex/skills/assistant-reflexion/SKILL.md" ]]; then
+    pass
+else
+    fail "CODEX_HOME retired skill was not removed, or ~/.codex was touched: $(tail -n 2 "$retired_codex_home/install.err")"
+fi
+
+test_start "install dry-run prints the same plan digest as the real run and changes nothing"
+retired_dry_home="$(mktemp -d)"
+p0p4_register_cleanup "$retired_dry_home"
+retired_seed_skill reflexion claude "$retired_dry_home/.claude/skills/assistant-reflexion"
+retired_dry_before="$(retired_tree_listing "$retired_dry_home")"
+if HOME="$retired_dry_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-clarify --no-hooks --dry-run </dev/null >"$retired_dry_home/../$(basename "$retired_dry_home").dry" 2>&1; then
+    retired_dry_out="$retired_dry_home/../$(basename "$retired_dry_home").dry"
+    p0p4_register_cleanup "$retired_dry_out"
+    retired_dry_after="$(retired_tree_listing "$retired_dry_home")"
+    retired_dry_digest="$(sed -n 's/.*Retired-item plan digest: \([0-9a-f]\{64\}\).*/\1/p' "$retired_dry_out")"
+    HOME="$retired_dry_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-clarify --no-hooks </dev/null >"$retired_dry_out.real" 2>&1 || true
+    p0p4_register_cleanup "$retired_dry_out.real"
+    retired_real_digest="$(sed -n 's/.*Retired-item plan digest: \([0-9a-f]\{64\}\).*/\1/p' "$retired_dry_out.real")"
+    if [[ "$retired_dry_before" == "$retired_dry_after" && -n "$retired_dry_digest" && "$retired_dry_digest" == "$retired_real_digest" \
+        && ! -e "$retired_dry_home/.claude/skills/assistant-reflexion" ]]; then
+        pass
+    else
+        fail "dry-run mutated the home or digests differ ('$retired_dry_digest' vs '$retired_real_digest')"
+    fi
+else
+    fail "install dry-run failed"
+fi
+
+test_start "install dry-run with TMPDIR inside the agent home leaves the home untouched"
+retired_tmp_home="$(mktemp -d)"
+p0p4_register_cleanup "$retired_tmp_home"
+retired_seed_skill reflexion claude "$retired_tmp_home/.claude/skills/assistant-reflexion"
+mkdir -p "$retired_tmp_home/.claude/tmp"
+retired_tmp_before="$(retired_tree_listing "$retired_tmp_home/.claude"; python3 -B -c 'import os, sys; [print(p, os.lstat(p).st_mtime_ns) for p in sys.argv[1:]]' "$retired_tmp_home/.claude" "$retired_tmp_home/.claude/tmp")"
+if HOME="$retired_tmp_home" TMPDIR="$retired_tmp_home/.claude/tmp" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-clarify --no-hooks --dry-run </dev/null >"$retired_tmp_home.out" 2>&1; then
+    p0p4_register_cleanup "$retired_tmp_home.out"
+    retired_tmp_after="$(retired_tree_listing "$retired_tmp_home/.claude"; python3 -B -c 'import os, sys; [print(p, os.lstat(p).st_mtime_ns) for p in sys.argv[1:]]' "$retired_tmp_home/.claude" "$retired_tmp_home/.claude/tmp")"
+    if [[ "$retired_tmp_before" == "$retired_tmp_after" ]]; then
+        pass
+    else
+        fail "dry-run with TMPDIR in the agent home changed it: $(diff <(printf '%s\n' "$retired_tmp_before") <(printf '%s\n' "$retired_tmp_after") | head -n 4)"
+    fi
+else
+    p0p4_register_cleanup "$retired_tmp_home.out"
+    fail "install dry-run failed: $(tail -n 3 "$retired_tmp_home.out")"
+fi
+
+test_start "install without Python keeps retired skills, retires source-only tools from the list and completes"
+retired_nopy_home="$(mktemp -d)"
+retired_nopy_bin="$(mktemp -d)"
+p0p4_register_cleanup "$retired_nopy_home" "$retired_nopy_bin"
+retired_path_without_python "$retired_nopy_bin"
+retired_seed_skill reflexion claude "$retired_nopy_home/.claude/skills/assistant-reflexion"
+mkdir -p "$retired_nopy_home/.claude/tools/evals"
+printf 'old\n' >"$retired_nopy_home/.claude/tools/context-budget-report.sh"
+printf 'old\n' >"$retired_nopy_home/.claude/tools/evals/package.json"
+if [[ -e "$retired_nopy_bin/python3" ]]; then
+    fail "no-Python PATH fixture still contains python3"
+elif HOME="$retired_nopy_home" PATH="$retired_nopy_bin" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-clarify --no-hooks </dev/null >"$retired_nopy_home/install.out" 2>"$retired_nopy_home/install.err" \
+    && [[ -f "$retired_nopy_home/.claude/skills/assistant-reflexion/SKILL.md" ]] \
+    && [[ ! -e "$retired_nopy_home/.claude/tools/context-budget-report.sh" && ! -e "$retired_nopy_home/.claude/tools/evals/package.json" ]] \
+    && grep -Fq 'ownership helper unavailable; kept' "$retired_nopy_home/install.out"; then
+    pass
+else
+    fail "Python-less install: $(tail -n 3 "$retired_nopy_home/install.out") $(tail -n 2 "$retired_nopy_home/install.err")"
+fi
+
+test_start "install from a checkout copy without .git reports the refusal, keeps retired skills and completes"
+retired_copy_root="$(mktemp -d)"
+p0p4_register_cleanup "$retired_copy_root"
+retired_checkout_copy "$retired_copy_root/checkout"
+mkdir -p "$retired_copy_root/home/.claude/skills"
+retired_seed_skill reflexion claude "$retired_copy_root/home/.claude/skills/assistant-reflexion"
+if HOME="$retired_copy_root/home" bash "$retired_copy_root/checkout/install.sh" --agent claude --skill assistant-clarify --no-hooks </dev/null >"$retired_copy_root/install.out" 2>"$retired_copy_root/install.err" \
+    && [[ -f "$retired_copy_root/home/.claude/skills/assistant-reflexion/SKILL.md" ]] \
+    && grep -Fq 'ownership helper refused:' "$retired_copy_root/install.out"; then
+    pass
+else
+    fail "no-.git copy: $(grep -F 'ownership' "$retired_copy_root/install.out" | head -n 2) $(tail -n 2 "$retired_copy_root/install.err")"
+fi
+
+test_start "a hand-placed checkout entry point in an agent home refuses"
+retired_hand_home="$(mktemp -d)"
+p0p4_register_cleanup "$retired_hand_home"
+mkdir -p "$retired_hand_home/.claude/tools/framework-ownership"
+cp "$FRAMEWORK_DIR/tools/framework-ownership/"*.py "$FRAMEWORK_DIR/tools/framework-ownership/"*.json "$retired_hand_home/.claude/tools/framework-ownership/"
+retired_seed_skill reflexion claude "$retired_hand_home/.claude/skills/assistant-reflexion"
+retired_hand_status=0
+HOME="$retired_hand_home" python3 -B "$retired_hand_home/.claude/tools/framework-ownership/ownership-checkout.py" install --agent claude >"$retired_hand_home/run.out" 2>&1 || retired_hand_status=$?
+if [[ "$retired_hand_status" == 2 && -f "$retired_hand_home/.claude/skills/assistant-reflexion/SKILL.md" ]]; then
+    pass
+else
+    fail "hand-placed entry point exited $retired_hand_status: $(tail -n 2 "$retired_hand_home/run.out")"
+fi
+
+test_start "an inventory error stops retired removal and installs no source-only tool"
+retired_bad_root="$(mktemp -d)"
+p0p4_register_cleanup "$retired_bad_root"
+retired_checkout_copy "$retired_bad_root/checkout"
+printf '{"schema_version": "9.0", "entries": []}\n' >"$retired_bad_root/checkout/tools/framework-ownership/retired-items.json"
+mkdir -p "$retired_bad_root/home/.claude/tools"
+printf 'old\n' >"$retired_bad_root/home/.claude/tools/context-budget-report.sh"
+if HOME="$retired_bad_root/home" bash "$retired_bad_root/checkout/install.sh" --agent claude --skill assistant-clarify --no-hooks </dev/null >"$retired_bad_root/install.out" 2>"$retired_bad_root/install.err" \
+    && grep -Fq 'retired tool and hook removal skipped' "$retired_bad_root/install.out" \
+    && [[ -f "$retired_bad_root/home/.claude/tools/context-budget-report.sh" ]] \
+    && [[ ! -e "$retired_bad_root/home/.claude/tools/evals/package.json" && ! -e "$retired_bad_root/home/.claude/tools/evals/run-codex-framework-evals.sh" ]] \
+    && [[ ! -e "$retired_bad_root/home/.claude/tools/framework-ownership/ownership-checkout.py" ]]; then
+    pass
+else
+    fail "inventory error: $(grep -F 'retired' "$retired_bad_root/install.out" | head -n 2) $(tail -n 2 "$retired_bad_root/install.err")"
+fi
+
+test_start "Python-less install refuses a traversal or malformed retired list line and removes nothing listed"
+retired_tsv_failures=()
+retired_tsv_bin="$(mktemp -d)"
+p0p4_register_cleanup "$retired_tsv_bin"
+retired_path_without_python "$retired_tsv_bin"
+for retired_tsv_case in traversal malformed absolute crlf hook-module hook-helper hook-entrypoint-directory; do
+    retired_tsv_root="$(mktemp -d)"
+    p0p4_register_cleanup "$retired_tsv_root"
+    retired_checkout_copy "$retired_tsv_root/checkout"
+    retired_tsv="$retired_tsv_root/checkout/tools/framework-ownership/installer-exact-removal.tsv"
+    case "$retired_tsv_case" in
+        traversal) printf 'source_only_tool\tfile\tcontext-budget-report.sh\nsource_only_tool\tfile\t../sentinel\n' >"$retired_tsv" ;;
+        malformed) printf 'source_only_tool\tfile\tcontext-budget-report.sh\nsource_only_tool\tfile\n' >"$retired_tsv" ;;
+        absolute) printf 'source_only_tool\tfile\tcontext-budget-report.sh\nsource_only_tool\tdirectory\t/tmp\n' >"$retired_tsv" ;;
+        crlf) printf 'source_only_tool\tfile\tcontext-budget-report.sh\r\n' >"$retired_tsv" ;;
+        hook-module) printf 'source_only_tool\tfile\tcontext-budget-report.sh\nhook_module\tfile\t../sentinel-hook\n' >"$retired_tsv" ;;
+        hook-helper) printf 'source_only_tool\tfile\tcontext-budget-report.sh\nhook_helper\tfile\ta/b.sh\n' >"$retired_tsv" ;;
+        hook-entrypoint-directory) printf 'source_only_tool\tfile\tcontext-budget-report.sh\nhook_entrypoint\tdirectory\tsession-start.sh\n' >"$retired_tsv" ;;
+    esac
+    mkdir -p "$retired_tsv_root/home/.claude/tools"
+    printf 'keep\n' >"$retired_tsv_root/home/.claude/sentinel"
+    mkdir -p "$retired_tsv_root/home/.claude/hooks"
+    printf 'keep\n' >"$retired_tsv_root/home/.claude/hooks/sentinel-hook"
+    printf 'old\n' >"$retired_tsv_root/home/.claude/tools/context-budget-report.sh"
+    if ! HOME="$retired_tsv_root/home" PATH="$retired_tsv_bin" bash "$retired_tsv_root/checkout/install.sh" --agent claude --skill assistant-clarify --no-hooks </dev/null >"$retired_tsv_root/install.out" 2>"$retired_tsv_root/install.err"; then
+        retired_tsv_failures+=("$retired_tsv_case install failed: $(tail -n 1 "$retired_tsv_root/install.err")")
+        continue
+    fi
+    grep -Fq 'retired tool list invalid: line' "$retired_tsv_root/install.out" || retired_tsv_failures+=("$retired_tsv_case: no invalid-list message")
+    [[ -f "$retired_tsv_root/home/.claude/sentinel" ]] || retired_tsv_failures+=("$retired_tsv_case: sentinel removed")
+    [[ -f "$retired_tsv_root/home/.claude/hooks/sentinel-hook" ]] || retired_tsv_failures+=("$retired_tsv_case: hook sentinel removed")
+    [[ ! -e "$retired_tsv_root/home/.claude/hooks/assistant/session-start.sh" ]] || retired_tsv_failures+=("$retired_tsv_case: a hook shim was written")
+    [[ -f "$retired_tsv_root/home/.claude/tools/context-budget-report.sh" ]] || retired_tsv_failures+=("$retired_tsv_case: a valid line was acted on")
+done
+if [[ "${#retired_tsv_failures[@]}" == 0 ]]; then pass; else fail "${retired_tsv_failures[*]}"; fi
+
+test_start "Python-less install retires listed hook registrations with jq and preserves settings without jq"
+retired_hook_failures=()
+retired_hook_bin="$(mktemp -d)"
+retired_hook_nojq_bin="$(mktemp -d)"
+p0p4_register_cleanup "$retired_hook_bin" "$retired_hook_nojq_bin"
+retired_path_without_python "$retired_hook_bin"
+for retired_hook_name in $(ls "$retired_hook_bin"); do
+    [[ "$retired_hook_name" == jq ]] || ln -s "$retired_hook_bin/$retired_hook_name" "$retired_hook_nojq_bin/$retired_hook_name"
+done
+for retired_hook_case in jq nojq; do
+    retired_hook_home="$(mktemp -d)"
+    p0p4_register_cleanup "$retired_hook_home"
+    mkdir -p "$retired_hook_home/.claude/hooks/assistant"
+    while IFS=$'\t' read -r retired_hook_kind _ retired_hook_path; do
+        case "$retired_hook_kind" in
+            hook_entrypoint|hook_helper|hook_module)
+                mkdir -p "$(dirname "$retired_hook_home/.claude/hooks/assistant/$retired_hook_path")"
+                printf '#!/bin/sh\necho old framework hook\n' >"$retired_hook_home/.claude/hooks/assistant/$retired_hook_path" ;;
+        esac
+    done <"$FRAMEWORK_DIR/tools/framework-ownership/installer-exact-removal.tsv"
+    cat >"$retired_hook_home/.claude/settings.json" <<'JSON'
+{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"$HOME/.claude/hooks/assistant/session-start.sh"},{"type":"command","command":"/tmp/custom-hook.sh"}]}]}}
+JSON
+    if [[ "$retired_hook_case" == jq ]]; then retired_hook_path="$retired_hook_bin"; else retired_hook_path="$retired_hook_nojq_bin"; fi
+    if ! HOME="$retired_hook_home" PATH="$retired_hook_path" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-clarify </dev/null >"$retired_hook_home/install.out" 2>"$retired_hook_home/install.err"; then
+        retired_hook_failures+=("$retired_hook_case install failed: $(tail -n 1 "$retired_hook_home/install.err")")
+        continue
+    fi
+    grep -Fq '/tmp/custom-hook.sh' "$retired_hook_home/.claude/settings.json" || retired_hook_failures+=("$retired_hook_case: custom hook registration lost")
+    while IFS=$'\t' read -r retired_hook_kind _ retired_hook_path; do
+        retired_hook_file="$retired_hook_home/.claude/hooks/assistant/$retired_hook_path"
+        case "$retired_hook_kind" in
+            hook_helper|hook_module) [[ ! -e "$retired_hook_file" ]] || retired_hook_failures+=("$retired_hook_case: $retired_hook_path kept") ;;
+            hook_entrypoint) [[ -f "$retired_hook_file" ]] && ! grep -Fq 'old framework hook' "$retired_hook_file" || retired_hook_failures+=("$retired_hook_case: $retired_hook_path not replaced by a shim") ;;
+        esac
+    done <"$FRAMEWORK_DIR/tools/framework-ownership/installer-exact-removal.tsv"
+    if [[ "$retired_hook_case" == jq ]] && grep -Fq 'hooks/assistant/session-start.sh' "$retired_hook_home/.claude/settings.json"; then
+        retired_hook_failures+=("jq: listed framework registration kept")
+    fi
+done
+if [[ "${#retired_hook_failures[@]}" == 0 ]]; then pass; else fail "${retired_hook_failures[*]}"; fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

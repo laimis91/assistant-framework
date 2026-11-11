@@ -7,6 +7,8 @@ on:
       - 'README.md'
       - 'install.sh'
       - 'install.ps1'
+      - 'uninstall.ps1'
+      - 'uninstall.sh'
       - 'agents/**'
       - 'codex-rules/**'
       - 'docs/evals/**'
@@ -22,6 +24,8 @@ on:
       - 'README.md'
       - 'install.sh'
       - 'install.ps1'
+      - 'uninstall.ps1'
+      - 'uninstall.sh'
       - 'agents/**'
       - 'codex-rules/**'
       - 'docs/evals/**'
@@ -40,10 +44,16 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Run Windows PowerShell 5.1 contracts
         shell: powershell
         run: .\tests\windows\installer-contracts.ps1 -FailOnSkip
+
+      - name: Run Windows PowerShell 5.1 framework ownership contracts
+        shell: powershell
+        run: .\tests\windows\framework-ownership-contracts.ps1 -FailOnSkip
 
   powershell-7:
     name: PowerShell 7 contracts
@@ -51,7 +61,13 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Run PowerShell 7 contracts
         shell: pwsh
         run: .\tests\windows\installer-contracts.ps1 -FailOnSkip
+
+      - name: Run PowerShell 7 framework ownership contracts
+        shell: pwsh
+        run: .\tests\windows\framework-ownership-contracts.ps1 -FailOnSkip

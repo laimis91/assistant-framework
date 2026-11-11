@@ -1,6 +1,6 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. 19 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools, research, disposable feasibility spikes, security analysis, advisory triage, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), evidence-based verification selection and assessment, and exploratory UI QA.
+A Personal AI Assistant framework for developers. 20 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools, research, disposable feasibility spikes, security analysis, advisory triage, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), evidence-based verification selection and assessment, exploratory UI QA, and proof-based framework cleanup.
 
 ## Documentation
 
@@ -25,6 +25,7 @@ Start with the [documentation map](docs/README.md) for task-specific guides, [du
 15. **Verification** — Selects proportionate checks and techniques, applies TDD only when appropriate, and assesses whether evidence supports the claim.
 16. **Feasibility Spike** — Answers one feasibility question with a small disposable experiment and a control, returning validated, partial or invalidated without authorizing production changes
 17. **Exploratory UI QA** — Explores a running UI through the available browser tools and reports reproducible issues with severity and tested, not tested and blocked coverage; acceptance stays with the QA Evaluator
+18. **Framework Cleanup** — Removes retired Assistant Framework items from an installed agent home only after an ownership helper proves them framework-owned and you confirm the plan's digest; answers uninstall requests with the command to run
 
 ## Installation
 
@@ -59,6 +60,8 @@ Claude Code, Codex, and Gemini CLI discover and route installed skills through t
 ```
 
 Both installers refuse, before any write and in dry-run, when the framework checkout and the agent home (including a configured `CODEX_HOME`) are the same directory or one contains the other. Keep the checkout outside `~/.claude`, `~/.codex` or `CODEX_HOME`, and `~/.gemini`.
+
+Each install and update also removes retired framework skills and agent files that it can prove it installed: every file must match a released framework version byte for byte. It prints that plan and its digest before removing anything; `--dry-run` prints the same plan and digest and changes nothing. Modified, unknown, linked and other-product copies are always kept and reported. This step needs Python 3.9+ and a Git checkout with full history; without them the installer reports why, keeps every retired skill and agent, and completes the install. Retired framework tools and hook files are removed by exact path on every install, as before. See [Uninstall and legacy cleanup](#uninstall-and-legacy-cleanup) for everything else.
 
 For one compatibility release, a normal install retires only older Assistant Framework lifecycle hook registrations. It removes only commands owned by this framework from the selected agent's existing settings, preserves unrelated custom configuration, and replaces detected stale framework entrypoints with silent exit-zero shims for already-running clients. It does not inspect or alter legacy Memory Graph configuration, runtime, or provider data. The deprecated `--no-hooks` option remains a warning-only no-op during this transition.
 
@@ -119,8 +122,53 @@ Do not work around policy errors with `Set-ExecutionPolicy` or `-ExecutionPolicy
    Select-String -LiteralPath (Join-Path $codexHome 'AGENTS.md') -SimpleMatch 'ASSISTANT_FRAMEWORK_AGENTS_MD_START'
    ```
 
-4. Run the isolated integration contracts in both Windows PowerShell 5.1 and PowerShell 7: `.\tests\windows\installer-contracts.ps1`.
+4. Run the isolated integration contracts in both Windows PowerShell 5.1 and PowerShell 7: `.\tests\windows\installer-contracts.ps1` and `.\tests\windows\framework-ownership-contracts.ps1`.
 5. Restart the selected agent and verify its installed skills are available.
+
+## Uninstall and legacy cleanup
+
+Both commands prove ownership before they delete. An item is removed only when it is byte-identical to content the framework shipped (after the installer's own path substitution), sits at its exact install location, and is not a link, junction or hard link. Everything else is kept and listed with a reason. Neither command touches a file outside the selected agent home and, on Windows Codex, its `~/.agents` roots.
+
+**Uninstall** removes the framework from one agent home. Run it from your framework checkout; the installed agent home has no copy of it:
+
+```bash
+cd <path-to-your-framework-checkout>
+./uninstall.sh --agent claude --dry-run
+./uninstall.sh --agent claude
+```
+
+It prints the full plan and its digest, then asks you to type the agent name. For a non-interactive run, pass the digest from a dry run; a changed home prints the new digest and stops:
+
+```bash
+./uninstall.sh --agent codex --yes --plan-digest <digest-from-the-dry-run>
+```
+
+On Windows, close Codex first when uninstalling it:
+
+```powershell
+pwsh -NoProfile -File uninstall.ps1 -Agent codex -DryRun
+pwsh -NoProfile -File uninstall.ps1 -Agent codex
+powershell -NoProfile -File uninstall.ps1 -Agent claude
+```
+
+Uninstall removes framework skills, agent files, tools, hook files and their registrations in settings, and the framework's instruction block. For Codex it removes `rules/workflow.rules` only when unmodified and then reminds you that the framework's git and `rm -rf` safeguards are gone; other rule files stay. Exit status: 0 everything owned was removed; 3 finished with items kept; 2 refused and nothing changed.
+
+**Legacy cleanup** removes retired items that an update left behind: retired skills, hooks and their registrations, tools and the retired instruction block. Ask your agent to remove the retired framework items (the `assistant-cleanup` skill), or run the installed helper yourself with the agent home as the working directory. The dry run writes a manifest to a new file outside the agent home; apply removes only what that manifest lists, after re-proving each item:
+
+```bash
+cd ~/.claude
+python3 tools/framework-ownership/ownership.py dry-run --agent claude --manifest-out /tmp/framework-cleanup.json
+python3 tools/framework-ownership/ownership.py apply --agent claude --manifest /tmp/framework-cleanup.json --manifest-digest <digest>
+```
+
+On Windows, from the agent home:
+
+```powershell
+pwsh -NoProfile -File tools/framework-ownership/ownership.ps1 dry-run -Agent claude -ManifestOut $env:TEMP\framework-cleanup.json
+pwsh -NoProfile -File tools/framework-ownership/ownership.ps1 apply -Agent claude -Manifest $env:TEMP\framework-cleanup.json -ManifestDigest <digest>
+```
+
+Codex prompts before each documented uninstall and apply form. [tools/framework-ownership/README.md](tools/framework-ownership/README.md) describes the inventory, the proof rules and how to retire an item.
 
 ## Skills
 
@@ -315,6 +363,11 @@ Explores a running web or app UI in a local or named test environment through wh
 
 Triggers on: test this app, dogfood the signup flow, click through the settings page and report bugs, exploratory UI testing
 
+### assistant-cleanup
+Removes retired or legacy Assistant Framework skills, agents, hooks and tools from one installed agent home after an update. It always runs the installed ownership helper's dry run first, shows removable, kept-ambiguous and kept-unrelated items by path with the manifest digest, and applies only in the helper's fixed form after you confirm that exact digest. It never composes deletion commands. A request to uninstall the framework gets the two-step uninstall command with a checkout placeholder, and nothing is run. Not for code cleanup, refactoring, deleting project files or uninstalling other software.
+
+Triggers on: remove the retired framework skills, clean up legacy framework hooks after an update, uninstall the Assistant Framework
+
 ### assistant-verification
 Selects proportional verification scope, methods, and TDD applicability, then assesses observed evidence and limitations. It guides verification without running checks. Workflow consumers retain canonical typed decisions; human-only assessments can use concise prose.
 
@@ -369,7 +422,7 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 tools/evals/run-skill-evals.sh --activation-results /tmp/skill-activation-results.json
 ```
 
-The default eval inventory is 19 first-class `assistant-*` skills with fixtures.
+The default eval inventory is 20 first-class `assistant-*` skills with fixtures.
 Canonical first-class fixtures use schema `2.0` and include top-level
 `activation_cases`: exact `{user_request, should_activate}` objects with at
 least two normalized-distinct positive requests and one normalized-disjoint
@@ -492,6 +545,8 @@ separate authorization for the eight-case, three-repeat, two-variant pilot
 ```
 install.sh                         <- Top-level installer (skills + migration cleanup)
 install.ps1                        <- Native Windows PowerShell 5.1/7 installer
+uninstall.sh                       <- Unix uninstall front end (run from the checkout)
+uninstall.ps1                      <- Native Windows uninstall front end (run from the checkout)
 version.txt                        <- Framework version
 
 skills/
@@ -560,6 +615,10 @@ skills/
     references/issue-taxonomy.md   <- Severity, category, duplicate and coverage rules
     evals/cases.json               <- Offline behavior and activation fixtures
 
+  assistant-cleanup/
+    SKILL.md                       <- Retired-item cleanup through the ownership helper; uninstall command only
+    evals/cases.json               <- Offline behavior and activation fixtures
+
   assistant-docs/
     SKILL.md                       <- Mode selection and general protocol
     api-docs.md                    <- API surface documentation
@@ -601,10 +660,20 @@ tools/
     run-framework-instruction-evals.sh <- Provider-neutral framework instruction eval helper
     run-codex-framework-evals.sh   <- Opt-in paired Codex behavioral adapter
   cognitive-complexity/             <- Roslyn-based complexity analyzer
+  framework-ownership/
+    retired-items.json             <- Inventory of retired framework items
+    content-proof.json             <- Generated content fingerprints for the inventory
+    installer-exact-removal.tsv    <- Generated retired tool and hook list for Python-less install.sh
+    ownership.py, ownership.ps1    <- Installed cleanup helper (dry-run, apply, list-retired, validate)
+    ownership-core.ps1             <- Windows proof library
+    installer-primitives.ps1       <- Generated from install.ps1 for the Windows helper
+    ownership-checkout.py, .ps1    <- Checkout-only entry points (installer mode, uninstall); never installed
 
 tests/
   test-p0-p4-contracts.sh          <- Framework contract and migration tests
+  framework-ownership/test_ownership.py <- Ownership helper, installer mode and uninstall tests
   windows/installer-contracts.ps1  <- Isolated native Windows installer contracts
+  windows/framework-ownership-contracts.ps1 <- Native Windows ownership helper and uninstall contracts
 
 ```
 
@@ -741,7 +810,7 @@ configuration when reinstalling.
 
 ### Common guidance and unmatched activities
 
-All 19 first-class assistant skills reference
+All 20 first-class assistant skills reference
 `tools/progress/operating-guidance.md`. Unix installs put tools beside skills
 under `~/.claude`, configured `CODEX_HOME` (default `~/.codex`), or `~/.gemini`.
 Windows Codex also mirrors progress into `~/.agents/tools/progress`, so

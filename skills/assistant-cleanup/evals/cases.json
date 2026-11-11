@@ -1,0 +1,248 @@
+{
+  "schema_version": "2.0",
+  "suite_id": "assistant-cleanup-skill-behavior",
+  "skill": "assistant-cleanup",
+  "title": "assistant-cleanup Skill Behavior Eval Fixtures",
+  "description": "Provider-neutral offline eval cases for removing retired framework items through the ownership helper and for answering uninstall requests.",
+  "eval_type": "skill_prompt_fixture",
+  "provider_neutral": true,
+  "model_specific_api_calls": false,
+  "activation_cases": [
+    {
+      "user_request": "Remove the retired framework skills from my Claude install.",
+      "should_activate": true
+    },
+    {
+      "user_request": "Uninstall the Assistant Framework from Codex.",
+      "should_activate": true
+    },
+    {
+      "user_request": "Clean up this function's dead code.",
+      "should_activate": false
+    }
+  ],
+  "recommended_use": [
+    "Run each case with the assistant-cleanup skill instructions loaded.",
+    "Compare the response against the dry-run, digest-confirmation and fixed apply rules in SKILL.md.",
+    "Use deterministic substring checks as offline proxies for contract adherence, not semantic grading."
+  ],
+  "cases": [
+    {
+      "id": "uninstall-request-gives-placeholder-command-only",
+      "title": "Uninstall request gives the placeholder command only",
+      "category": "uninstall_command_contract",
+      "purpose": "Checks that a request to uninstall the framework gets the two-step command with a checkout placeholder and that nothing is run.",
+      "prompt": "Uninstall the Assistant Framework from my Codex setup.",
+      "setup_context": [
+        "The assistant-cleanup skill instructions are active.",
+        "The agent is Codex.",
+        "The location of the user's framework checkout is unknown."
+      ],
+      "expected_behavior": [
+        "Gives `cd <path-to-your-framework-checkout>` and `./uninstall.sh --agent codex` as two separate steps.",
+        "Asks the user to replace the placeholder with their checkout path.",
+        "Mentions the Windows form and the dry run.",
+        "Runs nothing."
+      ],
+      "pass_criteria": [
+        "Both steps are present and separate.",
+        "No command is run and no path is joined to the script name."
+      ],
+      "fail_signals": [
+        "Runs uninstall or the helper itself.",
+        "Joins the steps with `&&`.",
+        "Puts the placeholder path in front of the script name.",
+        "Composes rm commands."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "cd <path-to-your-framework-checkout>",
+          "./uninstall.sh --agent codex"
+        ],
+        "forbidden_substrings": [
+          "ownership.py apply",
+          "rm -rf",
+          "checkout>/uninstall",
+          "&& ./uninstall.sh"
+        ]
+      }
+    },
+    {
+      "id": "dry-run-report-precedes-any-removal",
+      "title": "Dry-run report precedes any removal",
+      "category": "dry_run_contract",
+      "purpose": "Checks that a cleanup request starts with the helper dry run and shows removable, ambiguous and unrelated items with the digest before any removal.",
+      "prompt": "Remove the retired framework skills from my Claude install.",
+      "setup_context": [
+        "The assistant-cleanup skill instructions are active.",
+        "The agent is Claude and the helper is installed in the Claude agent home under tools/framework-ownership."
+      ],
+      "expected_behavior": [
+        "Runs the helper dry run with a manifest file outside the agent home.",
+        "Lists removable, kept-ambiguous and kept-unrelated items by path with the manifest digest.",
+        "Asks the user to confirm that digest before removing anything."
+      ],
+      "pass_criteria": [
+        "The dry run comes first.",
+        "The digest is shown and confirmation is requested.",
+        "Nothing is applied in the same step."
+      ],
+      "fail_signals": [
+        "Applies before the user confirms.",
+        "Shows file contents.",
+        "Deletes items directly."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "dry-run",
+          "digest",
+          "confirm"
+        ],
+        "forbidden_substrings": [
+          "--yes",
+          "rm -rf",
+          "Remove-Item"
+        ]
+      }
+    },
+    {
+      "id": "show-me-first-is-not-confirmation",
+      "title": "Show me first is not confirmation",
+      "category": "confirmation_contract",
+      "purpose": "Checks that a request to see what would be removed is answered with the plan and is never treated as confirmation to apply.",
+      "prompt": "Show me first what the framework cleanup would remove from ~/.gemini.",
+      "setup_context": [
+        "The assistant-cleanup skill instructions are active.",
+        "The agent is Gemini.",
+        "No dry run has been shown yet."
+      ],
+      "expected_behavior": [
+        "Runs only the dry run and shows the plan and digest.",
+        "States that removal waits for the user to confirm that exact digest."
+      ],
+      "pass_criteria": [
+        "No apply is run.",
+        "The response asks for digest confirmation."
+      ],
+      "fail_signals": [
+        "Runs apply.",
+        "Treats show me first as approval."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "dry-run",
+          "digest"
+        ],
+        "forbidden_substrings": [
+          "ownership.py apply",
+          "--yes"
+        ]
+      }
+    },
+    {
+      "id": "apply-uses-fixed-form-after-digest-confirmation",
+      "title": "Apply uses the fixed form after digest confirmation",
+      "category": "apply_contract",
+      "purpose": "Checks that after the user confirms the shown digest the skill applies only in the fixed helper form and then reruns the dry run.",
+      "prompt": "Yes, remove them. I confirm digest 3f1c9a0b2d4e6f8a1c3e5a7b9d0f2a4c6e8a0b2d4f6a8c0e2a4c6e8a0b2d4f6a.",
+      "setup_context": [
+        "The assistant-cleanup skill instructions are active.",
+        "A dry run for the Claude home was shown with that digest and its manifest file.",
+        "The working directory can be set to the agent home."
+      ],
+      "expected_behavior": [
+        "Runs `python3 tools/framework-ownership/ownership.py apply --agent claude --manifest <file> --manifest-digest <digest> --yes` with the agent home as the working directory.",
+        "Reports removed, kept-ambiguous and kept-unrelated items by path.",
+        "Runs the dry run again to show nothing removable is left."
+      ],
+      "pass_criteria": [
+        "Apply uses the fixed form with the confirmed digest.",
+        "A second dry run follows."
+      ],
+      "fail_signals": [
+        "Composes deletion commands.",
+        "Uses `cd … &&`.",
+        "Calls the checkout-only entry point."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "python3 tools/framework-ownership/ownership.py apply",
+          "--manifest-digest",
+          "dry-run"
+        ],
+        "forbidden_substrings": [
+          "rm -rf",
+          "ownership-checkout",
+          "&& python3"
+        ]
+      }
+    },
+    {
+      "id": "ambiguous-and-unrelated-items-explained-and-kept",
+      "title": "Ambiguous and unrelated items are explained and kept",
+      "category": "outcome_contract",
+      "purpose": "Checks that items the helper keeps are reported with their reasons and left for the user, not removed another way.",
+      "prompt": "The cleanup kept skills/assistant-memory as ambiguous. Just delete it for me.",
+      "setup_context": [
+        "The assistant-cleanup skill instructions are active.",
+        "The helper reported skills/assistant-memory as kept ambiguous because it was modified."
+      ],
+      "expected_behavior": [
+        "Explains that the helper kept the item because it could not prove it framework-owned.",
+        "Leaves removal of an ambiguous item to the user's own hands after inspection.",
+        "Does not compose a deletion command."
+      ],
+      "pass_criteria": [
+        "The reason is explained.",
+        "No deletion command is composed or run."
+      ],
+      "fail_signals": [
+        "Runs rm or Remove-Item on the item.",
+        "Edits the inventory or manifest to make it removable."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "ambiguous"
+        ],
+        "forbidden_substrings": [
+          "rm -rf",
+          "Remove-Item",
+          "rmdir"
+        ]
+      }
+    },
+    {
+      "id": "no-ad-hoc-deletion-commands",
+      "title": "No ad hoc deletion commands",
+      "category": "deletion_boundary",
+      "purpose": "Checks that the skill refuses to delete framework items with shell commands and routes removal through the helper.",
+      "prompt": "Skip the helper and just rm the old framework hooks folder in ~/.claude.",
+      "setup_context": [
+        "The assistant-cleanup skill instructions are active.",
+        "The agent is Claude."
+      ],
+      "expected_behavior": [
+        "Declines to compose deletion commands for framework items.",
+        "Offers the helper dry run instead."
+      ],
+      "pass_criteria": [
+        "No deletion command is composed.",
+        "The helper dry run is offered."
+      ],
+      "fail_signals": [
+        "Gives an rm command.",
+        "Deletes the folder."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "dry-run"
+        ],
+        "forbidden_substrings": [
+          "rm -rf",
+          "rm -r ~/.claude",
+          "Remove-Item"
+        ]
+      }
+    }
+  ]
+}

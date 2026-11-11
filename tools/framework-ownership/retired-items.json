@@ -1,0 +1,1250 @@
+{
+  "schema_version": "1.0",
+  "entries": [
+    {
+      "id": "skill/assistant-memory",
+      "root": "agent_home",
+      "path": "skills/assistant-memory",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-memory",
+      "retired_in": "fdff2dc7cf5719e3c231e5c17f34c9207239c343",
+      "content_proof": "skill/assistant-memory",
+      "note": "install.sh at fdff2dc copied skills/assistant-memory to <agent home>/skills/assistant-memory for every agent (install.sh:800-805 lineage)."
+    },
+    {
+      "id": "skill/assistant-memory@windows",
+      "root": "agent_home",
+      "path": "skills/assistant-memory",
+      "agents": [
+        "claude",
+        "gemini"
+      ],
+      "layouts": [
+        "windows"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-memory",
+      "retired_in": "fdff2dc7cf5719e3c231e5c17f34c9207239c343",
+      "content_proof": "skill/assistant-memory",
+      "note": "install.ps1 at fdff2dc installed Claude and Gemini skills under <agent home>/skills."
+    },
+    {
+      "id": "skill/assistant-memory@agents-skills",
+      "root": "agents_skills",
+      "path": "assistant-memory",
+      "agents": [
+        "codex"
+      ],
+      "layouts": [
+        "windows"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-memory",
+      "retired_in": "fdff2dc7cf5719e3c231e5c17f34c9207239c343",
+      "content_proof": "skill/assistant-memory",
+      "note": "install.ps1 at fdff2dc (and since e7e1539) installed Codex skills under ~/.agents/skills."
+    },
+    {
+      "id": "skill/assistant-reflexion",
+      "root": "agent_home",
+      "path": "skills/assistant-reflexion",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-reflexion",
+      "retired_in": "fdff2dc7cf5719e3c231e5c17f34c9207239c343",
+      "content_proof": "skill/assistant-reflexion",
+      "note": "install.sh at fdff2dc copied skills/assistant-reflexion to <agent home>/skills/assistant-reflexion for every agent (install.sh:800-805 lineage)."
+    },
+    {
+      "id": "skill/assistant-reflexion@windows",
+      "root": "agent_home",
+      "path": "skills/assistant-reflexion",
+      "agents": [
+        "claude",
+        "gemini"
+      ],
+      "layouts": [
+        "windows"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-reflexion",
+      "retired_in": "fdff2dc7cf5719e3c231e5c17f34c9207239c343",
+      "content_proof": "skill/assistant-reflexion",
+      "note": "install.ps1 at fdff2dc installed Claude and Gemini skills under <agent home>/skills."
+    },
+    {
+      "id": "skill/assistant-reflexion@agents-skills",
+      "root": "agents_skills",
+      "path": "assistant-reflexion",
+      "agents": [
+        "codex"
+      ],
+      "layouts": [
+        "windows"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-reflexion",
+      "retired_in": "fdff2dc7cf5719e3c231e5c17f34c9207239c343",
+      "content_proof": "skill/assistant-reflexion",
+      "note": "install.ps1 at fdff2dc (and since e7e1539) installed Codex skills under ~/.agents/skills."
+    },
+    {
+      "id": "hook_entrypoint/session-start.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/session-start.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/session-start.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/session-start.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_entrypoint/skill-router.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/skill-router.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/skill-router.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/skill-router.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_entrypoint/learning-signals.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/learning-signals.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/learning-signals.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/learning-signals.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_entrypoint/workflow-enforcer.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-enforcer.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/workflow-enforcer.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/workflow-enforcer.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_entrypoint/workflow-guard.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-guard.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/workflow-guard.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/workflow-guard.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_entrypoint/stop-review.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/stop-review.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/stop-review.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/stop-review.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_entrypoint/harness-gate.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/harness-gate.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/harness-gate.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/harness-gate.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_entrypoint/subagent-monitor.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/subagent-monitor.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/subagent-monitor.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/subagent-monitor.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_entrypoint/pre-compress.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/pre-compress.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/pre-compress.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/pre-compress.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_entrypoint/post-compact.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/post-compact.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/post-compact.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/post-compact.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_entrypoint/session-end.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/session-end.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/session-end.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/session-end.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_entrypoint/post-tool-context.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/post-tool-context.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/post-tool-context.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/post-tool-context.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_entrypoint/tool-failure-advisor.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/tool-failure-advisor.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/tool-failure-advisor.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/tool-failure-advisor.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_entrypoint/task-completed.sh",
+      "kind": "hook_entrypoint",
+      "root": "agent_home",
+      "path": "hooks/assistant/task-completed.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/task-completed.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_entrypoint/task-completed.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*). The proof also accepts the inert shim bytes written at this path."
+    },
+    {
+      "id": "hook_helper/task-journal-resolver.sh",
+      "kind": "hook_helper",
+      "root": "agent_home",
+      "path": "hooks/assistant/task-journal-resolver.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/task-journal-resolver.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_helper/task-journal-resolver.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*)."
+    },
+    {
+      "id": "hook_helper/workflow-phase-gates.sh",
+      "kind": "hook_helper",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-phase-gates.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/workflow-phase-gates.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_helper/workflow-phase-gates.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*)."
+    },
+    {
+      "id": "hook_helper/hook-runtime.sh",
+      "kind": "hook_helper",
+      "root": "agent_home",
+      "path": "hooks/assistant/hook-runtime.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/hook-runtime.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_helper/hook-runtime.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*)."
+    },
+    {
+      "id": "hook_module/workflow-phase-gates.d/learning-controller.sh",
+      "kind": "hook_module",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-phase-gates.d/learning-controller.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/workflow-phase-gates.d/learning-controller.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_module/workflow-phase-gates.d/learning-controller.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*)."
+    },
+    {
+      "id": "hook_module/workflow-phase-gates.d/metrics.sh",
+      "kind": "hook_module",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-phase-gates.d/metrics.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/workflow-phase-gates.d/metrics.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_module/workflow-phase-gates.d/metrics.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*)."
+    },
+    {
+      "id": "hook_module/workflow-phase-gates.d/qa-controller.sh",
+      "kind": "hook_module",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-phase-gates.d/qa-controller.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/workflow-phase-gates.d/qa-controller.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_module/workflow-phase-gates.d/qa-controller.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*)."
+    },
+    {
+      "id": "hook_module/workflow-phase-gates.d/review-controller.sh",
+      "kind": "hook_module",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-phase-gates.d/review-controller.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/workflow-phase-gates.d/review-controller.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_module/workflow-phase-gates.d/review-controller.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*)."
+    },
+    {
+      "id": "hook_module/workflow-phase-gates.d/subagent-evidence.sh",
+      "kind": "hook_module",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-phase-gates.d/subagent-evidence.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/workflow-phase-gates.d/subagent-evidence.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_module/workflow-phase-gates.d/subagent-evidence.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*)."
+    },
+    {
+      "id": "hook_module/workflow-phase-gates.d/subagent-orchestration.sh",
+      "kind": "hook_module",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-phase-gates.d/subagent-orchestration.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/workflow-phase-gates.d/subagent-orchestration.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_module/workflow-phase-gates.d/subagent-orchestration.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*)."
+    },
+    {
+      "id": "hook_module/workflow-guard.d/path-policy.sh",
+      "kind": "hook_module",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-guard.d/path-policy.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/workflow-guard.d/path-policy.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_module/workflow-guard.d/path-policy.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*)."
+    },
+    {
+      "id": "hook_module/workflow-guard.d/shell-write-parser.sh",
+      "kind": "hook_module",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-guard.d/shell-write-parser.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/workflow-guard.d/shell-write-parser.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_module/workflow-guard.d/shell-write-parser.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*)."
+    },
+    {
+      "id": "hook_module/workflow-guard.d/workflow-state-artifacts.sh",
+      "kind": "hook_module",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-guard.d/workflow-state-artifacts.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "hooks/scripts/workflow-guard.d/workflow-state-artifacts.sh",
+      "retired_in": "f68887c3d75c7e711e62749bcaf90aee2a11d312",
+      "content_proof": "hook_module/workflow-guard.d/workflow-state-artifacts.sh",
+      "note": "Installed from hooks/scripts by install.sh before aba2a4f (HOOKS_TARGET=<agent home>/hooks/assistant); both installers retire it by exact name (install.sh legacy_framework_hook_*, install.ps1 $script:LegacyHook*)."
+    },
+    {
+      "id": "hook_registration/session-start.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/session-start.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/skill-router.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/skill-router.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/learning-signals.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/learning-signals.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/workflow-enforcer.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-enforcer.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/workflow-guard.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-guard.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/stop-review.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/stop-review.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/harness-gate.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/harness-gate.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/subagent-monitor.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/subagent-monitor.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/pre-compress.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/pre-compress.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/post-compact.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/post-compact.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/session-end.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/session-end.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/post-tool-context.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/post-tool-context.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/tool-failure-advisor.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/tool-failure-advisor.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/task-completed.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/task-completed.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/task-journal-resolver.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/task-journal-resolver.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/workflow-phase-gates.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/workflow-phase-gates.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "hook_registration/hook-runtime.sh",
+      "kind": "hook_registration",
+      "root": "agent_home",
+      "path": "hooks/assistant/hook-runtime.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "note": "Exact first-token registration in settings.json (Claude, Gemini) or hooks.json (Codex), matched as install.sh cleanup_legacy_framework_hooks and install.ps1 Test-LegacyFrameworkCommand do."
+    },
+    {
+      "id": "source_only_tool/context-budget-report.sh",
+      "kind": "source_only_tool",
+      "root": "agent_home",
+      "path": "tools/context-budget-report.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "installer_exact_removal": [
+        "unix",
+        "windows"
+      ],
+      "content_proof": "source_only_tool/context-budget-report.sh",
+      "note": "Source-repository-only promotion tool; both installers remove it by exact path (install.sh remove_source_only_promotion_tools; install.ps1 $sourceOnlyFiles). Fingerprints come from tools/context-budget-report.sh."
+    },
+    {
+      "id": "source_only_tool/evals/run-codex-framework-evals.sh",
+      "kind": "source_only_tool",
+      "root": "agent_home",
+      "path": "tools/evals/run-codex-framework-evals.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "installer_exact_removal": [
+        "unix",
+        "windows"
+      ],
+      "content_proof": "source_only_tool/evals/run-codex-framework-evals.sh",
+      "note": "Source-repository-only promotion tool; both installers remove it by exact path (install.sh remove_source_only_promotion_tools; install.ps1 $sourceOnlyFiles). Fingerprints come from tools/evals/run-codex-framework-evals.sh."
+    },
+    {
+      "id": "source_only_tool/evals/finalize-workflow-kernel-review.sh",
+      "kind": "source_only_tool",
+      "root": "agent_home",
+      "path": "tools/evals/finalize-workflow-kernel-review.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "installer_exact_removal": [
+        "unix",
+        "windows"
+      ],
+      "content_proof": "source_only_tool/evals/finalize-workflow-kernel-review.sh",
+      "note": "Source-repository-only promotion tool; both installers remove it by exact path (install.sh remove_source_only_promotion_tools; install.ps1 $sourceOnlyFiles). Fingerprints come from tools/evals/finalize-workflow-kernel-review.sh."
+    },
+    {
+      "id": "source_only_tool/evals/lib/context-budget-evidence.sh",
+      "kind": "source_only_tool",
+      "root": "agent_home",
+      "path": "tools/evals/lib/context-budget-evidence.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "installer_exact_removal": [
+        "unix",
+        "windows"
+      ],
+      "content_proof": "source_only_tool/evals/lib/context-budget-evidence.sh",
+      "note": "Source-repository-only promotion tool; both installers remove it by exact path (install.sh remove_source_only_promotion_tools; install.ps1 $sourceOnlyFiles). Fingerprints come from tools/evals/lib/context-budget-evidence.sh."
+    },
+    {
+      "id": "source_only_tool/evals/validate-promotion-decision-schema.cjs",
+      "kind": "source_only_tool",
+      "root": "agent_home",
+      "path": "tools/evals/validate-promotion-decision-schema.cjs",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "installer_exact_removal": [
+        "unix",
+        "windows"
+      ],
+      "content_proof": "source_only_tool/evals/validate-promotion-decision-schema.cjs",
+      "note": "Source-repository-only promotion tool; both installers remove it by exact path (install.sh remove_source_only_promotion_tools; install.ps1 $sourceOnlyFiles). Fingerprints come from tools/evals/validate-promotion-decision-schema.cjs."
+    },
+    {
+      "id": "source_only_tool/evals/package.json",
+      "kind": "source_only_tool",
+      "root": "agent_home",
+      "path": "tools/evals/package.json",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "installer_exact_removal": [
+        "unix",
+        "windows"
+      ],
+      "content_proof": "source_only_tool/evals/package.json",
+      "note": "Source-repository-only promotion tool; both installers remove it by exact path (install.sh remove_source_only_promotion_tools; install.ps1 $sourceOnlyFiles). Fingerprints come from tools/evals/package.json."
+    },
+    {
+      "id": "source_only_tool/evals/package-lock.json",
+      "kind": "source_only_tool",
+      "root": "agent_home",
+      "path": "tools/evals/package-lock.json",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "installer_exact_removal": [
+        "unix",
+        "windows"
+      ],
+      "content_proof": "source_only_tool/evals/package-lock.json",
+      "note": "Source-repository-only promotion tool; both installers remove it by exact path (install.sh remove_source_only_promotion_tools; install.ps1 $sourceOnlyFiles). Fingerprints come from tools/evals/package-lock.json."
+    },
+    {
+      "id": "source_only_tool/evals/node_modules",
+      "kind": "source_only_tool",
+      "root": "agent_home",
+      "path": "tools/evals/node_modules",
+      "node_type": "directory",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "installer_generated": true,
+      "installer_exact_removal": [
+        "unix",
+        "windows"
+      ],
+      "note": "Never tracked (.gitignore); both installers delete it by exact path whatever it holds. Proven by exact location (R-S11-3(f))."
+    },
+    {
+      "id": "managed_tool/plugins/sync-plugin-skills.sh",
+      "kind": "managed_tool",
+      "root": "agent_home",
+      "path": "tools/plugins/sync-plugin-skills.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "tools/plugins/sync-plugin-skills.sh",
+      "retired_in": "36a59a5600b89058135cf37f26f0fb8aa00d9d52",
+      "installer_exact_removal": [
+        "unix",
+        "windows"
+      ],
+      "content_proof": "managed_tool/plugins/sync-plugin-skills.sh",
+      "note": "Removed from source in 0e6d4c7; both installers remove it by exact path with link and type guards."
+    },
+    {
+      "id": "managed_tool_empty_directory/plugins",
+      "kind": "managed_tool_empty_directory",
+      "root": "agent_home",
+      "path": "tools/plugins",
+      "node_type": "directory",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "tools/plugins",
+      "retired_in": "36a59a5600b89058135cf37f26f0fb8aa00d9d52",
+      "installer_exact_removal": [
+        "unix",
+        "windows"
+      ],
+      "note": "Removed only when empty (install.sh retire_installed_plugin_tool; install.ps1 Remove-ExactManagedEmptyDirectories)."
+    },
+    {
+      "id": "managed_tool/cleanup-memory-graph.ps1",
+      "kind": "managed_tool",
+      "root": "agent_home",
+      "path": "tools/cleanup-memory-graph.ps1",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "tools/cleanup-memory-graph.ps1",
+      "retired_in": "201709378bd87c868a6b326fc144d61ed500913c",
+      "installer_exact_removal": [
+        "unix",
+        "windows"
+      ],
+      "content_proof": "managed_tool/cleanup-memory-graph.ps1",
+      "note": "Removed from source in 2368e95. install.ps1 removes it by exact path; install.sh does too since audit F4 (8e9a302, RETIRED_MANAGED_TOOLS)."
+    },
+    {
+      "id": "managed_tool/cleanup-memory-graph.sh",
+      "kind": "managed_tool",
+      "root": "agent_home",
+      "path": "tools/cleanup-memory-graph.sh",
+      "node_type": "file",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "tools/cleanup-memory-graph.sh",
+      "retired_in": "201709378bd87c868a6b326fc144d61ed500913c",
+      "installer_exact_removal": [
+        "unix",
+        "windows"
+      ],
+      "content_proof": "managed_tool/cleanup-memory-graph.sh",
+      "note": "Removed from source in 2368e95. install.ps1 removes it by exact path; install.sh does too since audit F4 (8e9a302, RETIRED_MANAGED_TOOLS)."
+    },
+    {
+      "id": "managed_tool/memory-graph",
+      "kind": "managed_tool",
+      "root": "agent_home",
+      "path": "tools/memory-graph",
+      "node_type": "directory",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "source_path": "tools/memory-graph",
+      "retired_in": "fdff2dc7cf5719e3c231e5c17f34c9207239c343",
+      "content_proof": "managed_tool/memory-graph",
+      "note": "Removed from source in 7e2fedd. No installer removes it; cleanup and uninstall prove it by content."
+    },
+    {
+      "id": "instruction_block/memory-protocol/claude",
+      "kind": "instruction_block",
+      "root": "agent_home",
+      "path": "CLAUDE.md",
+      "agents": [
+        "claude"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "markers": {
+        "start": "<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->",
+        "end": "<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->"
+      },
+      "note": "Memory protocol block appended to CLAUDE.md by install.sh and install.ps1 at fdff2dc (Update-MemoryProtocol)."
+    },
+    {
+      "id": "instruction_block/memory-protocol/codex",
+      "kind": "instruction_block",
+      "root": "agent_home",
+      "path": "AGENTS.md",
+      "agents": [
+        "codex"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "markers": {
+        "start": "<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->",
+        "end": "<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->"
+      },
+      "note": "Memory protocol block appended to AGENTS.md by install.sh and install.ps1 at fdff2dc (Update-MemoryProtocol)."
+    },
+    {
+      "id": "instruction_block/memory-protocol/gemini",
+      "kind": "instruction_block",
+      "root": "agent_home",
+      "path": "GEMINI.md",
+      "agents": [
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "markers": {
+        "start": "<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_START -->",
+        "end": "<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->"
+      },
+      "note": "Memory protocol block appended to GEMINI.md by install.sh and install.ps1 at fdff2dc (Update-MemoryProtocol)."
+    }
+  ]
+}

@@ -5918,18 +5918,19 @@ custom_fixture_name="$(basename "$custom_fixture_dir")"
 p0p4_register_cleanup "$custom_fixture_dir"
 p0p4_write_skill_eval_fixture "$custom_fixture_dir"
 if local_only_list_output="$("$skill_eval_runner" --list)" \
-    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-clarify" \
-    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-debugging" \
-    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-diagrams" \
-    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-docs" \
-    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-ideate" \
-    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-research" \
-    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-security" \
-    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-skill-creator" \
-    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-telos" \
-    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-thinking" \
-    && printf '%s\n' "$local_only_list_output" | grep -Fq "assistant-workflow" \
-    && ! printf '%s\n' "$local_only_list_output" | grep -Fq "$custom_fixture_name"; then
+    && grep -Fq "assistant-clarify" <<<"$local_only_list_output" \
+    && grep -Fq "assistant-cleanup" <<<"$local_only_list_output" \
+    && grep -Fq "assistant-debugging" <<<"$local_only_list_output" \
+    && grep -Fq "assistant-diagrams" <<<"$local_only_list_output" \
+    && grep -Fq "assistant-docs" <<<"$local_only_list_output" \
+    && grep -Fq "assistant-ideate" <<<"$local_only_list_output" \
+    && grep -Fq "assistant-research" <<<"$local_only_list_output" \
+    && grep -Fq "assistant-security" <<<"$local_only_list_output" \
+    && grep -Fq "assistant-skill-creator" <<<"$local_only_list_output" \
+    && grep -Fq "assistant-telos" <<<"$local_only_list_output" \
+    && grep -Fq "assistant-thinking" <<<"$local_only_list_output" \
+    && grep -Fq "assistant-workflow" <<<"$local_only_list_output" \
+    && ! grep -Fq "$custom_fixture_name" <<<"$local_only_list_output"; then
     pass
 else
     fail "default skill eval inventory should include assistant fixtures and exclude local-only custom fixtures"
@@ -5953,6 +5954,7 @@ test_start "skill eval docs describe complete first-class coverage"
 documented_skill_count="$(p0p4_skill_eval_default_fixtures | wc -l | tr -d '[:space:]')"
 if grep -Fq "default eval inventory is $documented_skill_count first-class \`assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-debugging" "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq "assistant-cleanup" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-diagrams" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-docs" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-ideate" "$FRAMEWORK_DIR/README.md" \
@@ -5978,6 +5980,7 @@ if grep -Fq "default eval inventory is $documented_skill_count first-class \`ass
     && p0p4_contains_text "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" '../../docs/evals/README.md#per-skill-eval-fixtures' \
     && cmp -s "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && grep -Fq "skills/assistant-debugging/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
+    && grep -Fq "skills/assistant-cleanup/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
     && grep -Fq "skills/assistant-diagrams/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
     && grep -Fq "skills/assistant-docs/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
     && grep -Fq "skills/assistant-ideate/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \

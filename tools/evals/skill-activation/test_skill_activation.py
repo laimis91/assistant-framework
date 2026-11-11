@@ -751,9 +751,9 @@ class ExistingActivationCases(unittest.TestCase):
 
     def test_all_activation_cases_load_with_unique_ids(self):
         cases = activation.load_cases()
-        self.assertEqual(len(cases), 77)
-        self.assertEqual(len({case["id"] for case in cases}), 77)
-        self.assertEqual(sum(case["should_activate"] for case in cases), 47)
+        self.assertEqual(len(cases), 80)
+        self.assertEqual(len({case["id"] for case in cases}), 80)
+        self.assertEqual(sum(case["should_activate"] for case in cases), 49)
         self.assertEqual(sum(case["run_only"] for case in cases), 2)
 
     def test_positive_counts_every_activation_so_order_does_not_matter(self):
@@ -868,7 +868,7 @@ class ExistingActivationCases(unittest.TestCase):
         code, text = self.report_output(rows, "--baselines", "b1,b2", "--candidate", "c", "--json")
         printed = json.loads(text)
         self.assertEqual(code, 0)
-        self.assertEqual((printed["compared_cases"], printed["total_cases"]), (2, 77))
+        self.assertEqual((printed["compared_cases"], printed["total_cases"]), (2, 80))
         self.assertEqual(printed["regressions"], [["m", "x"], ["m", "y"]])
         self.assertEqual(printed["activation_cases"]["c / m"]["fail"], 2)
         self.assertEqual(printed["groups"], {})
@@ -895,7 +895,7 @@ class ExistingActivationCases(unittest.TestCase):
             base = Path(name).resolve()
             plugin = make_plugin(base, "arm")
             manifest = json.loads((plugin / "generation.json").read_text())
-            arguments = ["run_trials.py", "--batch", "b", "--arm", "arm", "--set", "activation", "--repeats", "1", "--max-cost-usd", "2", "--authorized-calls", "77"]
+            arguments = ["run_trials.py", "--batch", "b", "--arm", "arm", "--set", "activation", "--repeats", "1", "--max-cost-usd", "2", "--authorized-calls", "80"]
             crowded = dict(manifest, listing_condition="crowded")
             with mock.patch.object(run_trials, "PLUGINS", base), mock.patch.object(run_trials, "load_manifest", return_value=(plugin, crowded)), \
                     mock.patch.object(sys, "stderr", io.StringIO()) as err, mock.patch.object(sys, "stdout", io.StringIO()), mock.patch.object(sys, "argv", arguments):
