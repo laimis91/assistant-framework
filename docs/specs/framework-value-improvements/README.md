@@ -18,7 +18,7 @@ Source: [framework value assessment](../../research/assistant-framework-value-as
 | S08 | [assistant-spike](S08-assistant-spike.md) | New disposable-experiment skill and a prose handoff to Workflow. Implemented | Integration count reconciliation and held-out refreeze |
 | S09 | [assistant-ui-qa](S09-assistant-ui-qa.md) | New exploratory UI QA skill feeding the QA evaluator. Implemented | Integration count reconciliation and held-out refreeze |
 | S10 | [Skill retirement and Ideate consolidation](S10-skill-retirement.md) | Remove Telos; retire Diagrams after migrating its obligations to Docs/Workflow; merge Ideate into Thinking and remove Ideate (user decision 2026-11-06) | S11; integration count reconciliation and held-out refreeze |
-| S11 | [Cleanup and uninstall](S11-cleanup-and-uninstall.md) | New cleanup skill with a deterministic ownership helper; `uninstall.sh`/`uninstall.ps1`; one retired-item inventory; installers auto-remove proven-owned retired skills and agents through the same helper (user decision 2026-11-06). Implemented on branch `fvi/s11-cleanup-uninstall`, pending merge | Audit repairs F5, F4, F2; integration count reconciliation and held-out refreeze |
+| S11 | [Cleanup and uninstall](S11-cleanup-and-uninstall.md) | New cleanup skill with a deterministic ownership helper; `uninstall.sh`/`uninstall.ps1`; one retired-item inventory; installers auto-remove proven-owned retired skills and agents through the same helper (user decision 2026-11-06). Implemented in main 1e18c8a (#108) | Audit repairs F5, F4, F2; integration count reconciliation and held-out refreeze |
 
 ## Coordinator reconciliations
 
