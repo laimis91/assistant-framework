@@ -21,7 +21,6 @@ description_prompt_anchor_count() {
 }
 
 test_start "deterministic lexical description proxy keeps broad prose away from specialist routes"
-ideate_skill="$FRAMEWORK_DIR/skills/assistant-ideate/SKILL.md"
 research_skill="$FRAMEWORK_DIR/skills/assistant-research/SKILL.md"
 thinking_skill="$FRAMEWORK_DIR/skills/assistant-thinking/SKILL.md"
 clarify_skill="$FRAMEWORK_DIR/skills/assistant-clarify/SKILL.md"
@@ -30,8 +29,8 @@ cleanup_skill="$FRAMEWORK_DIR/skills/assistant-cleanup/SKILL.md"
 activation_failures=()
 
 for file_and_prompt in \
-    "$ideate_skill::generate and rank brainstorm options" \
-    "$ideate_skill::run a quick improvement scan for our agent framework" \
+    "$thinking_skill::generate and rank brainstorm options" \
+    "$thinking_skill::run a quick improvement scan for our agent framework" \
     "$research_skill::research current source-backed evidence" \
     "$research_skill::compare source-backed options" \
     "$thinking_skill::stress test this complex architecture decision" \
@@ -46,7 +45,7 @@ for file_and_prompt in \
 done
 
 for file_and_phrase in \
-    "$ideate_skill::improve this" \
+    "$thinking_skill::improve this" \
     "$research_skill::what is" \
     "$research_skill::Discovery phase" \
     "$thinking_skill::clarify"; do
@@ -58,7 +57,7 @@ for file_and_phrase in \
 done
 
 for file_and_prompt in \
-    "$ideate_skill::improve this function" \
+    "$thinking_skill::improve this function" \
     "$research_skill::what is this function doing" \
     "$research_skill::investigate failure in the payment test" \
     "$thinking_skill::clarify my request" \
@@ -88,7 +87,7 @@ else
     fail "skill activation inventory retains retired custom-memory routes"
 fi
 
-# Ideation depth and decision behavior are covered by assistant-ideate-reference-contracts.sh.
+# Option-generation depth and decision behavior are covered by assistant-thinking-options-contracts.sh.
 # Numeric idea quotas and prompt-only YAML envelopes are retired, not activation rules.
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

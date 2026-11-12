@@ -2940,6 +2940,41 @@ worker_stage_protocol:
         }
     }
 
+    # R-S11-25 with the skills S10 retired, seeded from the S10 base revision.
+    Invoke-Contract 'install removes a byte-identical S10-retired skill and keeps modified or user-extended ones' {
+        Use-IsolatedEnvironment 'S10 retired skills installer mode' {
+            param($root, $isolatedUserProfile)
+            $s10Base = '68da3fd9c653d02ed58561fde66d057d0e5f16dc'
+            $stage = Join-Path $root 's10-retired-stage'
+            $archive = Join-Path $root 's10-retired.zip'
+            & git -C $script:FrameworkRoot archive --format=zip -o $archive $s10Base 'skills/assistant-diagrams' 'skills/assistant-ideate' 'skills/assistant-telos'
+            Assert-Equal 0 $LASTEXITCODE 'git archive of the S10-retired skills failed'
+            Expand-Archive -LiteralPath $archive -DestinationPath $stage
+            $sharedSkills = Join-Path (Join-Path $isolatedUserProfile '.agents') 'skills'
+            [void][System.IO.Directory]::CreateDirectory($sharedSkills)
+            foreach ($name in @('assistant-diagrams', 'assistant-ideate', 'assistant-telos')) {
+                [System.IO.Directory]::Move((Join-Path (Join-Path $stage 'skills') $name), (Join-Path $sharedSkills $name))
+            }
+            $diagrams = Join-Path $sharedSkills 'assistant-diagrams'
+            $ideate = Join-Path $sharedSkills 'assistant-ideate'
+            $telosSkill = Join-Path (Join-Path $sharedSkills 'assistant-telos') 'SKILL.md'
+            $notes = Join-Path $ideate 'notes.md'
+            [System.IO.File]::WriteAllText($notes, "my notes`n", (New-Object System.Text.UTF8Encoding($false)))
+            $telosBytes = [System.IO.File]::ReadAllBytes($telosSkill)
+            $telosBytes[$telosBytes.Length - 2] = if ($telosBytes[$telosBytes.Length - 2] -eq 88) { 89 } else { 88 }
+            [System.IO.File]::WriteAllBytes($telosSkill, $telosBytes)
+
+            $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow')
+            Assert-Equal 0 $result.ExitCode "S10-retired-skill install failed: $($result.Output)"
+            Assert-Contains $result.Output 'removed: assistant-diagrams' 'Install did not report the byte-identical S10-retired skill removal'
+            Assert-False (Test-Path -LiteralPath $diagrams) 'byte-identical assistant-diagrams still present under .agents/skills'
+            Assert-True (Test-Path -LiteralPath $notes -PathType Leaf) 'assistant-ideate with a user file was removed'
+            Assert-Contains $result.Output 'assistant-ideate' 'Install did not report the user-extended assistant-ideate'
+            Assert-Equal $telosBytes ([System.IO.File]::ReadAllBytes($telosSkill)) 'Install changed a modified assistant-telos'
+            Assert-Contains $result.Output 'assistant-telos' 'Install did not report the modified assistant-telos'
+        }
+    }
+
     Invoke-Contract 'install keeps a modified retired skill and points to the cleanup skill' {
         Use-IsolatedEnvironment 'modified retired skill installer mode' {
             param($root, $isolatedUserProfile)

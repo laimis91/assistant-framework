@@ -70,16 +70,15 @@ The ledger must include at least these easily lost use cases:
 | `assistant-tdd` | Tests-first requests, project TDD rules, workflow-selected checks |
 | `assistant-debugging` | Unknown failures, root causes, flaky tests, unexplained breakage; not an already diagnosed fix |
 | `assistant-ci-audit` | False passes, discovery gaps, stale fixtures, brittle or duplicate tests, cost |
-| `assistant-ideate` | Light mode for improvement scans, deep mode for brainstorming; must not claim "improve this function" |
-| `assistant-thinking` | Architecture trade-offs, stress tests, debate, first principles, hypotheses; must not claim clarification |
+| `assistant-thinking` | Architecture trade-offs, stress tests, debate, first principles, hypotheses; light mode for improvement scans, deep mode for brainstorming; must not claim clarification or "improve this function" |
 | `assistant-cleanup` | Retired or legacy framework skills, agents, hooks and tools after an update; uninstall requests answered with the command only; must not claim code cleanup, refactoring, deleting project files or uninstalling other software |
-| `assistant-clarify`, `-docs`, `-diagrams`, `-onboard`, `-telos` | All current description clauses, plus body scope such as code explanation in docs, component diagrams, and Telos review |
+| `assistant-clarify`, `-docs`, `-onboard` | All current description clauses, plus body scope such as code explanation and source-backed diagrams in docs |
 
 ### Descriptions
 
 - **R-DESC-1.** Every candidate description states what the skill does and when to use it, in third person, with the key use case first, within the existing 1,024-character limit.
 - **R-DESC-2.** Triggers stay in `description`. `when_to_use` and other Claude Code-only fields may add to the portable description, never replace a trigger in it.
-- **R-DESC-3.** "explicit" is changed per skill with a recorded reason, not removed across the board. Skills with low false-activation cost and real misses are candidates first (`assistant-review`, `assistant-research`, `assistant-security`). `assistant-telos` and `assistant-ideate` keep their guard unless evals show it is safe to loosen.
+- **R-DESC-3.** "explicit" is changed per skill with a recorded reason, not removed across the board. Skills with low false-activation cost and real misses are candidates first (`assistant-review`, `assistant-research`, `assistant-security`). `assistant-thinking` keeps its explicit brainstorm guard unless evals show it is safe to loosen.
 - **R-DESC-4.** Descriptions gain state and target cues where the routing table needs them, such as `SKILL.md` and skill files for `assistant-skill-creator`, or review-comment and CI-fix work for `assistant-workflow`.
 - **R-DESC-5.** `./tests/test-p0-p4-contracts.sh` and `tools/skills/validate-skills.sh` pass without changing any contract. Changing a contract or an existing case requires its own user-approved reason.
 - **R-DESC-6.** No existing activation case regresses, as measured by [R-RUN-10](#collection-and-safety).
@@ -116,11 +115,9 @@ This table is the expected behavior the evals grade. "Required" means activated 
 | Triage of a security advisory or vulnerability report | `assistant-advisory-triage` | `assistant-security` | |
 | Request whose intent is still unresolved after inspection | `assistant-clarify` | | |
 | Architecture trade-off or stress test | `assistant-thinking` | | |
-| Generating and ranking options | `assistant-ideate` | | |
+| Generating and ranking options | `assistant-thinking` | | |
 | Documentation work | `assistant-docs` | `assistant-workflow` | |
-| Diagram request | `assistant-diagrams` | `assistant-workflow` | |
 | Unfamiliar codebase | `assistant-onboard` | | |
-| Purpose, mission or goals | `assistant-telos` | | |
 | Remove retired or legacy framework items from an agent home, or uninstall the framework | `assistant-cleanup` | | |
 | Narrow question, or running an existing test command | None | | Every skill |
 | One-word typo | See [OD-1](#accepted-defaults) | | |
@@ -145,7 +142,7 @@ This table is the expected behavior the evals grade. "Required" means activated 
 - **R-EVAL-6.** Every skill has at least three stateful positive cases in the held-out set, with development cases on top, so a per-skill rate does not rest on one case. `assistant-workflow` and `assistant-skill-creator` also have one for each phase they apply to.
 - **R-EVAL-7.** Negative cases are of two kinds, reported separately:
   - No skill should fire.
-  - A neighbour must win. Required pairs: review and skill-creator; verification and tdd; debugging and ci-audit; debugging and thinking; research, thinking and ideate; workflow preparation and thinking; spike and research; spike and workflow; ui-qa and debugging; ui-qa and review.
+  - A neighbour must win. Required pairs: review and skill-creator; verification and tdd; debugging and ci-audit; debugging and thinking; research and thinking; workflow preparation and thinking; spike and research; spike and workflow; ui-qa and debugging; ui-qa and review.
 - **R-EVAL-8. Sensitivity check.** A control arm installs the current source with only the Skills bullet reverted to its text before commit `36c59c5`, so later skill changes do not confound the result. It then replays cases derived from the real failing turns.
   - If the control does not miss at the [OD-2](#accepted-defaults) rate, the replay is not faithful. Fix it before any comparison.
   - If the control misses and the current baseline does not, the result is "already improved by the wording". Report that to the user before writing candidates.

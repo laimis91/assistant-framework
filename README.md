@@ -1,6 +1,6 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. 20 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools, research, disposable feasibility spikes, security analysis, advisory triage, documentation generation, codebase onboarding, idea generation, visual diagrams, review automation, skill creation, purpose-driven context (Telos), evidence-based verification selection and assessment, exploratory UI QA, and proof-based framework cleanup.
+A Personal AI Assistant framework for developers. 17 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools with option generation, research, disposable feasibility spikes, security analysis, advisory triage, documentation generation, codebase onboarding, review automation, skill creation, evidence-based verification selection and assessment, exploratory UI QA, and proof-based framework cleanup.
 
 ## Documentation
 
@@ -12,20 +12,17 @@ Start with the [documentation map](docs/README.md) for task-specific guides, [du
 2. **Clarification** — Converts ambiguous, fragmented, or multi-intent prompts into an executable brief
 3. **TDD** — Red-Green-Refactor with verification gates at each transition, when requested, required by project policy, or selected for checks
 4. **Debugging** — Evidence-first root-cause workflow: reproduce, hypothesize, isolate, fix, verify
-5. **Thinking Tools** — On-demand structured reasoning (first principles, multi-perspective debate, stress testing, etc.)
+5. **Thinking Tools** — On-demand structured reasoning (first principles, multi-perspective debate, stress testing, etc.) and option generation: quick improvement scans and explicit brainstorms with qualitative ranking
 6. **Research Tools** — Source-backed research with verified links, claim-specific evidence quality, and explicit conflicts and gaps
 7. **Security Analysis** — STRIDE threat modeling, OWASP code review, CVE dependency audit, attack surface mapping, agent/installer/release boundary companions, and advisory triage with a shipped-release close bar
 8. **Documentation** — Creates or updates API docs, architecture docs, README, changelogs, migration guides and code explanations from source truth
 9. **Onboarding** — Systematic codebase learning: maps structure, identifies patterns, and reports actionable project orientation
-10. **Idea Generation** — Diverge-converge-refine brainstorming pipeline with codebase awareness
-11. **Visual Diagrams** — Mermaid diagrams from code: architecture, sequence, ER, flow, component, class, state
-12. **Review Automation** — Evidence-bounded review/fix/re-review with fresh independent passes; further rounds need new evidence, with no cumulative round ceiling
-13. **Skill Creation** — Creates focused instructions, with schemas when a real consumer needs them
-14. **Telos** — Purpose context framework ([Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos)): problems, mission, goals, strategies, projects — so agents prioritize work that matters
-15. **Verification** — Selects proportionate checks and techniques, applies TDD only when appropriate, and assesses whether evidence supports the claim.
-16. **Feasibility Spike** — Answers one feasibility question with a small disposable experiment and a control, returning validated, partial or invalidated without authorizing production changes
-17. **Exploratory UI QA** — Explores a running UI through the available browser tools and reports reproducible issues with severity and tested, not tested and blocked coverage; acceptance stays with the QA Evaluator
-18. **Framework Cleanup** — Removes retired Assistant Framework items from an installed agent home only after an ownership helper proves them framework-owned and you confirm the plan's digest; answers uninstall requests with the command to run
+10. **Review Automation** — Evidence-bounded review/fix/re-review with fresh independent passes; further rounds need new evidence, with no cumulative round ceiling
+11. **Skill Creation** — Creates focused instructions, with schemas when a real consumer needs them
+12. **Verification** — Selects proportionate checks and techniques, applies TDD only when appropriate, and assesses whether evidence supports the claim.
+13. **Feasibility Spike** — Answers one feasibility question with a small disposable experiment and a control, returning validated, partial or invalidated without authorizing production changes
+14. **Exploratory UI QA** — Explores a running UI through the available browser tools and reports reproducible issues with severity and tested, not tested and blocked coverage; acceptance stays with the QA Evaluator
+15. **Framework Cleanup** — Removes retired Assistant Framework items from an installed agent home only after an ownership helper proves them framework-owned and you confirm the plan's digest; answers uninstall requests with the command to run
 
 ## Installation
 
@@ -289,9 +286,9 @@ Evidence-first debugging: reproduce or bound the failure, rank competing hypothe
 Triggers on: debug, root cause, investigate failure, flaky test, failing test, production issue
 
 ### assistant-thinking
-Six structured reasoning tools: clarify, perspectives, stress-test, deep-think, hypothesize, creative.
+Six structured reasoning tools: clarify, perspectives, stress-test, deep-think, hypothesize, creative. The creative method also generates and ranks options: a light mode compares a few useful alternatives quickly for an improvement scan, and a deep mode expands and refines alternatives when an explicit brainstorm or the decision needs it. It reads only the local context needed to shape useful options.
 
-Triggers on: architecture decisions, complex trade-offs, stress tests, debate, first principles, hypotheses
+Triggers on: architecture decisions, complex trade-offs, stress tests, debate, first principles, hypotheses, brainstorm, feature ideas, what if, how could we, alternatives, or what-else improvement scans
 
 ### assistant-spike
 Answers one observable feasibility question with the smallest disposable probe outside tracked files. It checks source and docs first, asks once for a probe plan that binds a fresh directory and exact commands (installs, network calls, credentials and real data still ask separately), runs the decisive case plus a control, and returns validated, partial or invalidated with evidence, limits and the consequence for a real build. Its handoff to Workflow authorizes no production change.
@@ -319,7 +316,7 @@ Evidence-bounded code review: trivial/small light review uses one fresh pass plu
 Triggers on: review, fresh review, code review, review this, check the code
 
 ### assistant-docs
-Documentation generation and maintenance: API docs, architecture overview, README, changelog, migration guide, and code explanation. Checks source accuracy within the requested scope. Prose edits follow an editing checklist that preserves meaning, technical terms and the existing voice.
+Documentation generation and maintenance: API docs, architecture overview, README, changelog, migration guide, and code explanation. Checks source accuracy within the requested scope. A diagram it includes draws only source-backed current elements, labels proposed ones, and states what render check actually ran. Prose edits follow an editing checklist that preserves meaning, technical terms and the existing voice.
 
 Triggers on: document, write docs, update readme, changelog, API docs, architecture doc
 
@@ -332,24 +329,6 @@ Triggers on: create skill, new skill, add contracts, skill contracts, scaffold s
 Maps a codebase to the requested depth: entry points, responsibilities, commands, conventions, relevant risks, and coverage gaps. An optional size/language inventory uses `git ls-files` and counters already installed, and reports counts as orientation facts, not quality. Persists orientation only when authorized.
 
 Triggers on: learn this codebase, onboard, get familiar with, map this project
-
-### assistant-ideate
-Light ideation compares useful options quickly; deep ideation expands and
-refines alternatives when the decision needs it. The task sets the depth and
-criteria. Codebase-aware ideation reads only the local context needed to shape
-useful options.
-
-Triggers on: brainstorm, feature ideas, what if, how could we, alternatives, or what-else improvement scans
-
-### assistant-diagrams
-Visual documentation from code analysis. Seven diagram types: architecture, sequence, entity-relationship, flow, component, class, state. All output as Mermaid for markdown embedding.
-
-Triggers on: diagram, draw, visualize, show me the flow, architecture diagram
-
-### assistant-telos
-Purpose context framework based on [Daniel Miessler's Telos Method](https://github.com/danielmiessler/Telos). Creates or updates a purpose chain (problems → mission → goals → challenges → strategies → projects) to the requested depth. Uses a user-approved location when persistence is requested; session loading depends on the user's configured setup.
-
-Triggers on: telos, my purpose, why am I doing this, what matters most, my mission, update telos
 
 ### assistant-ci-audit
 Audits CI/test discovery, fixture fidelity, child/report/final-gate failures and
@@ -422,7 +401,7 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 tools/evals/run-skill-evals.sh --activation-results /tmp/skill-activation-results.json
 ```
 
-The default eval inventory is 20 first-class `assistant-*` skills with fixtures.
+The default eval inventory is 17 first-class `assistant-*` skills with fixtures.
 Canonical first-class fixtures use schema `2.0` and include top-level
 `activation_cases`: exact `{user_request, should_activate}` objects with at
 least two normalized-distinct positive requests and one normalized-disjoint
@@ -636,22 +615,6 @@ skills/
     SKILL.md                       <- Scoped codebase orientation
     inventory.md                   <- Optional size/language inventory with local tools
 
-  assistant-ideate/
-    SKILL.md                       <- Diverge-converge-refine pipeline
-
-  assistant-diagrams/
-    SKILL.md                       <- Diagram type selection and protocol
-    arch-diagram.md                <- Architecture (component) diagrams
-    sequence-diagram.md            <- Interaction sequence diagrams
-    er-diagram.md                  <- Entity-relationship diagrams
-    flow-diagram.md                <- Flowcharts and decision trees
-    component-diagram.md           <- Module dependency diagrams
-    class-diagram.md               <- Type hierarchy diagrams
-    state-diagram.md               <- State machine diagrams
-
-  assistant-telos/
-    SKILL.md                       <- Purpose context framework (Telos Method)
-
 tools/
   skills/
     validate-skills.sh             <- Source validator for first-class skill metadata and contracts
@@ -730,21 +693,7 @@ Onboard skill: Maps structure, identifies patterns, and reports project orientat
 ### For brainstorming
 ```
 You: "What are some ideas for improving the search experience?"
-Ideate skill: Uses the constraints to compare useful alternatives; expands the search when requested
-```
-
-### For diagrams
-```
-You: "Draw the architecture diagram"
-Diagrams skill: Traces code, maps components and dependencies, outputs Mermaid diagram
-```
-
-### For purpose alignment
-```
-You: "telos create"
-Telos skill: Walks you through problems → mission → goals → challenges → strategies → projects
-You: "Does this task align with my goals?"
-Telos skill: Checks active work against your purpose chain
+Thinking skill: Uses the constraints to compare useful alternatives; expands the search when requested
 ```
 
 ## Native skill routing
@@ -810,7 +759,7 @@ configuration when reinstalling.
 
 ### Common guidance and unmatched activities
 
-All 20 first-class assistant skills reference
+All 17 first-class assistant skills reference
 `tools/progress/operating-guidance.md`. Unix installs put tools beside skills
 under `~/.claude`, configured `CODEX_HOME` (default `~/.codex`), or `~/.gemini`.
 Windows Codex also mirrors progress into `~/.agents/tools/progress`, so

@@ -1,6 +1,6 @@
 ---
 name: assistant-thinking
-description: "Reason through architecture decisions and complex trade-offs. Use for explicit stress tests, debate, first principles, or hypotheses."
+description: "Reason through architecture decisions and complex trade-offs, and generate and rank options. Use for explicit stress tests, debate, first principles, hypotheses, quick improvement scans, or explicit brainstorm requests."
 ---
 
 # Think Through the Decision
@@ -19,9 +19,9 @@ Choose the smallest reasoning method that helps answer the question. Use local e
 | Stress Test | `stress-test.md` | A proposal needs a strong challenge |
 | Deep Think | `deep-think.md` | Hidden concerns or criteria need exploration |
 | Hypothesize | `hypothesize.md` | The cause is unknown and evidence must distinguish explanations |
-| Creative | `creative.md` | Naming or unusual options need variety |
+| Creative | `creative.md` | Naming, quick improvement scans, brainstorming, or ranked options |
 
-Read the relevant method on demand and scale its depth to the stakes. Use only the lenses, hypotheses, or rounds that can change the conclusion. For broad option generation, use `assistant-ideate`. Ask every material, non-discoverable question that changes the recommendation, with the impact and a safe default where available.
+Read the relevant method on demand and scale its depth to the stakes. Use only the lenses, hypotheses, or rounds that can change the conclusion. Ask every material, non-discoverable question that changes the recommendation, with the impact and a safe default where available.
 
 Ground alternatives and trade-offs in concrete constraints. Include the strongest counterpoint or dissent where it affects confidence, an evidence-calibrated recommendation, and a useful validation or rollback step. Hypotheses need distinct predictions and disconfirming tests; do not invent extra causes to reach a quota. Record actual observations and distinguish confirmed, refuted, and inconclusive results.
 

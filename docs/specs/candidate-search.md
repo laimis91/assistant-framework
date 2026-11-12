@@ -119,6 +119,6 @@ The original Phase 2 and Phase 3 requirements also retain these boundaries:
 ## Source owners
 
 - [Workflow candidate search](../../skills/assistant-workflow/references/candidate-search.md)
-- [Thinking](../../skills/assistant-thinking/SKILL.md), [ideation](../../skills/assistant-ideate/SKILL.md), and [review](../../skills/assistant-review/SKILL.md)
+- [Thinking, including option generation](../../skills/assistant-thinking/SKILL.md) and [review](../../skills/assistant-review/SKILL.md)
 
 Before promoting an optional direction to implemented status, verify its owning source and actual checks. Development task sequences and run commands belong in local ignored task state.

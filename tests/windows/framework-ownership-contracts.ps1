@@ -570,6 +570,30 @@ Invoke-Contract 'cleanup retired skill plus user file ambiguous' {
     Assert-Equal $before (Get-TreeSnapshot (Get-AgentHome $h 'claude')) 'ambiguous skill changed'
 }
 
+Invoke-Contract 'cleanup removes byte-identical S10-retired skills and keeps a user-extended one' {
+    $h = New-TestHome
+    $s10Base = '68da3fd9c653d02ed58561fde66d057d0e5f16dc'
+    $skills = Join-Path (Get-AgentHome $h 'claude') 'skills'
+    foreach ($name in @('assistant-telos', 'assistant-diagrams', 'assistant-ideate')) {
+        Copy-SeedTree $s10Base ('skills/' + $name) (Join-Path $skills $name) 'claude'
+    }
+    $notes = Join-Path $skills 'assistant-ideate/notes.md'
+    Write-TestBytes $notes "my notes`n"
+    $purpose = Join-Path $h.Base 'purpose/TELOS.md'
+    Write-TestBytes $purpose "# Telos`nMission: user-authored.`n"
+    $out = Invoke-DryRun $h
+    Assert-Contains $out 'skill_directory: skills/assistant-telos' 'byte-identical assistant-telos not offered'
+    Assert-Contains $out 'skill_directory: skills/assistant-diagrams' 'byte-identical assistant-diagrams not offered'
+    Assert-Contains $out 'skills/assistant-ideate: file does not match framework content: notes.md' 'user-extended assistant-ideate not reported'
+    $saved = Save-Manifest $h $out
+    $result = Invoke-Apply $h $saved
+    Assert-Equal 0 $result.Code ($result.Out + $result.Err)
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $skills 'assistant-telos'))) 'byte-identical assistant-telos kept'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $skills 'assistant-diagrams'))) 'byte-identical assistant-diagrams kept'
+    Assert-True (Test-Path -LiteralPath $notes) 'user-extended assistant-ideate removed'
+    Assert-Equal "# Telos`nMission: user-authored.`n" (Read-TestText $purpose) 'purpose file changed'
+}
+
 Invoke-Contract 'cleanup symbolic-link retired skill kept' {
     $h = New-TestHome
     $target = Join-Path $h.Base 'elsewhere'

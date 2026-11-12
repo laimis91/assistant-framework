@@ -649,6 +649,129 @@
           "it is now repeatable"
         ]
       }
+    },
+    {
+      "id": "architecture-doc-diagram-uses-source-evidence",
+      "title": "Architecture doc diagram uses only source-backed current elements",
+      "category": "code_derived_architecture_docs",
+      "purpose": "Checks that a documentation diagram draws only components and relationships found in inspected source, labels a requested future component as proposed, and states honestly what render or parse check was run.",
+      "prompt": "Write an architecture overview of the skill eval runner in tools/evals/run-skill-evals.sh and its lib helpers, with a Mermaid diagram. Also show where a result cache could sit in a future version.",
+      "setup_context": [
+        "The assistant-docs skill instructions are active.",
+        "The user named specific source files and asked for an architecture overview with a diagram.",
+        "The runner and its helpers contain no cache component today; the user asked to show a future cache.",
+        "No Mermaid renderer or project diagram tool is available in this environment."
+      ],
+      "expected_behavior": [
+        "Reads the named runner and helpers before drawing.",
+        "Draws only current components and relationships supported by the inspected files and cites them.",
+        "Labels the requested result cache as proposed and keeps it visually and textually apart from current behavior.",
+        "States what was checked for the diagram, such as syntax not rendered because no Mermaid tool is available, rather than claiming a successful render.",
+        "Does not require a per-element ledger for this ordinary diagram."
+      ],
+      "pass_criteria": [
+        "Every current element in the diagram is found in tools/evals source.",
+        "The future cache is labelled proposed.",
+        "The render or parse statement matches what was actually run."
+      ],
+      "fail_signals": [
+        "Draws a cache or other component absent from the source as current behavior.",
+        "Draws from memory without reading the named files.",
+        "Says the diagram was validated or rendered when no tool ran."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "mermaid",
+          "tools/evals/run-skill-evals.sh",
+          "proposed",
+          "not rendered"
+        ],
+        "forbidden_substrings": [
+          "drawn from memory",
+          "diagram validated",
+          "rendered successfully"
+        ]
+      }
+    },
+    {
+      "id": "feature-preparation-doc-diagram-binds-elements",
+      "title": "Feature-preparation doc diagram binds each element to its exact evidence row",
+      "category": "feature_preparation_evidence_binding",
+      "purpose": "Checks that a diagram in existing-system feature-preparation documentation is treated as a set of behavior claims, so every node and edge carries an exact evidence binding and an incomplete VIEWING path cannot look complete.",
+      "prompt": "Document the route behavior for ACTIVE and read-only VIEWING with a Mermaid flowchart. Return the complete response as one valid JSON object.",
+      "setup_context": [
+        "The assistant-docs skill instructions are active.",
+        "feature_preparation_scope=existing_system, feature_preparation_evidence_status=current, and architecture_design_mode=not_applicable.",
+        "Canonical rows prep/viewing-route item active-route-effects (ACTIVE selection, map highlight, and viewport focus with implementation and behavioral-test evidence) and item viewing-route-gap (the VIEWING requirement and proposed relationship; VIEWING implementation is not yet present) are available.",
+        "The carried diagram element claims and their exact bindings are: Node active-route: the ACTIVE route is current behavior. -> {evidence_ref=prep/viewing-route, item_id=active-route-effects}; Node active-effects: selection, map highlight, and viewport focus are the observable ACTIVE effects. -> {evidence_ref=prep/viewing-route, item_id=active-route-effects}; Edge active-to-effects: the ACTIVE route selects, highlights, and focuses. -> {evidence_ref=prep/viewing-route, item_id=active-route-effects}; Node viewing-route: the read-only VIEWING route is a requirement without implementation. -> {evidence_ref=prep/viewing-route, item_id=viewing-route-gap}; Edge viewing-to-effects (proposed): VIEWING should reach the same observable effects. -> {evidence_ref=prep/viewing-route, item_id=viewing-route-gap}."
+      ],
+      "expected_behavior": [
+        "Treats each diagram node and edge as a carried behavior claim and returns one exact evidence_ref, item_id, and claim_or_question binding per element.",
+        "Binds the ACTIVE elements to active-route-effects and the VIEWING elements to viewing-route-gap.",
+        "Labels the VIEWING relationship as proposed and lists the missing VIEWING implementation for review instead of presenting it as existing behavior.",
+        "Returns feature_preparation_evidence_trace outcome=validated with a non-empty review_trace."
+      ],
+      "pass_criteria": [
+        "Every rendered element has its exact admissible evidence-row binding.",
+        "The incomplete VIEWING path is clearly disclosed."
+      ],
+      "fail_signals": [
+        "Renders the proposed VIEWING route as established repository behavior.",
+        "Binds a node or edge to the wrong row, only to the broad artifact ref, or not at all."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "feature_preparation_evidence_trace",
+          "validated",
+          "evidence_ref",
+          "item_id",
+          "claim_or_question",
+          "review_trace",
+          "prep/viewing-route",
+          "active-route-effects",
+          "viewing-route-gap",
+          "flowchart",
+          "proposed",
+          "selection",
+          "highlight",
+          "viewport focus"
+        ],
+        "forbidden_substrings": [
+          "complete diagram with no evidence",
+          "VIEWING implementation already exists",
+          "blocked_incomplete_evidence"
+        ],
+        "structured_json_assertions": [
+          {"operator": "array_items_nonempty_fields", "path": ["files_updated"], "fields": ["path", "change_type", "description"]},
+          {"operator": "array_items_nonempty_fields", "path": ["evidence_sources"], "fields": ["source", "claims_supported"]},
+          {"operator": "nonempty_string", "path": ["doc_coverage"]},
+          {"operator": "nonempty_array", "path": ["review_items"]},
+          {"operator": "nonempty_string", "path": ["review_items", 0]},
+          {"operator": "equals", "path": ["feature_preparation_scope"], "expected": "existing_system"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_status"], "expected": "current"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "outcome"], "expected": "validated"},
+          {"operator": "array_items_nonempty_fields", "path": ["feature_preparation_evidence_trace", "evidence_refs"], "fields": ["evidence_ref", "item_id", "claim_or_question"]},
+          {"operator": "array_field_values_exact", "path": ["feature_preparation_evidence_trace", "evidence_refs"], "field": "item_id", "expected_values": ["active-route-effects", "active-route-effects", "active-route-effects", "viewing-route-gap", "viewing-route-gap"]},
+          {"operator": "array_object_values_exact", "path": ["feature_preparation_evidence_trace", "evidence_refs"], "fields": ["evidence_ref", "item_id", "claim_or_question"], "expected_objects": [{"evidence_ref": "prep/viewing-route", "item_id": "active-route-effects", "claim_or_question": "Node active-route: the ACTIVE route is current behavior."}, {"evidence_ref": "prep/viewing-route", "item_id": "active-route-effects", "claim_or_question": "Node active-effects: selection, map highlight, and viewport focus are the observable ACTIVE effects."}, {"evidence_ref": "prep/viewing-route", "item_id": "active-route-effects", "claim_or_question": "Edge active-to-effects: the ACTIVE route selects, highlights, and focuses."}, {"evidence_ref": "prep/viewing-route", "item_id": "viewing-route-gap", "claim_or_question": "Node viewing-route: the read-only VIEWING route is a requirement without implementation."}, {"evidence_ref": "prep/viewing-route", "item_id": "viewing-route-gap", "claim_or_question": "Edge viewing-to-effects (proposed): VIEWING should reach the same observable effects."}]},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 0, "evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 0, "item_id"], "expected": "active-route-effects"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 0, "claim_or_question"], "expected": "Node active-route: the ACTIVE route is current behavior."},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 1, "evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 1, "item_id"], "expected": "active-route-effects"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 1, "claim_or_question"], "expected": "Node active-effects: selection, map highlight, and viewport focus are the observable ACTIVE effects."},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 2, "evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 2, "item_id"], "expected": "active-route-effects"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 2, "claim_or_question"], "expected": "Edge active-to-effects: the ACTIVE route selects, highlights, and focuses."},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 3, "evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 3, "item_id"], "expected": "viewing-route-gap"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 3, "claim_or_question"], "expected": "Node viewing-route: the read-only VIEWING route is a requirement without implementation."},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 4, "evidence_ref"], "expected": "prep/viewing-route"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 4, "item_id"], "expected": "viewing-route-gap"},
+          {"operator": "equals", "path": ["feature_preparation_evidence_trace", "evidence_refs", 4, "claim_or_question"], "expected": "Edge viewing-to-effects (proposed): VIEWING should reach the same observable effects."},
+          {"operator": "nonempty_array", "path": ["feature_preparation_evidence_trace", "review_trace"]},
+          {"operator": "nonempty_string", "path": ["feature_preparation_evidence_trace", "review_trace", 0]}
+        ]
+      }
     }
   ]
 }

@@ -2431,12 +2431,12 @@
       "id": "workflow-trigger-routes-create-make-dev-idea-action",
       "title": "Workflow trigger routes create/make dev idea action",
       "category": "trigger_routing",
-      "purpose": "Checks that workflow routing covers common concrete dev creation prompts while leaving pure brainstorming to assistant-ideate.",
+      "purpose": "Checks that workflow routing covers common concrete dev creation prompts while leaving pure brainstorming to assistant-thinking.",
       "prompt": "Create a new REST endpoint, make a dashboard, and turn this idea into an implementation plan.",
       "setup_context": [
         "The assistant-workflow skill instructions are active.",
         "The request asks for concrete development artifacts, not pure brainstorming.",
-        "Pure brainstorming prompts should remain owned by assistant-ideate."
+        "Pure brainstorming prompts should remain owned by assistant-thinking."
       ],
       "expected_behavior": [
         "Routes workflow because create/make target concrete development artifacts.",
@@ -2448,7 +2448,7 @@
         "The response starts with Triage.",
         "The response treats the REST endpoint and dashboard as development artifacts.",
         "The response converts the idea-to-action request into implementation criteria.",
-        "The response preserves assistant-ideate ownership for pure brainstorming."
+        "The response preserves assistant-thinking ownership for pure brainstorming."
       ],
       "fail_signals": [
         "Does not route create/make development artifact prompts to workflow.",
