@@ -72,7 +72,7 @@ The ledger must include at least these easily lost use cases:
 | `assistant-ci-audit` | False passes, discovery gaps, stale fixtures, brittle or duplicate tests, cost |
 | `assistant-thinking` | Architecture trade-offs, stress tests, debate, first principles, hypotheses; light mode for improvement scans, deep mode for brainstorming; must not claim clarification or "improve this function" |
 | `assistant-cleanup` | Retired or legacy framework skills, agents, hooks and tools after an update; uninstall requests answered with the command only; must not claim code cleanup, refactoring, deleting project files or uninstalling other software |
-| `assistant-clarify`, `-docs`, `-onboard` | All current description clauses, plus body scope such as code explanation and source-backed diagrams in docs |
+| `assistant-clarify`, `-docs`, `-onboard` | All current description clauses, plus body scope such as code explanation and source-backed diagrams in docs; `-docs` also claims diagrams of existing code (S10 D-S10-2 (c), 2026-11-12) but not concept sketches or code explanation in chat |
 
 ### Descriptions
 
@@ -117,6 +117,7 @@ This table is the expected behavior the evals grade. "Required" means activated 
 | Architecture trade-off or stress test | `assistant-thinking` | | |
 | Generating and ranking options | `assistant-thinking` | | |
 | Documentation work | `assistant-docs` | `assistant-workflow` | |
+| Diagram of existing code | `assistant-docs` | | |
 | Unfamiliar codebase | `assistant-onboard` | | |
 | Remove retired or legacy framework items from an agent home, or uninstall the framework | `assistant-cleanup` | | |
 | Narrow question, or running an existing test command | None | | Every skill |

@@ -4,9 +4,10 @@
 
 ### When to Use
 
-- User says "explain this code" or "doc this"
-- User is learning a new part of the codebase
-- Complex logic that would benefit from documentation
+- User asks to document code: "doc this", "add doc comments", or "write up how this works" for a guide or README
+- Complex logic that would benefit from a lasting explanation in comments or docs
+
+A plain chat question such as "explain this function" is answered directly; it does not need this mode.
 
 ### Step 1: Understand Context
 

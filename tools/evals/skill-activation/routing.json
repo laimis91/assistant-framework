@@ -37,6 +37,7 @@
     "thinking": {"situation": "Architecture trade-off or stress test", "required": ["assistant-thinking"], "optional": [], "forbidden": []},
     "options": {"situation": "Generating and ranking options", "required": ["assistant-thinking"], "optional": [], "forbidden": []},
     "docs": {"situation": "Documentation work", "required": ["assistant-docs"], "optional": ["assistant-workflow"], "forbidden": []},
+    "code_diagram": {"situation": "Diagram of existing code", "required": ["assistant-docs"], "optional": [], "forbidden": []},
     "onboard": {"situation": "Unfamiliar codebase", "required": ["assistant-onboard"], "optional": [], "forbidden": []},
     "cleanup": {"situation": "Remove retired or legacy framework items from an agent home, or uninstall the framework", "required": ["assistant-cleanup"], "optional": [], "forbidden": []},
     "none": {"situation": "Narrow question, or running an existing test command", "required": [], "optional": [], "forbidden": "*"},

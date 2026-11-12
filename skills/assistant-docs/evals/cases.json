@@ -10,7 +10,9 @@
   "activation_cases": [
     {"user_request": "Update the README documentation.", "should_activate": true},
     {"user_request": "Write an API migration guide.", "should_activate": true},
-    {"user_request": "Fix the broken API endpoint.", "should_activate": false}
+    {"user_request": "Fix the broken API endpoint.", "should_activate": false},
+    {"user_request": "Draw a sequence diagram of how the existing sync job calls its fetch function.", "should_activate": true},
+    {"user_request": "Sketch a quick diagram of a product idea I have.", "should_activate": false}
   ],
   "recommended_use": [
     "Run each case with the assistant-docs skill instructions loaded.",

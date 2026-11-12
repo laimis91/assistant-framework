@@ -15,7 +15,7 @@ Start with the [documentation map](docs/README.md) for task-specific guides, [du
 5. **Thinking Tools** — On-demand structured reasoning (first principles, multi-perspective debate, stress testing, etc.) and option generation: quick improvement scans and explicit brainstorms with qualitative ranking
 6. **Research Tools** — Source-backed research with verified links, claim-specific evidence quality, and explicit conflicts and gaps
 7. **Security Analysis** — STRIDE threat modeling, OWASP code review, CVE dependency audit, attack surface mapping, agent/installer/release boundary companions, and advisory triage with a shipped-release close bar
-8. **Documentation** — Creates or updates API docs, architecture docs, README, changelogs, migration guides and code explanations from source truth
+8. **Documentation** — Creates or updates API docs, architecture docs, README, changelogs, migration guides and code explanations written into docs or comments, from source truth
 9. **Onboarding** — Systematic codebase learning: maps structure, identifies patterns, and reports actionable project orientation
 10. **Review Automation** — Evidence-bounded review/fix/re-review with fresh independent passes; further rounds need new evidence, with no cumulative round ceiling
 11. **Skill Creation** — Creates focused instructions, with schemas when a real consumer needs them
@@ -316,9 +316,9 @@ Evidence-bounded code review: trivial/small light review uses one fresh pass plu
 Triggers on: review, fresh review, code review, review this, check the code
 
 ### assistant-docs
-Documentation generation and maintenance: API docs, architecture overview, README, changelog, migration guide, and code explanation. Checks source accuracy within the requested scope. A diagram it includes draws only source-backed current elements, labels proposed ones, and states what render check actually ran. Prose edits follow an editing checklist that preserves meaning, technical terms and the existing voice.
+Documentation generation and maintenance: API docs, architecture overview, README, changelog, migration guide, and code explanations written into docs or comments. A plain chat question such as "explain this function" is answered directly. Checks source accuracy within the requested scope. A request for a diagram of existing code also routes here: the diagram draws only source-backed current elements, labels proposed ones, and states what render check actually ran. Concept sketches with no source use the general model. Prose edits follow an editing checklist that preserves meaning, technical terms and the existing voice.
 
-Triggers on: document, write docs, update readme, changelog, API docs, architecture doc
+Triggers on: document, write docs, update readme, changelog, API docs, architecture doc, diagram of existing code
 
 ### assistant-skill-creator
 Creates, updates, or assesses concise skills. Adds contracts when an actual consumer, persisted state, validator, or user-requested schema needs a defined format.
@@ -606,7 +606,7 @@ skills/
     editing-checklist.md           <- Prose editing: meaning, terms and voice preserved
     changelog.md                   <- Release notes from git history
     migration.md                   <- Breaking change migration guides
-    explainer.md                   <- Code explanation for learning
+    explainer.md                   <- Code explanations written into docs or comments
 
   assistant-skill-creator/
     SKILL.md                       <- Instruction-first skill authoring and assessment
