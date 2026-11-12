@@ -59,7 +59,7 @@ p0p4_activation_cases_are_adequate() {
 skill_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 clarify_fixture="$FRAMEWORK_DIR/skills/assistant-clarify/evals/cases.json"
-telos_fixture="$FRAMEWORK_DIR/skills/assistant-telos/evals/cases.json"
+onboard_fixture="$FRAMEWORK_DIR/skills/assistant-onboard/evals/cases.json"
 workflow_fixture="$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
 research_evals="$FRAMEWORK_DIR/skills/assistant-research/evals/cases.json"
 
@@ -1104,8 +1104,8 @@ p0p4_write_skill_eval_responses() {
                     assistant-thinking:feature-preparation-mismatched-evidence-binding)
                         jq -n --arg summary "$required_summary" '{summary: $summary, tool_used: "deep_think", key_insights: ["A stale candidate reference cannot validate a concern."], recommendation: "Keep the concern unpromoted until the exact canonical row resolves.", confidence: "medium", gaps_or_assumptions: ["The candidate reference is stale."], evidence_or_observations: ["Canonical input is prep/viewing-route#viewing-route-effects."], candidate_concerns_or_criteria: [{concern_or_criterion: "Preserve selection, highlight, and viewport focus for VIEWING", promotion_status: "requires_feature_preparation_evidence", rationale: "The supplied candidate reference does not match the canonical input and cannot validate promotion."}]}' >"$response_path"
                         ;;
-                    assistant-diagrams:feature-preparation-diagram-traceability)
-                        jq -n --arg summary "$required_summary" '{summary: $summary, diagram_code: "flowchart LR\n  active-route[ACTIVE route] -->|selects, highlights, focuses| active-effects[Observable effects]\n  viewing-route[VIEWING route] -. proposed .-> active-effects", diagram_type: "flow", description: "ACTIVE effects are traced; the VIEWING relationship remains a disclosed implementation gap.", feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}, {evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}], evidence_sources: [{source_ref: "prep/viewing-route", supported_elements_or_relationships: ["ACTIVE selection, highlight, and viewport focus"]}, {source_ref: "prep/viewing-route#requirements", supported_elements_or_relationships: ["VIEWING route requirement and proposed relationship"]}], element_trace: [{element_id: "active-route", element_kind: "node", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "active-effects", element_kind: "node", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "active-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]}, {element_id: "viewing-route", element_kind: "node", source_refs: ["prep/viewing-route#requirements"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}]}, {element_id: "viewing-to-effects", element_kind: "edge", source_refs: ["prep/viewing-route#requirements"], feature_preparation_evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}]}], coverage_gaps: ["VIEWING relationship has no implementation source"]}' >"$response_path"
+                    assistant-docs:feature-preparation-doc-diagram-binds-elements)
+                        jq -n --arg summary "$required_summary" '{summary: $summary, files_updated: [{path: "docs/viewing-route.md", change_type: "created", description: "Documents the ACTIVE route and the proposed read-only VIEWING route as a Mermaid flowchart with one evidence binding per node and edge."}], evidence_sources: [{source: "prep/viewing-route#active-route-effects", claims_supported: "ACTIVE selection, map highlight, and viewport focus, and the ACTIVE edge."}, {source: "prep/viewing-route#viewing-route-gap", claims_supported: "VIEWING route requirement and the proposed VIEWING edge."}], doc_coverage: "The flowchart binds every node and edge to an exact evidence row; the VIEWING edge is labelled proposed.", review_items: ["VIEWING implementation is not yet present; the VIEWING relationship stays proposed."], safety_notes: ["none"], feature_preparation_scope: "existing_system", feature_preparation_evidence_status: "current", feature_preparation_evidence_trace: {outcome: "validated", evidence_refs: [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects", claim_or_question: "Node active-route: the ACTIVE route is current behavior."}, {evidence_ref: "prep/viewing-route", item_id: "active-route-effects", claim_or_question: "Node active-effects: selection, map highlight, and viewport focus are the observable ACTIVE effects."}, {evidence_ref: "prep/viewing-route", item_id: "active-route-effects", claim_or_question: "Edge active-to-effects: the ACTIVE route selects, highlights, and focuses."}, {evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap", claim_or_question: "Node viewing-route: the read-only VIEWING route is a requirement without implementation."}, {evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap", claim_or_question: "Edge viewing-to-effects (proposed): VIEWING should reach the same observable effects."}], review_trace: ["Each diagram element binding was checked against its exact evidence row before documentation."]}}' >"$response_path"
                         ;;
                     assistant-docs:architecture-doc-pack-backed-decision-trace)
                         jq -n --arg summary "$required_summary" '{summary: $summary, files_updated: [{path: "docs/parser-boundary.md", change_type: "created", description: "Documents the current parser-boundary decision."}], evidence_sources: [{source: "pack/parser-boundary", claims_supported: "The selected parser boundary design and its compatibility claim are current."}], doc_coverage: "Documents the current parser boundary from the fresh Pack and exact feature-preparation row.", review_items: [], safety_notes: ["none"], architecture_design_mode: "required", architecture_decision_pack_status: "current", feature_preparation_scope: "existing_system", feature_preparation_evidence_status: "current", architecture_decision_pack: {ref: "pack/parser-boundary", mode: "required", freshness: "current repository basis"}, architecture_decision_pack_trace: {outcome: "documented", source_pack_ref: "pack/parser-boundary", documented_decision_refs: ["pack/parser-boundary#selected-design"], evidence_refs: ["pack/parser-boundary#facts"], feature_preparation_evidence_refs: [{evidence_ref: "prep/parser-boundary", item_id: "parser-boundary-compatibility", claim_or_question: "Preserve the current parser boundary compatibility while documenting the selected design."}], review_trace: ["resolves selected design and rationale through the current canonical Pack ref"]}, feature_preparation_evidence_trace: {outcome: "validated", evidence_refs: [{evidence_ref: "prep/parser-boundary", item_id: "parser-boundary-compatibility", claim_or_question: "Preserve the current parser boundary compatibility while documenting the selected design."}], review_trace: ["Exact evidence-row binding validated before documentation."]}}' >"$response_path"
@@ -1447,16 +1447,13 @@ while IFS='|' read -r skill_name positive_one positive_two negative; do
 done <<'EOF_CURATED'
 assistant-clarify|Clarify this ambiguous multi-intent request.|Help me untangle what I mean.|Summarize the already clarified request.
 assistant-debugging|Diagnose this flaky test failure.|Find the root cause before fixing.|Apply the known one-line fix from the accepted diagnosis.
-assistant-diagrams|Create a Mermaid sequence diagram.|Show the system flow.|Explain the architecture in prose without a diagram.
 assistant-docs|Update the README documentation.|Write an API migration guide.|Fix the broken API endpoint.
-assistant-ideate|Generate and rank feature ideas.|Run a quick improvement scan.|Implement the chosen feature idea.
 assistant-onboard|Get familiar with this codebase.|Map this project before changing it.|Make a small change in this familiar codebase.
 assistant-research|Research current source-backed evidence.|Compare these technical options.|Choose the option from the completed research brief.
 assistant-review|Review the current uncommitted changes.|Review and fix actionable findings in the current changes.|Summarize already approved review findings without inspecting code.
 assistant-security|Threat model this OAuth callback.|Audit this endpoint for vulnerabilities.|Write release notes for the already approved OAuth callback fix.
 assistant-skill-creator|Create a new skill with contracts.|Update this skill's contract design.|Run the existing skill without modifying its design.
 assistant-tdd|Use TDD to fix this bug.|Write a failing regression test first.|Apply the known fix after the regression test already passes.
-assistant-telos|Create my Telos context.|Help define my mission and goals.|Update the project README with our established mission.
 assistant-thinking|Stress test this architecture decision.|Reason through this trade-off.|Implement the selected architecture decision.
 assistant-workflow|Technically prepare the VIEWING route from current implementation and behavioral tests; do not implement.|Prepare a pending Architecture Pack with planned verification and no verification ref.|Answer a narrow question about the existing implementation.
 EOF_CURATED
@@ -1569,7 +1566,7 @@ fi
 test_start "activation result adapter evaluates multiple selected fixtures"
 multi_activation_results_file="$activation_results_root/multi-results.json"
 multi_activation_results_output="$activation_results_root/multi-results.out"
-jq -n --slurpfile clarify "$clarify_fixture" --slurpfile telos "$telos_fixture" '
+jq -n --slurpfile clarify "$clarify_fixture" --slurpfile onboard "$onboard_fixture" '
     {
       schema_version: "1.0",
       results: [
@@ -1578,15 +1575,15 @@ jq -n --slurpfile clarify "$clarify_fixture" --slurpfile telos "$telos_fixture" 
           user_request,
           selected_skills: (if .should_activate then ["assistant-clarify"] else [] end)
         }),
-        ($telos[0].activation_cases[] | {
-          skill: "assistant-telos",
+        ($onboard[0].activation_cases[] | {
+          skill: "assistant-onboard",
           user_request,
-          selected_skills: (if .should_activate then ["assistant-telos"] else [] end)
+          selected_skills: (if .should_activate then ["assistant-onboard"] else [] end)
         })
       ]
     }
 ' >"$multi_activation_results_file"
-if "$skill_eval_runner" --activation-results "$multi_activation_results_file" --skill assistant-clarify --skill assistant-telos >"$multi_activation_results_output" 2>&1 \
+if "$skill_eval_runner" --activation-results "$multi_activation_results_file" --skill assistant-clarify --skill assistant-onboard >"$multi_activation_results_output" 2>&1 \
     && grep -Fq "Summary: total=6 passed=6 failed=0" "$multi_activation_results_output"; then
     pass
 else
@@ -1594,11 +1591,11 @@ else
 fi
 
 test_start "activation result adapter rejects a missing second-skill observation"
-jq 'del(.results[3])' "$multi_activation_results_file" >"$activation_results_root/multi-results-missing-telos.json"
-if "$skill_eval_runner" --activation-results "$activation_results_root/multi-results-missing-telos.json" --skill assistant-clarify --skill assistant-telos >"$multi_activation_results_output" 2>&1 \
+jq 'del(.results[3])' "$multi_activation_results_file" >"$activation_results_root/multi-results-missing-onboard.json"
+if "$skill_eval_runner" --activation-results "$activation_results_root/multi-results-missing-onboard.json" --skill assistant-clarify --skill assistant-onboard >"$multi_activation_results_output" 2>&1 \
     || ! grep -Fq 'missing activation result' "$multi_activation_results_output" \
-    || ! grep -Fq 'assistant-telos' "$multi_activation_results_output"; then
-    fail "activation result adapter did not reject a missing assistant-telos observation"
+    || ! grep -Fq 'assistant-onboard' "$multi_activation_results_output"; then
+    fail "activation result adapter did not reject a missing assistant-onboard observation"
 else
     pass
 fi
@@ -1754,16 +1751,13 @@ test_start "skill eval runner validates default fixture inventory"
 if validation_output="$("$skill_eval_runner" --validate-fixture 2>&1)" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-clarify/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-debugging/evals/cases.json" \
-    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-diagrams/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-docs/evals/cases.json" \
-    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-ideate/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-onboard/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-research/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-review/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-security/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-skill-creator/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-tdd/evals/cases.json" \
-    && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-telos/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-thinking/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "skills/assistant-workflow/evals/cases.json" \
     && printf '%s\n' "$validation_output" | grep -Fq "OK skill eval fixtures:"; then
@@ -1814,10 +1808,8 @@ if list_output="$("$skill_eval_runner" --list)" \
     && grep -Fq -- $'assistant-tdd\tunknown-cause-bugfix-waits-for-debugging-evidence\tdebugging_bridge\tUnknown-cause bugfix waits for debugging evidence' <<<"$list_output" \
     && grep -Fq -- $'assistant-security\tfindings-include-severity-impact-remediation\tsecurity_report_contract\tFindings include severity impact remediation' <<<"$list_output" \
     && grep -Fq -- $'assistant-debugging\tbugfix-reproduces-before-patching\treproduction_gate\tBugfix reproduces before patching' <<<"$list_output" \
-    && grep -Fq -- $'assistant-diagrams\tarchitecture-diagram-derived-from-code\tcode_derived_architecture\tArchitecture diagram derived from code' <<<"$list_output" \
     && grep -Fq -- $'assistant-docs\tarchitecture-doc-uses-code-evidence\tcode_derived_architecture_docs\tArchitecture doc uses code evidence' <<<"$list_output" \
-    && grep -Fq -- $'assistant-ideate\tbrainstorm-diverges-before-ranking\tdiverge_converge_gate\tBrainstorm diverges before ranking' <<<"$list_output" \
-    && grep -Fq -- $'assistant-telos\tcreate-personal-tcf-core-sections\ttcf_creation_contract\tCreate personal TCF core sections' <<<"$list_output" \
+    && grep -Fq -- $'assistant-thinking\tbrainstorm-diverges-before-ranking\tdiverge_converge_gate\tBrainstorm diverges before ranking' <<<"$list_output" \
     && grep -Fq -- $'assistant-skill-creator\tnew-process-skill-designs-contracts-before-build\tcontract_design_gate\tNew process skill designs contracts before build' <<<"$list_output" \
     && grep -Fq -- $'assistant-research\ttechnology-comparison-uses-standard-tier\ttier_and_synthesis\tTechnology comparison uses standard tier' <<<"$list_output" \
     && grep -Fq -- $'assistant-onboard\tnew-repo-onboarding-produces-orientation\tsystematic_onboarding\tNew repo onboarding produces orientation' <<<"$list_output"; then
@@ -1875,16 +1867,16 @@ else
 fi
 
 test_start "skill eval runner list honors targeted expanded skill selection"
-telos_case_count="$(jq '.cases | length' "$telos_fixture")"
-if targeted_telos_list_output="$("$skill_eval_runner" --list --skill assistant-telos)" \
-    && [[ "$(printf '%s\n' "$targeted_telos_list_output" | grep -c .)" -eq "$telos_case_count" ]] \
-    && printf '%s\n' "$targeted_telos_list_output" | grep -Fq $'assistant-telos\tcreate-personal-tcf-core-sections\ttcf_creation_contract\tCreate personal TCF core sections' \
-    && printf '%s\n' "$targeted_telos_list_output" | grep -Fq $'assistant-telos\treview-existing-tcf-finds-chain-gaps\ttcf_review_contract\tReview existing TCF finds chain gaps' \
-    && ! printf '%s\n' "$targeted_telos_list_output" | grep -Fq "assistant-clarify" \
-    && ! printf '%s\n' "$targeted_telos_list_output" | grep -Fq "assistant-security"; then
+onboard_case_count="$(jq '.cases | length' "$onboard_fixture")"
+if targeted_onboard_list_output="$("$skill_eval_runner" --list --skill assistant-onboard)" \
+    && [[ "$(printf '%s\n' "$targeted_onboard_list_output" | grep -c .)" -eq "$onboard_case_count" ]] \
+    && printf '%s\n' "$targeted_onboard_list_output" | grep -Fq $'assistant-onboard\tnew-repo-onboarding-produces-orientation\tsystematic_onboarding\tNew repo onboarding produces orientation' \
+    && printf '%s\n' "$targeted_onboard_list_output" | grep -Fq $'assistant-onboard\tmedium-onboarding-requires-inspected-architecture-candidates\tproject_size_architecture_mapping\tMedium onboarding omits irrelevant architecture arrays' \
+    && ! printf '%s\n' "$targeted_onboard_list_output" | grep -Fq "assistant-clarify" \
+    && ! printf '%s\n' "$targeted_onboard_list_output" | grep -Fq "assistant-security"; then
     pass
 else
-    fail "skill eval runner --list --skill assistant-telos did not list only assistant-telos cases"
+    fail "skill eval runner --list --skill assistant-onboard did not list only assistant-onboard cases"
 fi
 
 test_start "skill eval runner emits task-only clarification packets and full other packets"
@@ -1897,14 +1889,12 @@ if "$skill_eval_runner" --emit-prompts "$prompt_dir" >/dev/null \
     && ! grep -Eiq 'Skill:|Case ID:|Category:|Purpose:|Expected Behavior|Pass Criteria|Fail Signals|Machine Expectations|needs clarification|Risk if guessed' "$prompt_dir/assistant-clarify/task-01.md" \
     && ! grep -Fq "multi-intent-prompt-asks-material-clarification" "$prompt_dir/assistant-clarify/task-01.md" \
     && grep -Fq "Skill: assistant-debugging" "$prompt_dir/assistant-debugging/bugfix-reproduces-before-patching.md" \
-    && grep -Fq "Skill: assistant-diagrams" "$prompt_dir/assistant-diagrams/architecture-diagram-derived-from-code.md" \
     && grep -Fq "Skill: assistant-docs" "$prompt_dir/assistant-docs/architecture-doc-uses-code-evidence.md" \
-    && grep -Fq "Skill: assistant-ideate" "$prompt_dir/assistant-ideate/brainstorm-diverges-before-ranking.md" \
+    && grep -Fq "Skill: assistant-thinking" "$prompt_dir/assistant-thinking/brainstorm-diverges-before-ranking.md" \
     && grep -Fq "Skill: assistant-thinking" "$prompt_dir/assistant-thinking/architecture-decision-selects-perspectives.md" \
     && grep -Fq "Skill: assistant-skill-creator" "$prompt_dir/assistant-skill-creator/new-process-skill-designs-contracts-before-build.md" \
     && grep -Fq "Skill: assistant-research" "$prompt_dir/assistant-research/technology-comparison-uses-standard-tier.md" \
     && grep -Fq "Skill: assistant-onboard" "$prompt_dir/assistant-onboard/new-repo-onboarding-produces-orientation.md" \
-    && grep -Fq "Skill: assistant-telos" "$prompt_dir/assistant-telos/create-personal-tcf-core-sections.md" \
     && grep -Fq "Skill: assistant-workflow" "$prompt_dir/assistant-workflow/medium-task-plans-before-build.md" \
     && grep -Fq "Skill: assistant-workflow" "$prompt_dir/assistant-workflow/unknown-cause-bugfix-routes-through-debugging-before-tdd.md" \
     && grep -Fq "### Structured JSON Assertions" "$prompt_dir/assistant-workflow/architecture-pack-resists-premature-abstraction.md" \
@@ -3819,7 +3809,7 @@ else
     fail "workflow core artifact mutations were not rejected or miscounted: ${workflow_core_failures[*]-} (direct=$prepare_only_direct_structured_probe_count representative_cli=$prepare_only_representative_cli_probe_count)"
 fi
 
-test_start "feature-preparation rows and diagram traces reject omitted central evidence in the actual grader"
+test_start "feature-preparation rows and docs diagram element bindings reject omitted central evidence in the actual grader"
 feature_mutation_root="$(mktemp -d "${TMPDIR:-/tmp}/feature-eval-mutations.XXXXXX")"
 feature_counter_skill="$feature_mutation_root/assistant-eval-feature-counter"
 feature_diagram_skill="$feature_mutation_root/assistant-eval-feature-diagram"
@@ -3841,7 +3831,7 @@ p0p4_write_skill_eval_fixture "$feature_docs_skill"
 jq --argjson case "$(jq '.cases[] | select(.id == "feature-preparation-counterclassifies-unknown-conflict-and-gap")' "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json")" \
     '.cases = [$case]' "$feature_counter_skill/evals/cases.json" >"$feature_mutation_root/counter-cases.json"
 mv "$feature_mutation_root/counter-cases.json" "$feature_counter_skill/evals/cases.json"
-jq --argjson case "$(jq '.cases[] | select(.id == "feature-preparation-diagram-traceability")' "$FRAMEWORK_DIR/skills/assistant-diagrams/evals/cases.json")" \
+jq --argjson case "$(jq '.cases[] | select(.id == "feature-preparation-doc-diagram-binds-elements")' "$FRAMEWORK_DIR/skills/assistant-docs/evals/cases.json")" \
     '.cases = [$case]' "$feature_diagram_skill/evals/cases.json" >"$feature_mutation_root/diagram-cases.json"
 mv "$feature_mutation_root/diagram-cases.json" "$feature_diagram_skill/evals/cases.json"
 jq --argjson cases "$(jq '[.cases[] | select(.id == "feature-preparation-exact-evidence-binding" or .id == "feature-preparation-multiple-evidence-bindings" or .id == "feature-preparation-mismatched-evidence-binding")]' "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json")" \
@@ -3854,8 +3844,8 @@ mkdir -p "$feature_counter_responses/assistant-eval-feature-counter" "$feature_d
     "$feature_thinking_responses/assistant-eval-feature-thinking" "$feature_docs_responses/assistant-eval-feature-docs"
 cp "$passing_response_dir/assistant-workflow/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt" \
     "$feature_counter_responses/assistant-eval-feature-counter/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt"
-cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
-    "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+cp "$passing_response_dir/assistant-docs/feature-preparation-doc-diagram-binds-elements.txt" \
+    "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
 for case_id in feature-preparation-exact-evidence-binding feature-preparation-multiple-evidence-bindings feature-preparation-mismatched-evidence-binding; do
     cp "$passing_response_dir/assistant-thinking/$case_id.txt" "$feature_thinking_responses/assistant-eval-feature-thinking/$case_id.txt"
 done
@@ -3918,133 +3908,110 @@ else
                 "$feature_counter_responses/assistant-eval-feature-counter/feature-preparation-counterclassifies-unknown-conflict-and-gap.txt"
         done
     done
-    for trace_index in 0 1 2 3 4; do
-        jq "del(.element_trace[$trace_index])" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
-        mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    for binding_index in 0 1 2 3 4; do
+        jq "del(.feature_preparation_evidence_trace.evidence_refs[$binding_index])" \
+            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt" >"$feature_mutation_root/mutated.json"
+        mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
         if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
             || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
-            feature_mutation_failures+=("diagram:trace-$trace_index")
+            feature_mutation_failures+=("diagram:element-binding-$binding_index")
         fi
-        cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
-            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+        cp "$passing_response_dir/assistant-docs/feature-preparation-doc-diagram-binds-elements.txt" \
+            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
     done
-    for binding_field in evidence_ref item_id; do
-        jq "del(.feature_preparation_evidence_refs[0].$binding_field)" \
-            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
-        mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-        if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
-            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
-            feature_mutation_failures+=("diagram:root-binding-$binding_field")
-        fi
-        cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
-            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-    done
-    jq '(.feature_preparation_evidence_refs[0].item_id) = "wrong-evidence-row"' \
-        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
-    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
-        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
-        feature_mutation_failures+=("diagram:root-binding-mismatched-item")
-    fi
-    cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
-        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-    for trace_index in 0 1 2 3 4; do
-        for binding_field in evidence_ref item_id; do
-            jq "del(.element_trace[$trace_index].feature_preparation_evidence_refs[0].$binding_field)" \
-                "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
-            mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    for binding_index in 0 1 2 3 4; do
+        for binding_field in evidence_ref item_id claim_or_question; do
+            jq "del(.feature_preparation_evidence_trace.evidence_refs[$binding_index].$binding_field)" \
+                "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt" >"$feature_mutation_root/mutated.json"
+            mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
             if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
                 || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
-                feature_mutation_failures+=("diagram:trace-$trace_index-binding-$binding_field")
+                feature_mutation_failures+=("diagram:element-binding-$binding_index-$binding_field")
             fi
-            cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
-                "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+            cp "$passing_response_dir/assistant-docs/feature-preparation-doc-diagram-binds-elements.txt" \
+                "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
         done
     done
-    jq '(.element_trace[0].feature_preparation_evidence_refs[0].item_id) = "wrong-evidence-row"' \
-        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
-    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    jq '(.feature_preparation_evidence_trace.evidence_refs[0].item_id) = "wrong-evidence-row"' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
     if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
         || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
-        feature_mutation_failures+=("diagram:trace-binding-mismatched-item")
+        feature_mutation_failures+=("diagram:element-binding-mismatched-item")
     fi
-    cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
-        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-    jq '(.element_trace[0].feature_preparation_evidence_refs[0].item_id) = "viewing-route-gap"' \
-        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
-    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    cp "$passing_response_dir/assistant-docs/feature-preparation-doc-diagram-binds-elements.txt" \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
+    jq '(.feature_preparation_evidence_trace.evidence_refs[0].item_id) = "viewing-route-gap"' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
     if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
         || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
-        feature_mutation_failures+=("diagram:active-trace-replaced-by-valid-viewing-row")
+        feature_mutation_failures+=("diagram:active-element-replaced-by-valid-viewing-row")
     fi
-    cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
-        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-    jq '(.element_trace[0].element_id) as $active | (.element_trace[3].element_id) as $viewing | .element_trace[0].element_id = $viewing | .element_trace[3].element_id = $active' \
-        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
-    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+    cp "$passing_response_dir/assistant-docs/feature-preparation-doc-diagram-binds-elements.txt" \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
+    jq '(.feature_preparation_evidence_trace.evidence_refs[0].evidence_ref) = "prep/viewing-route#requirements"' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
     if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
         || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
-        feature_mutation_failures+=("diagram:active-viewing-element-ids-swapped")
+        feature_mutation_failures+=("diagram:element-binding-broad-or-mismatched-ref")
     fi
-    cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
-        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-    for trace_shape_mutation in invalid_kind dangling_source; do
-        case "$trace_shape_mutation" in
-            invalid_kind) trace_shape_filter='.element_trace[2].element_kind = "node"' ;;
-            dangling_source) trace_shape_filter='.element_trace[4].source_refs = ["prep/dangling"]' ;;
+    cp "$passing_response_dir/assistant-docs/feature-preparation-doc-diagram-binds-elements.txt" \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
+    jq '(.feature_preparation_evidence_trace.evidence_refs[0].claim_or_question) as $active | (.feature_preparation_evidence_trace.evidence_refs[3].claim_or_question) as $viewing | .feature_preparation_evidence_trace.evidence_refs[0].claim_or_question = $viewing | .feature_preparation_evidence_trace.evidence_refs[3].claim_or_question = $active' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
+    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+        feature_mutation_failures+=("diagram:active-viewing-element-claims-swapped")
+    fi
+    cp "$passing_response_dir/assistant-docs/feature-preparation-doc-diagram-binds-elements.txt" \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
+    jq '.feature_preparation_evidence_trace.evidence_refs += [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects", claim_or_question: "Node cache: a result cache is current behavior."}]' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
+    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+        feature_mutation_failures+=("diagram:extra-unsupported-element-binding")
+    fi
+    cp "$passing_response_dir/assistant-docs/feature-preparation-doc-diagram-binds-elements.txt" \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
+    jq '.feature_preparation_evidence_trace.outcome = "blocked_incomplete_evidence"' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
+    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+        feature_mutation_failures+=("diagram:validated-outcome-replaced")
+    fi
+    cp "$passing_response_dir/assistant-docs/feature-preparation-doc-diagram-binds-elements.txt" \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
+    jq '.review_items = []' \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt" >"$feature_mutation_root/mutated.json"
+    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
+    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
+        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
+        feature_mutation_failures+=("diagram:viewing-gap-not-disclosed")
+    fi
+    cp "$passing_response_dir/assistant-docs/feature-preparation-doc-diagram-binds-elements.txt" \
+        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
+    for support_mutation in null_member object_member blank_member whitespace_member; do
+        case "$support_mutation" in
+            null_member) support_filter='.evidence_sources[1].claims_supported = null' ;;
+            object_member) support_filter='.evidence_sources[1].claims_supported = {}' ;;
+            blank_member) support_filter='.evidence_sources[1].claims_supported = ""' ;;
+            whitespace_member) support_filter='.evidence_sources[1].claims_supported = "  "' ;;
         esac
-        jq "$trace_shape_filter" \
-            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
-        mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+        jq "$support_filter" \
+            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt" >"$feature_mutation_root/mutated.json"
+        mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
         if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
             || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
-            feature_mutation_failures+=("diagram:$trace_shape_mutation")
+            feature_mutation_failures+=("diagram:later-evidence-source-support:$support_mutation")
         fi
-        cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
-            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
+        cp "$passing_response_dir/assistant-docs/feature-preparation-doc-diagram-binds-elements.txt" \
+            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-doc-diagram-binds-elements.txt"
     done
-    jq '.feature_preparation_evidence_refs += [{evidence_ref: "prep/viewing-route", item_id: "active-route-effects"}]' \
-        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
-    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
-        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
-        feature_mutation_failures+=("diagram:extra-root-evidence-binding")
-    fi
-    cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
-        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-    jq '.element_trace[0].feature_preparation_evidence_refs += [{evidence_ref: "prep/viewing-route", item_id: "viewing-route-gap"}]' \
-        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
-    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
-        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
-        feature_mutation_failures+=("diagram:extra-nested-evidence-binding")
-    fi
-    cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
-        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-    for support_array_mutation in null_member object_member blank_member whitespace_member; do
-        case "$support_array_mutation" in
-            null_member) support_array_filter='.evidence_sources[1].supported_elements_or_relationships = [null]' ;;
-            object_member) support_array_filter='.evidence_sources[1].supported_elements_or_relationships = [{}]' ;;
-            blank_member) support_array_filter='.evidence_sources[1].supported_elements_or_relationships = [""]' ;;
-            whitespace_member) support_array_filter='.evidence_sources[1].supported_elements_or_relationships = ["  "]' ;;
-        esac
-        jq "$support_array_filter" \
-            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
-        mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-        if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
-            || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
-            feature_mutation_failures+=("diagram:later-evidence-source-support-array:$support_array_mutation")
-        fi
-        cp "$passing_response_dir/assistant-diagrams/feature-preparation-diagram-traceability.txt" \
-            "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-    done
-    jq '(.diagram_code) |= sub("viewing-route"; "preview-route")' \
-        "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt" >"$feature_mutation_root/mutated.json"
-    mv "$feature_mutation_root/mutated.json" "$feature_diagram_responses/assistant-eval-feature-diagram/feature-preparation-diagram-traceability.txt"
-    if "$skill_eval_runner" --responses "$feature_diagram_responses" --skill "$feature_diagram_skill" >"$feature_diagram_output" 2>&1 \
-        || ! grep -Eq 'structured_json_assertion_failures=[1-9]' "$feature_diagram_output"; then
-        feature_mutation_failures+=("diagram:diagram-code-viewing-route")
-    fi
     jq 'del(.tool_used, .key_insights, .recommendation, .confidence, .gaps_or_assumptions, .evidence_or_observations)' \
         "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-exact-evidence-binding.txt" >"$feature_mutation_root/mutated.json"
     mv "$feature_mutation_root/mutated.json" "$feature_thinking_responses/assistant-eval-feature-thinking/feature-preparation-exact-evidence-binding.txt"
@@ -5921,13 +5888,10 @@ if local_only_list_output="$("$skill_eval_runner" --list)" \
     && grep -Fq "assistant-clarify" <<<"$local_only_list_output" \
     && grep -Fq "assistant-cleanup" <<<"$local_only_list_output" \
     && grep -Fq "assistant-debugging" <<<"$local_only_list_output" \
-    && grep -Fq "assistant-diagrams" <<<"$local_only_list_output" \
     && grep -Fq "assistant-docs" <<<"$local_only_list_output" \
-    && grep -Fq "assistant-ideate" <<<"$local_only_list_output" \
     && grep -Fq "assistant-research" <<<"$local_only_list_output" \
     && grep -Fq "assistant-security" <<<"$local_only_list_output" \
     && grep -Fq "assistant-skill-creator" <<<"$local_only_list_output" \
-    && grep -Fq "assistant-telos" <<<"$local_only_list_output" \
     && grep -Fq "assistant-thinking" <<<"$local_only_list_output" \
     && grep -Fq "assistant-workflow" <<<"$local_only_list_output" \
     && ! grep -Fq "$custom_fixture_name" <<<"$local_only_list_output"; then
@@ -5950,15 +5914,45 @@ else
     fail "skill eval runner --list --include-local should include generated local-only custom fixtures while default list excludes them"
 fi
 
+p0p4_assert_retired_skill_fixtures_absent() {
+    local list_output="$1"
+    local retired_skill
+    local failures=()
+    for retired_skill in assistant-telos assistant-diagrams assistant-ideate; do
+        if grep -Fq "$retired_skill" <<<"$list_output"; then
+            failures+=("$retired_skill fixture still listed")
+        fi
+        if grep -Fq "$retired_skill" "$FRAMEWORK_DIR/README.md"; then
+            failures+=("$retired_skill still documented in README.md")
+        fi
+        if grep -Fq "skills/$retired_skill/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md"; then
+            failures+=("$retired_skill fixture still documented in docs/evals/skill-fixtures.md")
+        fi
+        if [[ -e "$FRAMEWORK_DIR/skills/$retired_skill" ]]; then
+            failures+=("$retired_skill fixture still present")
+        fi
+    done
+    if [[ "${#failures[@]}" -eq 0 ]]; then
+        return 0
+    fi
+    printf '%s\n' "${failures[@]}"
+    return 1
+}
+
+test_start "skill eval inventory excludes retired skill fixtures"
+if retired_list_output="$("$skill_eval_runner" --list)" \
+    && retired_fixture_failures="$(p0p4_assert_retired_skill_fixtures_absent "$retired_list_output")"; then
+    pass
+else
+    fail "retired skill fixtures remain: ${retired_fixture_failures:-skill eval runner --list failed}"
+fi
+
 test_start "skill eval docs describe complete first-class coverage"
 documented_skill_count="$(p0p4_skill_eval_default_fixtures | wc -l | tr -d '[:space:]')"
 if grep -Fq "default eval inventory is $documented_skill_count first-class \`assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-debugging" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-cleanup" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-diagrams" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-docs" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-ideate" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-telos" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-skill-creator" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-research" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-onboard" "$FRAMEWORK_DIR/README.md" \
@@ -5981,10 +5975,7 @@ if grep -Fq "default eval inventory is $documented_skill_count first-class \`ass
     && cmp -s "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && grep -Fq "skills/assistant-debugging/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
     && grep -Fq "skills/assistant-cleanup/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq "skills/assistant-diagrams/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
     && grep -Fq "skills/assistant-docs/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq "skills/assistant-ideate/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq "skills/assistant-telos/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
     && grep -Fq "skills/assistant-skill-creator/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
     && grep -Fq "skills/assistant-research/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
     && grep -Fq "skills/assistant-onboard/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \

@@ -19,13 +19,11 @@ Agent definitions are per-platform: Claude uses `.md` files in `agents/claude/`,
 
 - **assistant-review**: Autonomous review loop — MUST be invoked for the Stage 2 final acceptance review
 - **assistant-tdd**: Test-Driven Development enforcement — Red-Green-Refactor cycle (Build phase, when TDD is active)
-- **assistant-thinking**: Structured reasoning for architecture decisions (Discovery, Plan phases)
+- **assistant-thinking**: Structured reasoning for architecture decisions (Discovery, Plan phases) and option generation for idea-to-action decomposition
 - **assistant-research**: Information gathering during Discovery phase
 - **assistant-security**: Security analysis during Plan/Build phases
 - **assistant-docs**: Documentation generation in Document phase or standalone
 - **assistant-onboard**: Systematic project learning when entering a new codebase
-- **assistant-ideate**: Brainstorming pipeline during idea-to-action decomposition
-- **assistant-diagrams**: Visual documentation during Plan/Document phases
 
 ## Anti-Patterns
 

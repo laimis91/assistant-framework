@@ -1245,6 +1245,168 @@
         "end": "<!-- ASSISTANT_FRAMEWORK_MEMORY_PROTOCOL_END -->"
       },
       "note": "Memory protocol block appended to GEMINI.md by install.sh and install.ps1 at fdff2dc (Update-MemoryProtocol)."
+    },
+    {
+      "id": "skill/assistant-telos",
+      "root": "agent_home",
+      "path": "skills/assistant-telos",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-telos",
+      "retired_in": "68da3fd9c653d02ed58561fde66d057d0e5f16dc",
+      "content_proof": "skill/assistant-telos",
+      "note": "S10 removed skills/assistant-telos; install.sh copied it to <agent home>/skills/assistant-telos for every agent (install.sh:800-805 lineage)."
+    },
+    {
+      "id": "skill/assistant-telos@windows",
+      "root": "agent_home",
+      "path": "skills/assistant-telos",
+      "agents": [
+        "claude",
+        "gemini"
+      ],
+      "layouts": [
+        "windows"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-telos",
+      "retired_in": "68da3fd9c653d02ed58561fde66d057d0e5f16dc",
+      "content_proof": "skill/assistant-telos",
+      "note": "install.ps1 installed Claude and Gemini skills under <agent home>/skills."
+    },
+    {
+      "id": "skill/assistant-telos@agents-skills",
+      "root": "agents_skills",
+      "path": "assistant-telos",
+      "agents": [
+        "codex"
+      ],
+      "layouts": [
+        "windows"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-telos",
+      "retired_in": "68da3fd9c653d02ed58561fde66d057d0e5f16dc",
+      "content_proof": "skill/assistant-telos",
+      "note": "install.ps1 installed Codex skills under ~/.agents/skills."
+    },
+    {
+      "id": "skill/assistant-diagrams",
+      "root": "agent_home",
+      "path": "skills/assistant-diagrams",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-diagrams",
+      "retired_in": "68da3fd9c653d02ed58561fde66d057d0e5f16dc",
+      "content_proof": "skill/assistant-diagrams",
+      "note": "S10 removed skills/assistant-diagrams; install.sh copied it to <agent home>/skills/assistant-diagrams for every agent (install.sh:800-805 lineage)."
+    },
+    {
+      "id": "skill/assistant-diagrams@windows",
+      "root": "agent_home",
+      "path": "skills/assistant-diagrams",
+      "agents": [
+        "claude",
+        "gemini"
+      ],
+      "layouts": [
+        "windows"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-diagrams",
+      "retired_in": "68da3fd9c653d02ed58561fde66d057d0e5f16dc",
+      "content_proof": "skill/assistant-diagrams",
+      "note": "install.ps1 installed Claude and Gemini skills under <agent home>/skills."
+    },
+    {
+      "id": "skill/assistant-diagrams@agents-skills",
+      "root": "agents_skills",
+      "path": "assistant-diagrams",
+      "agents": [
+        "codex"
+      ],
+      "layouts": [
+        "windows"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-diagrams",
+      "retired_in": "68da3fd9c653d02ed58561fde66d057d0e5f16dc",
+      "content_proof": "skill/assistant-diagrams",
+      "note": "install.ps1 installed Codex skills under ~/.agents/skills."
+    },
+    {
+      "id": "skill/assistant-ideate",
+      "root": "agent_home",
+      "path": "skills/assistant-ideate",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-ideate",
+      "retired_in": "68da3fd9c653d02ed58561fde66d057d0e5f16dc",
+      "content_proof": "skill/assistant-ideate",
+      "note": "S10 removed skills/assistant-ideate; install.sh copied it to <agent home>/skills/assistant-ideate for every agent (install.sh:800-805 lineage)."
+    },
+    {
+      "id": "skill/assistant-ideate@windows",
+      "root": "agent_home",
+      "path": "skills/assistant-ideate",
+      "agents": [
+        "claude",
+        "gemini"
+      ],
+      "layouts": [
+        "windows"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-ideate",
+      "retired_in": "68da3fd9c653d02ed58561fde66d057d0e5f16dc",
+      "content_proof": "skill/assistant-ideate",
+      "note": "install.ps1 installed Claude and Gemini skills under <agent home>/skills."
+    },
+    {
+      "id": "skill/assistant-ideate@agents-skills",
+      "root": "agents_skills",
+      "path": "assistant-ideate",
+      "agents": [
+        "codex"
+      ],
+      "layouts": [
+        "windows"
+      ],
+      "kind": "skill_directory",
+      "node_type": "directory",
+      "source_path": "skills/assistant-ideate",
+      "retired_in": "68da3fd9c653d02ed58561fde66d057d0e5f16dc",
+      "content_proof": "skill/assistant-ideate",
+      "note": "install.ps1 installed Codex skills under ~/.agents/skills."
     }
   ]
 }

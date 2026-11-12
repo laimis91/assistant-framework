@@ -1741,11 +1741,11 @@ fi
 
 retired_seed_skill() {
     # Write the last released assistant-<name> skill as an install would have.
-    local name="$1" agent="$2" target="$3"
-    (cd "$FRAMEWORK_DIR" && python3 -B - "$name" "$agent" "$target" <<'SEED'
+    # An optional fourth argument names the source revision (default: the last release before fdff2dc).
+    local name="$1" agent="$2" target="$3" rev="${4:-fdff2dc7cf5719e3c231e5c17f34c9207239c343^}"
+    (cd "$FRAMEWORK_DIR" && python3 -B - "$name" "$agent" "$target" "$rev" <<'SEED'
 import os, subprocess, sys
-name, agent, target = sys.argv[1:]
-rev = "fdff2dc7cf5719e3c231e5c17f34c9207239c343^"
+name, agent, target, rev = sys.argv[1:]
 source = f"skills/assistant-{name}"
 files = subprocess.run(["git", "ls-tree", "-r", "--name-only", rev, source], check=True, capture_output=True, text=True).stdout.split()
 for path in files:
@@ -1839,6 +1839,44 @@ else
     retired_failures+=("linked install failed: $(tail -n 2 "$retired_link_home/install.err")")
 fi
 if [[ "${#retired_failures[@]}" == 0 ]]; then pass; else fail "${retired_failures[*]}"; fi
+
+test_start "install removes byte-identical S10-retired skills, keeps modified or user-extended copies, and leaves purpose files alone"
+# R-S11-25 with the skills S10 retired (Telos, Diagrams, Ideate), seeded from the S10 base revision, plus R-S10-11.
+s10_retired_rev="68da3fd9c653d02ed58561fde66d057d0e5f16dc"
+s10_retired_failures=()
+s10_retired_home="$(mktemp -d)"
+p0p4_register_cleanup "$s10_retired_home"
+s10_retired_skills="$s10_retired_home/.claude/skills"
+retired_seed_skill telos claude "$s10_retired_skills/assistant-telos" "$s10_retired_rev"
+retired_seed_skill diagrams claude "$s10_retired_skills/assistant-diagrams" "$s10_retired_rev"
+retired_seed_skill ideate claude "$s10_retired_skills/assistant-ideate" "$s10_retired_rev"
+# One changed byte in Diagrams' SKILL.md and one user file in Ideate make both ambiguous.
+python3 -B - "$s10_retired_skills/assistant-diagrams/SKILL.md" <<'FLIP'
+import sys
+path = sys.argv[1]
+data = bytearray(open(path, "rb").read())
+data[-2] = ord("X") if data[-2] != ord("X") else ord("Y")
+open(path, "wb").write(bytes(data))
+FLIP
+printf 'my notes\n' >"$s10_retired_skills/assistant-ideate/notes.md"
+mkdir -p "$s10_retired_home/purpose" "$s10_retired_home/project/docs"
+printf '# Telos\nMission: user-authored.\n' >"$s10_retired_home/purpose/TELOS.md"
+printf '# Project telos\nGoals: user-authored.\n' >"$s10_retired_home/project/docs/telos.md"
+s10_purpose_before="$(cat "$s10_retired_home/purpose/TELOS.md" "$s10_retired_home/project/docs/telos.md" | shasum -a 256)"
+s10_diagrams_before="$(shasum -a 256 <"$s10_retired_skills/assistant-diagrams/SKILL.md")"
+if HOME="$s10_retired_home" bash "$FRAMEWORK_DIR/install.sh" --agent claude --skill assistant-clarify --no-hooks </dev/null >"$s10_retired_home/install.out" 2>"$s10_retired_home/install.err"; then
+    [[ ! -e "$s10_retired_skills/assistant-telos" ]] || s10_retired_failures+=("byte-identical assistant-telos was kept")
+    [[ -f "$s10_retired_skills/assistant-diagrams/SKILL.md" ]] || s10_retired_failures+=("modified assistant-diagrams was removed")
+    [[ "$(shasum -a 256 <"$s10_retired_skills/assistant-diagrams/SKILL.md")" == "$s10_diagrams_before" ]] || s10_retired_failures+=("modified assistant-diagrams was changed")
+    [[ -f "$s10_retired_skills/assistant-ideate/notes.md" && -f "$s10_retired_skills/assistant-ideate/SKILL.md" ]] || s10_retired_failures+=("assistant-ideate with a user file was removed")
+    grep -Fq 'skills/assistant-diagrams' "$s10_retired_home/install.out" || s10_retired_failures+=("modified assistant-diagrams was not reported")
+    grep -Fq 'skills/assistant-ideate' "$s10_retired_home/install.out" || s10_retired_failures+=("user-extended assistant-ideate was not reported")
+    [[ "$(cat "$s10_retired_home/purpose/TELOS.md" "$s10_retired_home/project/docs/telos.md" | shasum -a 256)" == "$s10_purpose_before" ]] \
+        || s10_retired_failures+=("a user purpose file changed")
+else
+    s10_retired_failures+=("install failed: $(tail -n 2 "$s10_retired_home/install.err")")
+fi
+if [[ "${#s10_retired_failures[@]}" == 0 ]]; then pass; else fail "${s10_retired_failures[*]}"; fi
 
 test_start "Codex install removes a byte-identical retired skill under CODEX_HOME"
 retired_codex_home="$(mktemp -d)"

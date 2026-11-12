@@ -9,7 +9,6 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 thinking_dir="$FRAMEWORK_DIR/skills/assistant-thinking"
-diagrams_dir="$FRAMEWORK_DIR/skills/assistant-diagrams"
 docs_dir="$FRAMEWORK_DIR/skills/assistant-docs"
 
 test_start "feature-preparation response fixtures may be sourced twice without readonly diagnostics"
@@ -1212,68 +1211,58 @@ else
     fail "thinking multi-binding eval does not prove both candidate-to-row bindings"
 fi
 
-test_start "diagrams bind feature-preparation behavior to exact evidence rows"
+test_start "docs diagrams bind each feature-preparation element to exact evidence rows"
 if ruby -ryaml -e '
   input = YAML.load_file(ARGV.fetch(0))
   output = YAML.load_file(ARGV.fetch(1))
-  skill = File.read(ARGV.fetch(2))
-  expected = %w[evidence_ref item_id]
-  binding = lambda do |fields|
-    field = fields.find { |candidate| candidate["name"] == "feature_preparation_evidence_refs" }
-    field && field["type"] == "object[]" &&
-      field["required"] == "conditional" &&
-      field["condition"] == "diagram supports existing-system feature preparation" &&
-      field.fetch("object_fields").map { |candidate| candidate["name"] } == expected
-  end
-  input_fields = input.fetch("fields")
-  artifacts = output.fetch("artifacts").to_h { |artifact| [artifact.fetch("name"), artifact] }
-  output_binding = artifacts.fetch("feature_preparation_evidence_refs")
-  trace_fields = artifacts.fetch("element_trace").fetch("object_fields")
-  valid = input.fetch("schema_version") == "3.0" &&
-    output.fetch("schema_version") == "3.0" &&
-    binding.call(input_fields) &&
-    output_binding["type"] == "object[]" &&
-    output_binding["required"] == "conditional" &&
-    output_binding["condition"] == "diagram supports existing-system feature preparation" &&
-    output_binding.fetch("object_fields").map { |candidate| candidate["name"] } == expected &&
-    binding.call(trace_fields) &&
-    !input_fields.any? { |field| field["name"] == "feature_preparation_evidence_ref" } &&
-    !artifacts.key?("feature_preparation_evidence_ref") &&
-    skill.include?("contracts/input.yaml") && skill.include?("contracts/output.yaml") &&
-    skill.include?("{evidence_ref, item_id}")
+  architecture = File.read(ARGV.fetch(2))
+  expected = %w[evidence_ref item_id claim_or_question]
+  input_binding = input.fetch("fields").find { |field| field["name"] == "feature_preparation_evidence_refs" }
+  trace = output.fetch("artifacts").find { |artifact| artifact["name"] == "feature_preparation_evidence_trace" }
+  trace_refs = trace && trace.fetch("object_fields").find { |field| field["name"] == "evidence_refs" }
+  valid = input.fetch("schema_version") == "4.0" &&
+    output.fetch("schema_version") == "4.0" &&
+    input_binding && input_binding["type"] == "object[]" &&
+    input_binding.fetch("object_fields").map { |field| field["name"] } == expected &&
+    trace_refs && trace_refs["type"] == "object[]" &&
+    trace_refs.fetch("object_fields").map { |field| field["name"] } == expected &&
+    architecture.include?("each node or edge that depicts existing or proposed behavior needs its own exact `{evidence_ref, item_id, claim_or_question}` binding") &&
+    architecture.include?("an unbound element makes the evidence incomplete") &&
+    architecture.include?("An ordinary diagram needs no separate per-element ledger.")
   exit(valid ? 0 : 1)
-' "$diagrams_dir/contracts/input.yaml" "$diagrams_dir/contracts/output.yaml" "$diagrams_dir/SKILL.md"; then
+' "$docs_dir/contracts/input.yaml" "$docs_dir/contracts/output.yaml" "$docs_dir/architecture.md"; then
     pass
 else
-    fail "diagram feature-preparation bindings remain broad, untyped, or missing from element traces"
+    fail "docs architecture.md lacks per-element diagram binding or the Docs binding fields changed"
 fi
 
-test_start "diagram eval binds ACTIVE effects and VIEWING gaps to different admissible rows"
+test_start "docs diagram eval binds ACTIVE effects and VIEWING gaps to different admissible rows"
 if ruby -rjson -e '
-  entry = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases").find { |candidate| candidate["id"] == "feature-preparation-diagram-traceability" }
+  entry = JSON.parse(File.read(ARGV.fetch(0))).fetch("cases").find { |candidate| candidate["id"] == "feature-preparation-doc-diagram-binds-elements" }
+  unless entry
+    warn "docs fixture lacks feature-preparation-doc-diagram-binds-elements"
+    exit 1
+  end
   assertions = entry.fetch("machine_expectations").fetch("structured_json_assertions")
   value_at = lambda do |path|
     assertion = assertions.find { |candidate| candidate["operator"] == "equals" && candidate["path"] == path }
     assertion && assertion["expected"]
   end
-  root_rows = [["prep/viewing-route", "active-route-effects"], ["prep/viewing-route", "viewing-route-gap"]]
-  root_bindings = root_rows.each_with_index.all? do |(ref, item), index|
-    value_at.call(["feature_preparation_evidence_refs", index, "evidence_ref"]) == ref &&
-      value_at.call(["feature_preparation_evidence_refs", index, "item_id"]) == item
-  end
   expected_items = ["active-route-effects", "active-route-effects", "active-route-effects", "viewing-route-gap", "viewing-route-gap"]
-  trace_bindings = expected_items.each_with_index.all? do |item, index|
-    value_at.call(["element_trace", index, "feature_preparation_evidence_refs", 0, "evidence_ref"]) == "prep/viewing-route" &&
-      value_at.call(["element_trace", index, "feature_preparation_evidence_refs", 0, "item_id"]) == item
+  element_bindings = expected_items.each_with_index.all? do |item, index|
+    value_at.call(["feature_preparation_evidence_trace", "evidence_refs", index, "evidence_ref"]) == "prep/viewing-route" &&
+      value_at.call(["feature_preparation_evidence_trace", "evidence_refs", index, "item_id"]) == item &&
+      value_at.call(["feature_preparation_evidence_trace", "evidence_refs", index, "claim_or_question"]).to_s.match?(/\A(Node|Edge) /)
   end
-  valid = entry.fetch("setup_context").join(" ").include?("active-route-effects") &&
-    entry.fetch("setup_context").join(" ").include?("viewing-route-gap") &&
-    root_bindings && trace_bindings && expected_items.uniq.length == 2
+  setup = entry.fetch("setup_context").join(" ")
+  valid = setup.include?("active-route-effects") && setup.include?("viewing-route-gap") &&
+    value_at.call(["feature_preparation_evidence_trace", "outcome"]) == "validated" &&
+    element_bindings && expected_items.uniq.length == 2
   exit(valid ? 0 : 1)
-' "$diagrams_dir/evals/cases.json"; then
+' "$docs_dir/evals/cases.json"; then
     pass
 else
-    fail "diagram eval does not prove per-element relevance across two admissible feature-preparation rows"
+    fail "docs diagram eval does not prove per-element relevance across two admissible feature-preparation rows"
 fi
 
 test_start "docs block incomplete feature preparation with or without Architecture Packs"
@@ -1303,7 +1292,7 @@ else
     fail "docs incomplete Pack recovery contract missing: ${docs_failures[*]}"
 fi
 
-test_start "all four skill evals cover the sanitized behavior-preservation regression"
+test_start "workflow, thinking and docs evals cover the sanitized behavior-preservation regression"
 eval_failures=()
 for file_and_term in \
     "$workflow_dir/evals/cases.json::viewing-route-preserves-active-behavior" \
@@ -1312,7 +1301,7 @@ for file_and_term in \
     "$workflow_dir/evals/cases.json::source_conflict" \
     "$workflow_dir/evals/cases.json::evidence_gap" \
     "$thinking_dir/evals/cases.json::feature-preparation-candidates-require-evidence" \
-    "$diagrams_dir/evals/cases.json::feature-preparation-diagram-traceability" \
+    "$docs_dir/evals/cases.json::feature-preparation-doc-diagram-binds-elements" \
     "$docs_dir/evals/cases.json::architecture-doc-blocks-incomplete-feature-preparation-pack" \
     "$docs_dir/evals/cases.json::feature-preparation-doc-blocks-incomplete-evidence-without-pack"; do
     file="${file_and_term%%::*}"
@@ -1344,7 +1333,7 @@ $workflow_dir/evals/cases.json|feature-preparation-counterclassifies-unknown-con
 $thinking_dir/evals/cases.json|feature-preparation-candidates-require-evidence
 $thinking_dir/evals/cases.json|feature-preparation-exact-evidence-binding
 $thinking_dir/evals/cases.json|feature-preparation-mismatched-evidence-binding
-$diagrams_dir/evals/cases.json|feature-preparation-diagram-traceability
+$docs_dir/evals/cases.json|feature-preparation-doc-diagram-binds-elements
 $docs_dir/evals/cases.json|architecture-doc-blocks-incomplete-feature-preparation-pack
 $docs_dir/evals/cases.json|feature-preparation-doc-blocks-incomplete-evidence-without-pack
 $docs_dir/evals/cases.json|feature-preparation-doc-requires-exact-evidence-binding

@@ -176,21 +176,23 @@ else
     fail "assistant-review execution authorization contract drifted: ${review_authorization_failures[*]}"
 fi
 
-test_start "assistant-ideate owns brainstorming description activation"
+test_start "assistant-thinking owns brainstorming description activation"
 thinking_skill="$FRAMEWORK_DIR/skills/assistant-thinking/SKILL.md"
-ideate_skill="$FRAMEWORK_DIR/skills/assistant-ideate/SKILL.md"
 brainstorm_trigger_failures=()
-if grep -Eiq '^description:.*brainstorm' "$thinking_skill"; then
-    brainstorm_trigger_failures+=("assistant-thinking frontmatter still routes brainstorm")
+if ! grep -Eiq '^description:.*brainstorm' "$thinking_skill"; then
+    brainstorm_trigger_failures+=("assistant-thinking frontmatter does not route brainstorm")
 fi
-if ! grep -Eiq '^description:.*brainstorm' "$ideate_skill"; then
-    brainstorm_trigger_failures+=("assistant-ideate frontmatter does not route brainstorm")
-fi
+for skill_file in "$FRAMEWORK_DIR"/skills/*/SKILL.md; do
+    [[ "$skill_file" == "$thinking_skill" ]] && continue
+    if grep -Eiq '^description:.*brainstorm' "$skill_file"; then
+        brainstorm_trigger_failures+=("$(basename "$(dirname "$skill_file")") frontmatter also routes brainstorm")
+    fi
+done
 
 if [[ "${#brainstorm_trigger_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "brainstorm prompts should route to ideate only: ${brainstorm_trigger_failures[*]}"
+    fail "brainstorm prompts should route to thinking only: ${brainstorm_trigger_failures[*]}"
 fi
 
 test_start "current routing guidance separates discovery fields from post-activation instructions"

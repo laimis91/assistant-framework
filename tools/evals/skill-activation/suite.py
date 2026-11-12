@@ -36,8 +36,7 @@ NEIGHBOUR_PAIRS = (
     ("assistant-review", "assistant-skill-creator"), ("assistant-verification", "assistant-tdd"),
     ("assistant-ui-qa", "assistant-debugging"), ("assistant-ui-qa", "assistant-review"),
     ("assistant-debugging", "assistant-ci-audit"), ("assistant-debugging", "assistant-thinking"),
-    ("assistant-research", "assistant-thinking"), ("assistant-research", "assistant-ideate"),
-    ("assistant-thinking", "assistant-ideate"), ("assistant-workflow", "assistant-thinking"),
+    ("assistant-research", "assistant-thinking"), ("assistant-workflow", "assistant-thinking"),
 )
 PHASED_SKILLS = {
     "assistant-workflow": DIMENSIONS["phase"],

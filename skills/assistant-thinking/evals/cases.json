@@ -11,7 +11,10 @@
     {"user_request": "Stress test this architecture decision.", "should_activate": true},
     {"user_request": "Reason through this trade-off.", "should_activate": true},
     {"user_request": "Technically prepare this feature from current code and tests; do not implement.", "should_activate": false},
-    {"user_request": "Implement the selected architecture decision.", "should_activate": false}
+    {"user_request": "Implement the selected architecture decision.", "should_activate": false},
+    {"user_request": "Generate and rank feature ideas.", "should_activate": true},
+    {"user_request": "Run a quick improvement scan.", "should_activate": true},
+    {"user_request": "Implement the chosen feature idea.", "should_activate": false}
   ],
   "recommended_use": [
     "Run each case with the assistant-thinking skill instructions loaded.",
@@ -376,6 +379,202 @@
           {"operator": "nonempty_array", "path": ["evidence_or_observations"]},
           {"operator": "equals", "path": ["candidate_concerns_or_criteria", 0, "promotion_status"], "expected": "requires_feature_preparation_evidence"},
           {"operator": "nonempty_string", "path": ["candidate_concerns_or_criteria", 0, "rationale"]}
+        ]
+      }
+    },
+    {
+      "id": "quick-improvement-scan-uses-light-mode",
+      "title": "Quick improvement scan uses light mode",
+      "category": "adaptive_ideation_depth",
+      "purpose": "Checks that a broad what-else request gets several ranked options without deep-mode scoring ceremony.",
+      "prompt": "What else could improve native skill activation precision without adding more standing instructions?",
+      "setup_context": [
+        "The assistant-thinking skill instructions are active.",
+        "The user asks for a quick improvement scan, not a comprehensive brainstorm.",
+        "No user choice packet was requested."
+      ],
+      "expected_behavior": [
+        "Keeps the response concise for the quick scan.",
+        "Generates distinct options and ranks them qualitatively with useful trade-offs.",
+        "Recommends a next step without forcing a choice packet or implementation.",
+        "Avoids fixed idea quotas and unnecessary scoring."
+      ],
+      "pass_criteria": [
+        "Several meaningful alternatives are compared.",
+        "The ranking explains trade-offs and the recommended next step.",
+        "No mandatory mode label, numeric matrix, or follow-up decision ritual is imposed."
+      ],
+      "fail_signals": [
+        "Pads the list to a fixed quota.",
+        "Builds an unnecessary weighted scoring table.",
+        "Forces a follow-up decision packet or starts implementation."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "trade-off",
+          "next step"
+        ],
+        "forbidden_substrings": [
+          "user_decision: selected",
+          "I started implementing"
+        ]
+      }
+    },
+    {
+      "id": "explicit-brainstorm-uses-deep-mode",
+      "title": "Explicit brainstorm uses deep mode",
+      "category": "adaptive_ideation_depth",
+      "purpose": "Checks that an explicit broad brainstorm explores varied alternatives and compares them against relevant constraints.",
+      "prompt": "Brainstorm broadly and compare many ways to make agent skill routing more precise.",
+      "setup_context": [
+        "The assistant-thinking skill instructions are active.",
+        "The user explicitly requests broad brainstorming and comparison."
+      ],
+      "expected_behavior": [
+        "Explores varied meaningful alternatives beyond a quick list.",
+        "Compares options using relevant benefits, feasibility, constraints, and risk.",
+        "Refines promising candidates with a validation step.",
+        "Stops after the requested analysis without inventing a user choice."
+      ],
+      "pass_criteria": [
+        "The broad comparison covers distinct approaches.",
+        "Rankings and trade-offs are explained without arbitrary idea counts or unjustified weights.",
+        "Promising candidates have practical next steps."
+      ],
+      "fail_signals": [
+        "Returns one unexamined option.",
+        "Uses unsupported scores as precise evidence.",
+        "Claims the user selected a recommendation."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "risk",
+          "trade-off",
+          "next step"
+        ],
+        "forbidden_substrings": [
+          "user_decision: selected",
+          "only one idea is needed"
+        ]
+      }
+    },
+    {
+      "id": "brainstorm-diverges-before-ranking",
+      "title": "Brainstorm diverges before ranking",
+      "category": "diverge_converge_gate",
+      "purpose": "Checks that broad ideation generates distinct alternatives before narrowing and respects the no-provider-dependencies constraint.",
+      "prompt": "Brainstorm ways to make the skill eval framework more useful for future agents without adding model provider dependencies.",
+      "setup_context": [
+        "The assistant-thinking skill instructions are active.",
+        "The user asks for brainstorming and provides an important constraint.",
+        "No idea has been selected yet."
+      ],
+      "expected_behavior": [
+        "Frames the goal and respects the no-provider-dependencies constraint.",
+        "Generates varied options before narrowing to favorites.",
+        "Explains ranking against useful criteria and refines promising options.",
+        "Offers a recommendation without claiming an explicit user decision or starting implementation."
+      ],
+      "pass_criteria": [
+        "Multiple meaningful alternatives are compared.",
+        "Relevant trade-offs and risks guide ranking.",
+        "The constraint is preserved through refinement.",
+        "The response does not impose phase transcripts or numeric quotas."
+      ],
+      "fail_signals": [
+        "Presents only one unexamined idea.",
+        "Ignores the no-provider-dependencies constraint.",
+        "Fabricates a user choice."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "provider dependencies",
+          "risk",
+          "trade-off"
+        ],
+        "forbidden_substrings": [
+          "provider dependency is fine",
+          "user_decision: selected"
+        ]
+      }
+    },
+    {
+      "id": "prior-attempts-constraints-shape-refinement",
+      "title": "Prior attempts constraints shape refinement",
+      "category": "constraint_respecting_refinement",
+      "purpose": "Checks that prior attempts shape distinct alternatives and useful refinement without an unrequested decision ritual.",
+      "prompt": "Explore alternatives to another docs page for showing eval coverage. We already tried static README lists and they drift.",
+      "setup_context": [
+        "The assistant-thinking skill instructions are active.",
+        "The user supplied a prior attempt that should not be re-proposed unchanged.",
+        "The goal is to reduce coverage drift."
+      ],
+      "expected_behavior": [
+        "Frames the goal as reducing eval coverage drift.",
+        "Acknowledges the rejected static README approach and does not repeat it unchanged.",
+        "Compares distinct approaches against constraints and risks.",
+        "Includes a useful first validation step for the promising options.",
+        "Distinguishes recommendations from an actual user choice."
+      ],
+      "pass_criteria": [
+        "Prior attempts change the recommendations.",
+        "Relevant risks and validation steps are explicit.",
+        "The response does not force a choice packet or implement an unselected idea."
+      ],
+      "fail_signals": [
+        "Recommends another unchanged static README list as the only answer.",
+        "Ignores the prior attempt.",
+        "Starts implementing without authorization."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "drift",
+          "risks",
+          "step"
+        ],
+        "forbidden_substrings": [
+          "static README list is enough",
+          "ignore prior attempts",
+          "I selected the only option",
+          "user_decision: selected"
+        ]
+      }
+    },
+    {
+      "id": "stress-test-refusing-new-options-gets-stress-test",
+      "title": "Stress test that refuses new options gets a stress test",
+      "category": "stress_test_recommendation",
+      "purpose": "Checks that a request to attack an existing rule, which explicitly refuses new options, selects the stress test method rather than generating an option list.",
+      "prompt": "Attack the rule in docs/specs/export.md that unknown formats exit with status 2, from first principles. I don't want new options, I want to know where it breaks.",
+      "setup_context": [
+        "The assistant-thinking skill instructions are active.",
+        "The user asks to attack one existing rule and explicitly refuses new options.",
+        "docs/specs/export.md states that an unknown export format exits with status 2."
+      ],
+      "expected_behavior": [
+        "Selects the stress test method and treats the rule as the claim under attack.",
+        "Identifies where the rule breaks, with concrete edge cases or vulnerabilities.",
+        "Does not generate, rank, or recommend alternative rules or options.",
+        "Ends with a verdict on where the rule breaks and the confidence in it."
+      ],
+      "pass_criteria": [
+        "The response names stress test as the method.",
+        "The response reports vulnerabilities of the existing rule rather than an option list."
+      ],
+      "fail_signals": [
+        "Returns a ranked list of alternative rules or options.",
+        "Switches to brainstorming new export behaviors the user refused."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "stress test",
+          "status 2",
+          "vulnerabilities"
+        ],
+        "forbidden_substrings": [
+          "Option 1",
+          "Ranked options",
+          "Here are some alternatives"
         ]
       }
     }
