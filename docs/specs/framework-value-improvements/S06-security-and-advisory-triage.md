@@ -1,6 +1,6 @@
 # S06 — Framework-specific security and advisory triage
 
-Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented on branch `fvi/s06-advisory-triage` (2026-11-07), merged to main as 50f5f18 (#97); held-out refreeze pending integration. On 2026-11-08 the user accepted the triage method text (decision 7) and the R-S06-12 amendment, and waived the R-EVAL-3 review of the five S06 activation cases.
+Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented on branch `fvi/s06-advisory-triage` (2026-11-07), merged to main as 50f5f18 (#97); held-out set refrozen at integration (2026-11-12, after the user's R-EVAL-3 approval); live activation trials await the user's authorization. On 2026-11-08 the user accepted the triage method text (decision 7) and the R-S06-12 amendment, and waived the R-EVAL-3 review of the five S06 activation cases.
 Source: report §1.E "Security: add boundary-oriented depth selected by the target", §2 "Add: assistant-advisory-triage", §4 orders 5 and 6, "Additional audit findings" lesson 1, §6 rows 14–15, and "Status against main"; slice map row S06. Comparators: `/Users/laimis/Developer/Comparable skills/security-audit/SKILL.md`, its `AI-AND-LLM.md` (and, for release provenance only, `SUPPLY-CHAIN-AND-RELEASE.md`), and `/Users/laimis/Developer/Comparable skills/security-triage/SKILL.md`. Audit: `/Users/laimis/Downloads/assistant-v1-project-audit.md`.
 
 ## Problem and intended outcome

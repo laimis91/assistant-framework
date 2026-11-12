@@ -1,6 +1,6 @@
 # Framework value improvements — specification set
 
-Status: **Accepted by the user**, 2026-11-06. Baseline: main d11756d. S01 to S11 are implemented (see their rows). Integration count reconciliation, the held-out refreeze and live activation trials remain.
+Status: **Accepted by the user**, 2026-11-06. Baseline: main d11756d. S01 to S11 are implemented (see their rows). Integrated on branch `fvi/integration` from main 5861363 (2026-11-12): final count of 17 first-class skills reconciled, held-out set refrozen after the user's R-EVAL-3 approval of all 28 held-out changes since d11756d, aggregate validation and a fresh integrated review, with commands and results recorded in the integration pull request. Live activation trials and the live runs of new behaviour eval cases remain, each awaiting the user's authorization.
 
 Source: [framework value assessment](../../research/assistant-framework-value-assessment-2026-10-26.md). The user accepted the S01–S11 slice map and its decisions on 6 November 2026: matched evaluation for S01 and S05 only; new skills bundled by default with `--skill` for single installs; a cleanup skill plus uninstall script (S11); no word or character budgets.
 
@@ -58,9 +58,10 @@ Follow-up decisions, settled 2026-11-06 when the user accepted the set with the 
 - **D-S11-13:** no opt-out flag for installer removal; `--dry-run` is the preview.
 - **R-S11-25:** installer removal also runs on `--skill` single installs, as retired-tool removal does today.
 - **D-S11-12, D-S10-6, D-S10-7, D-S10-8 (technical defaults, accepted):** inventory reading in `install.sh` without Python ((b): a generated, test-checked tool list as the one allowed derivative of the inventory); keep the option-ranking routing row under Thinking; extend `creative.md` rather than add a method value; drop Thinking-to-itself neighbour fields.
+
 Still open:
 
-- **Held-out activation cases** change with the Ideate merge and the new skills; they need the user's R-EVAL-3 review before any rerun.
+- **Live activation trials** for the refrozen held-out set and the 76 `activation_cases` need the user's authorization (call count and cost cap). The held-out case changes were approved under R-EVAL-3 on 2026-11-12 and refrozen at integration.
 
 Unowned report items not covered above (document-to-action-items, meeting-action-items, hermes-agent-skill-authoring, github reference structure) are proposed as deferred.
 
