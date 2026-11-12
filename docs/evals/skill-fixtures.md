@@ -322,7 +322,7 @@ Run it. `--authorized-calls` must equal the plan's `calls`, and `--host-version`
 keeps every arm of a comparison on one installed host:
 
 ```bash
-tools/evals/skill-activation/run_trials.py --batch dev-1 --arm current --set development --host-version 2.1.317 --repeats 3 --max-cost-usd 60 --authorized-calls 211 --run
+tools/evals/skill-activation/run_trials.py --batch dev-1 --arm current --set development --host-version 2.1.317 --repeats 3 --max-cost-usd 60 --authorized-calls 217 --run
 ```
 
 Report. Existing `activation_cases` use `--set activation` with two baselines and

@@ -316,9 +316,9 @@ Evidence-bounded code review: trivial/small light review uses one fresh pass plu
 Triggers on: review, fresh review, code review, review this, check the code
 
 ### assistant-docs
-Documentation generation and maintenance: API docs, architecture overview, README, changelog, migration guide, and code explanation. Checks source accuracy within the requested scope. A diagram it includes draws only source-backed current elements, labels proposed ones, and states what render check actually ran. Prose edits follow an editing checklist that preserves meaning, technical terms and the existing voice.
+Documentation generation and maintenance: API docs, architecture overview, README, changelog, migration guide, and code explanation. Checks source accuracy within the requested scope. A request for a diagram of existing code also routes here: the diagram draws only source-backed current elements, labels proposed ones, and states what render check actually ran. Concept sketches with no source use the general model. Prose edits follow an editing checklist that preserves meaning, technical terms and the existing voice.
 
-Triggers on: document, write docs, update readme, changelog, API docs, architecture doc
+Triggers on: document, write docs, update readme, changelog, API docs, architecture doc, diagram of existing code
 
 ### assistant-skill-creator
 Creates, updates, or assesses concise skills. Adds contracts when an actual consumer, persisted state, validator, or user-requested schema needs a defined format.

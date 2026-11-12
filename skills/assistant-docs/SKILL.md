@@ -1,6 +1,6 @@
 ---
 name: assistant-docs
-description: "Create or update README, API, architecture, changelog, or migration docs. Use for explicit documentation work."
+description: "Create or update README, API, architecture, changelog, or migration docs, or diagrams of existing code. Use for explicit documentation work or a diagram of existing code."
 ---
 
 # Write Source-Backed Documentation
@@ -18,6 +18,7 @@ Load only the mode reference needed:
 |---|---|
 | API documentation | `api-docs.md` |
 | Architecture overview or decision | `architecture.md` |
+| Diagram of existing code | `architecture.md` |
 | README | `readme-gen.md` |
 | Release notes | `changelog.md` |
 | Upgrade or migration guide | `migration.md` |

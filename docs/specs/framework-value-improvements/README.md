@@ -50,7 +50,7 @@ The user decided every product question on 2026-11-06. Each specification record
 - **S07:** decision 1, (a) substantial = deliverable report, five-lens run or explicit request; 5, defer arxiv, youtube-content, competitor-news-monitor and llm-wiki.
 - **S08:** D4 both neighbour pairs; D5 Workflow handoff optional; D6 no model trial now (as S06).
 - **S09:** D3 include the inspect-before-CSS-edits section; D4 both neighbour pairs; D5 new routing row only; D6 no automatic selection by Workflow; D7 no public-site exception, production stays forbidden; D8 no model trial now (as S06).
-- **S10:** D-S10-1 (a) migrate the per-element evidence binding to Docs; D-S10-2 (a) ad hoc diagrams through the general capability; D-S10-4 **merge Ideate into Thinking now** (user's choice; brings the consolidation into S10).
+- **S10:** D-S10-1 (a) migrate the per-element evidence binding to Docs; D-S10-2 (a) ad hoc diagrams through the general capability, amended 2026-11-12 to (c): diagrams of existing code route through Docs, concept sketches stay with the general capability; D-S10-4 **merge Ideate into Thinking now** (user's choice; brings the consolidation into S10).
 - **S11:** D-S11-4 (a) the skill gives the uninstall command; D-S11-5 (a) keep and report modified files; D-S11-7 (a) keep and report the `~/.agents` link; D-S11-8 **(b) installers auto-remove proven-owned retired skills and agents** (user's choice; R-S11-25 to R-S11-27); D-S11-9 offer shim removal only when unregistered, with the installers writing shims until the user declares the compatibility window closed.
 
 Follow-up decisions, settled 2026-11-06 when the user accepted the set with the recommended defaults:
