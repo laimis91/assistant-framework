@@ -1,6 +1,6 @@
 # S10 — Skill retirement and Ideate consolidation into Thinking
 
-Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented in main 02cfeff (#110), on branch `fvi/s10-skill-retirement` based on main 68da3fd after S11. Held-out refreeze and live activation trials remain for integration. Revised 2026-11-06 for the user's decision D-S10-4 (merge Ideate into Thinking now).
+Status: **Accepted by the user**, 2026-11-06 (drafted and revised the same day). Baseline: main d11756d. Implemented in main 02cfeff (#110), on branch `fvi/s10-skill-retirement` based on main 68da3fd after S11. Held-out set refrozen at integration (2026-11-12, after the user's R-EVAL-3 approval); live activation trials await the user's authorization. Revised 2026-11-06 for the user's decision D-S10-4 (merge Ideate into Thinking now).
 Source: report §"Recommended direction" (Retire Telos, Retire standalone Diagrams, Further consolidation proposal), §3 "What to remove or consolidate" (Ideate/Thinking, Telos, Diagrams rows), §4 order 7, and "Status against main" (row "New skills and retirements"); slice map row S10 and its "Retirement facts" paragraph.
 
 ## Problem and intended outcome

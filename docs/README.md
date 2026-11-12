@@ -39,7 +39,7 @@ Research and proposals that inform later work. They are not implemented behavior
 |---|---|
 | [Skill activation research, 2026-11-02](research/skill-activation-research-2026-11-02.md) | Research note; the adopted requirements and measured results are in the [specification](specs/skill-activation.md). Read before rewriting skill descriptions, adding activation evals or changing skill-routing instructions. |
 | [Review techniques catalog, 2026-10-28](research/review-techniques-catalog-2026-10-28.md) | Research input for `assistant-review` references. Read when extending review coverage. |
-| [Framework value assessment, 2026-10-26](research/assistant-framework-value-assessment-2026-10-26.md) | Proposal, not implemented; its status section records what later commits changed. Read before specifying the planned skill improvements, new skills or the Telos/Diagrams retirement. |
+| [Framework value assessment, 2026-10-26](research/assistant-framework-value-assessment-2026-10-26.md) | Research report. Its recommendations were specified and implemented as the [S01–S11 specification set](specs/framework-value-improvements/README.md), integrated on 2026-11-12; its dated status section is history. Read for the rationale behind those slices. |
 
 ## Historical material
 

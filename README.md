@@ -1,6 +1,6 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. 17 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools with option generation, research, disposable feasibility spikes, security analysis, advisory triage, documentation generation, codebase onboarding, review automation, skill creation, evidence-based verification selection and assessment, exploratory UI QA, and proof-based framework cleanup.
+A Personal AI Assistant framework for developers. 17 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools with option generation, research, disposable feasibility spikes, security analysis, advisory triage, documentation generation, codebase onboarding, CI and test-protection audit, review automation, skill creation, evidence-based verification selection and assessment, exploratory UI QA, and proof-based framework cleanup.
 
 ## Documentation
 
@@ -542,10 +542,16 @@ skills/
     SKILL.md                       <- Bounded CI/test protection and maintenance audit
     contracts/                     <- Typed input/output, gates and progressive index
     references/                    <- Investigation and protection/cost assessment
-    evals/cases.json                <- Offline defect/control and authority fixtures
+    evals/cases.json               <- Offline defect/control and authority fixtures
 
   assistant-tdd/
     SKILL.md                       <- Conditional TDD (Red-Green-Refactor cycle)
+
+  assistant-debugging/
+    SKILL.md                       <- Reproduce, isolate, then fix an unknown failure
+    contracts/                     <- Typed input/output, gates and handoffs
+    references/                    <- Reproduction, state inspection, lifecycle and change impact
+    evals/cases.json               <- Behaviour and activation eval cases
 
   assistant-thinking/
     SKILL.md                       <- Tool descriptions and usage guidance
@@ -614,6 +620,11 @@ skills/
   assistant-onboard/
     SKILL.md                       <- Scoped codebase orientation
     inventory.md                   <- Optional size/language inventory with local tools
+
+  assistant-verification/
+    SKILL.md                       <- Verification selection and evidence assessment
+    references/                    <- Selection, evidence quality, lifecycle and methods
+    evals/cases.json               <- Behaviour and activation eval cases
 
 tools/
   skills/
