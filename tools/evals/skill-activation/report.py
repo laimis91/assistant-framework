@@ -147,6 +147,11 @@ def main():
     for path in args.results:
         with open(path, encoding="utf-8") as handle:
             rows.extend(json.loads(line) for line in handle if line.strip())
+    # Batches written before empty host runs were counted as not run can hold such trials and still say valid.
+    unran = {row.get("batch") for row in rows if row.get("set") == activation.SET_NAME and activation.missing_trial(row)}
+    for row in rows:
+        if row.get("batch") in unran:
+            row["batch_valid"] = False
     fresh = [row for row in rows if row.get("set") == activation.SET_NAME and row.get("batch_valid")]
     valid = [row for row in rows if row.get("batch_valid") and row.get("set") != activation.SET_NAME]
     invalid = sorted({str(row.get("batch")) for row in rows if not row.get("batch_valid")})

@@ -75,6 +75,11 @@ def listing_valid(run_root, plugin):
     return None
 
 
+def missing_trial(row):
+    """A trial that never ran. Older batches recorded an empty host run as no_trace with no turns and no cost."""
+    return row["stop"] in ("not_run", "empty_run") or (row["stop"] == "no_trace" and not row.get("turns") and not row.get("cost_usd"))
+
+
 def case_results(rows):
     """Return {(arm, model, case): pass|fail|inconclusive} by majority of conclusive repeats."""
     tallies = {}

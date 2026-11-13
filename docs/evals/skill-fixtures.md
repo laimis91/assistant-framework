@@ -336,5 +336,23 @@ tools/evals/skill-activation/report.py .codex/skill-activation/results/dev-1/res
 tools/evals/skill-activation/report.py .codex/skill-activation/results/act-*/results.jsonl --baselines current,current-b --candidate c1
 ```
 
+A host run that never started, with no trace, no turns and no cost, is recorded as
+`empty_run`. It is not an observed call, so a batch with one is invalid. The summary
+lists `empty_runs` and the host's own run errors, and keeps the host's last stderr
+line. Each row keeps its run's error as `host_error`, with the key removed.
+`report.py` leaves out any activation batch that holds a trial that never ran, including
+older batches that recorded one as `no_trace` with no turns and no cost.
+
+Fill an activation batch's trials that never ran. The command runs them on the same
+arm, plugin tree, suite and host, and writes the merged arm as a new batch. Each
+case must miss the same number of repeats. `--repeats` is the source's, and
+`--authorized-calls` is the number of missing trials. The source must hold every
+activation case. The summary describes the merged arm and records `filled_cases` and
+`filled_repeats`. Report on the new batch instead of the source:
+
+```bash
+tools/evals/skill-activation/run_trials.py --batch act-base-2-fill --arm base-b --set activation --host-version 2.1.321 --repeats 3 --fill-from act-base-2 --max-cost-usd 32.70 --authorized-calls 111 --run
+```
+
 `tests/test-skill-activation-tools.sh` tests the generator, scorer, runner and
 report offline. It does not show that a description activates in a real model.
