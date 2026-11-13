@@ -1,6 +1,6 @@
 # Skill activation requirements
 
-Status: **implemented for `deepseek-flash`, candidate c1 adopted; see [Current state](#current-state).** Date: 2026-11-03, updated 2026-11-05. Rationale and sources: [skill activation research](../research/skill-activation-research-2026-11-02.md). Measured benefit applies only to the model and host stated in Current state.
+Status: **implemented for `deepseek-flash`, candidate c1 adopted; see [Current state](#current-state).** Date: 2026-11-03, updated 2026-11-13. Rationale and sources: [skill activation research](../research/skill-activation-research-2026-11-02.md). Measured benefit applies only to the model and host stated in Current state.
 
 Owners: skill descriptions and `activation_cases` stay in each `skills/assistant-*/`; authoring rules stay in the [contract design guide](../skill-contract-design-guide.md); eval commands stay in the [per-skill fixtures guide](../evals/skill-fixtures.md). Exact serialized formats belong with the runner that consumes them, not in this document.
 
@@ -281,9 +281,9 @@ The user accepted these on 2026-11-03.
 | Use-case ledger | Built locally. Candidate c1's rationale maps the existing clauses and positive cases of the seven skills it changes |
 | Feasibility probe | Run; see [Feasibility results](#feasibility-results) |
 | Plugin generator, per-trial scorer, report aggregation | Implemented in `tools/evals/skill-activation/`, with offline tests; real batches are in [Adoption result](#adoption-result). Reports group by arm, model and listing condition; gate comparisons between arms are not computed |
-| Stateful suite and trial runner | Implemented. One 5-call smoke batch on development cases passed its validity checks on 2026-11-03; it tested the pipeline, not activation rates, and did not cover repeats above 1. A 61-call development batch the same day hit its $15 cap after 48 of 60 cases, so it is invalid and only diagnostic. A valid 13-call batch ran the other 12 cases on the same plugin tree and suite. Cases cost about $0.31 each by the host's estimate, and the host can overrun a cap slightly. Those batches predate later case edits, so their results don't compare with later runs. The held-out set is frozen provisionally after two independent agent reviews; the human review of the original c1 set that R-EVAL-3 requires before commit is still open, and changes from it go in with `suite.py freeze --refreeze`. Separately, the framework value improvements integration refroze the set on 2026-11-12 after the user approved, under R-EVAL-3, all 28 held-out changes since d11756d (16 added, 5 changed, 6 removed, one prefix); the c1 held-out results predate those changes and do not cover the new cases. Held-out ran for c1; see [Adoption result](#adoption-result) |
+| Stateful suite and trial runner | Implemented. One 5-call smoke batch on development cases passed its validity checks on 2026-11-03; it tested the pipeline, not activation rates, and did not cover repeats above 1. A 61-call development batch the same day hit its $15 cap after 48 of 60 cases, so it is invalid and only diagnostic. A valid 13-call batch ran the other 12 cases on the same plugin tree and suite. Cases cost about $0.31 each by the host's estimate, and the host can overrun a cap slightly. Those batches predate later case edits, so their results don't compare with later runs. The held-out set is frozen provisionally after two independent agent reviews; the human review of the original c1 set that R-EVAL-3 requires before commit is still open, and changes from it go in with `suite.py freeze --refreeze`. Separately, the framework value improvements integration refroze the set on 2026-11-12 after the user approved, under R-EVAL-3, all 28 held-out changes since d11756d (16 added, 5 changed, 6 removed, one prefix); the c1 held-out results predate those changes and do not cover the new cases. Held-out ran for c1; see [Adoption result](#adoption-result). The 21 new and changed held-out cases ran on 2026-11-13; see [Integration runs](#integration-runs-2026-11-13) |
 | R-EVAL-8 sensitivity check | Run 2026-11-04 on 12 development seeds × 5 repeats on `deepseek-flash`, isolated: both arms valid, 122 calls, about $38.85. Control missed 39 of 51 conclusive trials and current 40 of 53, so both miss. The misses are almost all `assistant-verification`; `assistant-workflow` was missing in 10 of 51 and 7 of 53, below the OD-2 30% rate, though the rate as confirmed applies across all seeds, so the check passes |
-| R-RUN-10 collection of existing `activation_cases` | Implemented in `activation.py`, `run_trials.py --set activation` and `report.py --baselines --candidate`, and run once for candidate c1. Trials grant no Bash, so there is no runner table and the two run-only cases cannot run their command; the report counts those trials |
+| R-RUN-10 collection of existing `activation_cases` | Implemented in `activation.py`, `run_trials.py --set activation` and `report.py --baselines --candidate`, and run for candidate c1. On 2026-11-13 the collection, now 76 cases, ran with one arm, `current`, so that run gives no regression verdict; see [Integration runs](#integration-runs-2026-11-13). Trials grant no Bash, so there is no runner table and the two run-only cases cannot run their command; the report counts those trials |
 | Description candidates | Candidate c1 is adopted in `skills/`; see [Adoption result](#adoption-result). The gain is measured on `deepseek-flash` only, and the user's case review is still open |
 | Forced-decision line, hook backstop | Deferred |
 
@@ -317,6 +317,34 @@ Departures from the plan, all accepted by the user's authorization of exact coun
 
 R-ROUTE-4 and R-DOC-1 followed adoption, so the composition text in the workflow and skill-creator bodies was not measured.
 
+## Integration runs, 2026-11-13
+
+After the framework value improvements integration, the user authorized three activation batches, each with an exact call count and a cost cap. All three ran on `deepseek-flash`, host 2.1.321, in the isolated condition, with one arm, `current`, and 3 repeats. Every batch was valid and not partial. No API key was found in any output, and no run directory was left behind. Per-run records stay in local Git-ignored evaluation state.
+
+| Batch | Source | Cases | Calls | Cost (cap) | Result |
+|---|---|---|---|---|---|
+| Development | 77b9240, the integration branch head before merge | 72 | 217 | $64.07 ($75) | Graded pass rate 142/173, 82.1%; false activation 0/59; 7 of 216 trials inconclusive |
+| Held-out, new and changed cases | main 79e6a74 | 21 | 64, including the listing probe | $16.43 ($25) | 63/63 pass; false activation 0/18; neighbour 18/18; precision 66/66; none inconclusive |
+| `activation_cases` | main 79e6a74 | 76 | 228 | $62.78 ($80) | Cases: 72 pass, 3 fail, 1 inconclusive. Trials: 209 pass, 7 fail, 12 inconclusive |
+
+The development figures do not compare with the c1 development result. That ran 60 cases on host 2.1.317, before the slices changed the set.
+
+- **Development set.**
+  - Recall was 100% for `assistant-advisory-triage`, `-ci-audit`, `-clarify`, `-cleanup`, `-debugging`, `-docs`, `-onboard`, `-research`, `-skill-creator`, `-tdd`, `-thinking` and `-ui-qa`. It was 5/6 for `assistant-spike`, 8/9 for `assistant-security`, 9/12 for `assistant-review`, 81/83 for `assistant-workflow` and 45/71 for `assistant-verification`.
+  - By phase, `review_feedback` (5 pass, 11 fail) and compaction (11 pass, 5 fail) are weakest.
+  - Cases failing by majority mostly miss `assistant-verification`. They include the five cases that failed in all arms under c1.
+  - `d-review-code` chose the host's built-in `code-review` skill instead of `assistant-review` in 2 of 3 trials, and `d-uiqa-vs-review` did so in 1.
+  - `d-spike-vs-research` edited with no skill in 1 of 3 trials.
+  - `assistant-skill-creator` was added to the two skill-file typo cases, `c-typo-mid-skill` and `c-typo-compaction`, in all 6 trials, as under c1.
+- **Held-out.** Each of the 21 cases that ran passed all 3 trials, with no misroute. They come from rows `ui_qa`, `cleanup`, `spike`, `options`, `advisory_triage` and `code_diagram`, plus `h-research-2`, `h-thinking-2` and `h-spike-vs-workflow` (`implement`). The other 69 held-out cases did not run again, so the set has no complete pass rate on this host and tree.
+- **`activation_cases`.**
+  - `a-review-00`, "Review the current uncommitted changes.", failed 3 of 3. The host's built-in `code-review` skill was chosen instead of `assistant-review` each time. Under c1 on host 2.1.317 it passed 2 of 3 and lost the third trial to the same host skill. The host skill also appears in earlier baseline and c1 batches, so the competition predates this tree. Three trials cannot separate the host version, the description changes or chance as the cause of the higher rate here.
+  - `a-research-01`, "Compare these technical options.", failed 2 of 3: `assistant-clarify` was chosen in one trial and `assistant-thinking` in the other.
+  - `a-clarify-02` activated `assistant-clarify` when it should not have in 2 of 3 trials. It failed in all arms under c1 too.
+  - `a-skill-creator-02` is inconclusive in all 3 trials, because its command cannot run without Bash.
+  - Every positive trial passed for the remaining skills, apart from inconclusive trials for `assistant-tdd` (2) and `assistant-verification` (2).
+- **Regression not evaluated.** R-RUN-10 needs two baseline arms beside the candidate. They were not run: about 456 calls and $126 at this batch's rate of about $0.28 a call.
+
 ## Known limits
 
 - `assistant-verification` stays required before the first edit on implementation rows; the user confirmed this on 2026-11-03. Across the two diagnostic development batches it activated in time in 3 of 15 conclusive trials, usually after `assistant-workflow` had loaded. c1 raises its held-out recall to 70% against 29%, so about 30–35% of conclusive trials still miss it.
@@ -326,6 +354,7 @@ R-ROUTE-4 and R-DOC-1 followed adoption, so the composition text in the workflow
 - Containment with Bash granted is unproven, and cases that run commands depend on it. That includes the two run-only `activation_cases`.
 - R-DESC-7 cannot be assessed on DeepSeek at the probe's listing budget, so it was checked with no model call on Claude model names. That check used a fresh home, so usage history is untested. Past about 30,000 listing characters the host reduces entries to names. Framework skills stayed intact in that test, but they also sorted first, so that doesn't show they would survive overflow in a real environment.
 - No Claude model ran the trials, so the measured gain is shown on `deepseek-flash` only.
+- The host lists its own `code-review` skill beside the framework skills. It competes with `assistant-review` on short review requests, in baseline and c1 batches on host 2.1.317, and in more trials on host 2.1.321.
 - The scorer's shell classifier is an approximation of bash. Anything it cannot follow becomes inconclusive, but an unquoted glob that expands to a writing option is not detected, and an unusual form can still be misread.
 - Compaction replay uses a synthetic boundary and summary, which approximates a real compaction.
 

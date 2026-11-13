@@ -1,6 +1,6 @@
 # Framework value improvements — specification set
 
-Status: **Accepted by the user**, 2026-11-06. Baseline: main d11756d. S01 to S11 are implemented (see their rows). Integrated on branch `fvi/integration` from main 5861363 (2026-11-12): final count of 17 first-class skills reconciled, held-out set refrozen after the user's R-EVAL-3 approval of all 28 held-out changes since d11756d, aggregate validation and a fresh integrated review, with commands and results recorded in the integration pull request. Live activation trials and the live runs of new behaviour eval cases remain, each awaiting the user's authorization.
+Status: **Accepted by the user**, 2026-11-06. Baseline: main d11756d. S01 to S11 are implemented (see their rows). Integrated on branch `fvi/integration` from main 5861363 (2026-11-12): final count of 17 first-class skills reconciled, held-out set refrozen after the user's R-EVAL-3 approval of all 28 held-out changes since d11756d, aggregate validation and a fresh integrated review, with commands and results recorded in the integration pull request. The authorized live activation trials and live behaviour eval runs followed on 2026-11-13; see [Live runs after integration](#live-runs-after-integration-2026-11-13).
 
 Source: [framework value assessment](../../research/assistant-framework-value-assessment-2026-10-26.md). The user accepted the S01–S11 slice map and its decisions on 6 November 2026: matched evaluation for S01 and S05 only; new skills bundled by default with `--skill` for single installs; a cleanup skill plus uninstall script (S11); no word or character budgets.
 
@@ -61,9 +61,43 @@ Follow-up decisions, settled 2026-11-06 when the user accepted the set with the 
 
 Still open:
 
-- **Live activation trials** for the refrozen held-out set and the 76 `activation_cases` need the user's authorization (call count and cost cap). The held-out case changes were approved under R-EVAL-3 on 2026-11-12 and refrozen at integration.
+- **R-RUN-10 baseline arms.** The 76 `activation_cases` ran with one arm, so no regression verdict exists. The two baseline arms need fresh authorization: about 456 calls and $126.
+- **Behaviour eval reruns.** Four cases produced no answer within the per-run cap, and the cleanup cases need a fixture home with the ownership helper and a filesystem sandbox before their result means anything. Any rerun needs fresh authorization.
 
 Unowned report items not covered above (document-to-action-items, meeting-action-items, hermes-agent-skill-authoring, github reference structure) are proposed as deferred.
+
+## Live runs after integration, 2026-11-13
+
+The user authorized each run with a call count and a cost cap. Every run used `deepseek-flash` on host 2.1.321. The held-out, `activation_cases` and behaviour runs used main 79e6a74. The development batch used 77b9240, the integration branch head before merge, with the same plugin tree. Per-run records stay in local Git-ignored evaluation state.
+
+- **Activation.**
+  - The 21 new and changed held-out cases passed 63 of 63 trials, with no misroute ($16.43).
+  - The 76 `activation_cases` ran with one arm: 72 pass, 3 fail, 1 inconclusive ($62.78).
+  - A development batch from the integration branch before merge passed 82.1% of graded trials, with no false activation ($64.07).
+  - Details and failing cases are in [skill activation, Integration runs](../skill-activation.md#integration-runs-2026-11-13).
+- **Behaviour evals.**
+  - 26 cases each ran once ($11.59 in total): the new cases of S03, S04, S07, S10 and S11, plus Workflow's changed trigger case.
+  - Each subject got a task-only packet, the setup context and the request without grading criteria, in a fresh temporary home and empty working folder. It had the generated `current` plugin, Read, Grep and Glob only, no MCP servers, no settings sources and a $0.90 cap.
+  - Responses were graded offline with `tools/evals/run-skill-evals.sh --responses`.
+
+| Skill | Pass | Notes |
+|---|---|---|
+| `assistant-debugging` (S03) | 4/5 | `exact-symptom-reproduction-rejects-nearby-failure` ran out of the per-run cap with no answer |
+| `assistant-tdd` (S04) | 0/2 | Both answers reject the bad RED evidence, but lack the required phrases "double application" and "shares the defect" |
+| `assistant-research` (S07) | 1/5 | Two cases ran out of the cap with no answer; the other two lack "gap", "official alternative" or "not sent" |
+| `assistant-thinking` (S10) | 0/5 | Each answer lacks one or two required phrases, such as "trade-off", "next step", "risks" or "vulnerabilities" |
+| `assistant-docs` (S10, code diagrams) | 1/2 | `architecture-doc-diagram-uses-source-evidence` ran out of the cap with no answer |
+| `assistant-workflow` (changed trigger) | 0/1 | Lacks "Triage" |
+| `assistant-cleanup` (S11) | 3/6 | Two misses come from the test environment and one is a substring false positive; see the limits below |
+
+Total 9 of 26. The grader checks required and forbidden substrings, so it does not separate a wrong answer from a right one worded differently. The phrase misses above need a reading of each answer before they count as behaviour gaps.
+
+Limits:
+
+- **Reads outside the workspace.** The Read tool was not sandboxed. Despite the temporary home, the cleanup subjects read the real installed homes, found no ownership helper there and correctly refused to proceed. That caused the apply and dry-run misses. The one forbidden-word hit, "rmdir", is the answer saying it will not use it. Some thinking answers also quote the real repository. All tools were read-only, so nothing changed.
+- **Run coverage.** One trial per case and one model. No shell, so command-running behaviour was not exercised. The four capped cases were not rerun.
+- **No before/after claim.** The S07 before-condition did not run.
+- **Runner not committed.** The runner script is local, not part of the repository.
 
 ## Corrections to the source report found while drafting
 
