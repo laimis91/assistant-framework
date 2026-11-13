@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from collections import Counter
 from pathlib import Path
 from unittest import mock
 
@@ -1055,11 +1056,13 @@ class Runner(unittest.TestCase):
             self.assertNotIn("secret-value", reason)
             self.assertLessEqual(len(reason), 200)
             child.return_value = subprocess.CompletedProcess([], 0, stderr="noise")
-            self.assertEqual(run_trials.run_eval("claude", "/p", "m", 2, 1.0, Path(name) / "other", environment, "k"), (0, None))
+            # A clean exit's line is returned too; the summary drops it unless a run was empty.
+            self.assertEqual(run_trials.run_eval("claude", "/p", "m", 2, 1.0, Path(name) / "other", environment, "k"), (0, "noise"))
 
     def test_host_reason_ignores_the_report_path_line(self):
         self.assertEqual(run_trials.host_reason(2, "budget reached\nReport: /x/report.html\n", "k"), "budget reached")
         self.assertIsNone(run_trials.host_reason(2, "Report: /x/report.html\n", "k"))
+        self.assertEqual(run_trials.host_reason(0, "429 from k\nReport: /x\n", "k"), "429 from [key]")
 
     def test_malformed_aggregates_are_flagged(self):
         with tempfile.TemporaryDirectory() as name:
@@ -1174,6 +1177,188 @@ def make_plugin(parent, arm):
                 "listing_condition": "isolated", "stubs": 0}
     (plugin / "generation.json").write_text(json.dumps(manifest))
     return plugin
+
+
+class EmptyRunsAndFill(unittest.TestCase):
+    """Empty host runs are not observed calls, and --fill-from reruns only an activation batch's trials that never ran."""
+
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.base = Path(directory.name).resolve()
+        (self.base / "tmp").mkdir()
+        self.plugin = make_plugin(self.base, "arm")
+        self.cases = activation.load_cases()
+        self.calls = []
+        self.empty_when = None
+        self.version = "9.9"
+        patches = [mock.patch.object(run_trials, "PLUGINS", self.base), mock.patch.object(run_trials, "RESULTS", self.base / "results"),
+                   mock.patch.object(run_trials, "RUN_ROOT_PARENTS", (self.base / "tmp",)), mock.patch.object(run_trials, "read_key", return_value="k-secret"),
+                   mock.patch.object(run_trials, "claude_binary", return_value="claude"), mock.patch.object(run_trials, "run_eval", self.fake_eval),
+                   mock.patch.object(run_trials, "run_refusals", return_value=[]), mock.patch.object(sys, "stdout", io.StringIO()),
+                   mock.patch.object(sys, "stderr", io.StringIO())]
+        for patcher in patches:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def fake_eval(self, binary, plugin_path, model, repeats, cap, output, environment, key):
+        names = sorted(path.name for path in (plugin_path / "evals").iterdir())
+        runs = {name: int(re.search(r"^runs: (\d+)$", (plugin_path / "evals" / name / "prompt.md").read_text(), re.MULTILINE).group(1)) for name in names}
+        self.calls.append({"names": names, "repeats": repeats, "runs": runs})
+        output.mkdir(parents=True)
+        skills = {case["id"]: case["skill"] for case in self.cases}
+        cases, index = [], 0
+        for name in names:
+            arm = []
+            for repeat in range(repeats):
+                if self.empty_when and self.empty_when(index, repeat):
+                    arm.append({"turns": 0, "costUsd": 0, "error": "API error 402: insufficient balance"})
+                else:
+                    root = self.base / "tmp" / f"e-run{len(list((self.base / 'tmp').iterdir()))}"
+                    (root / "out").mkdir(parents=True)
+                    trace = root / "out" / "trace.jsonl"
+                    events = [dict(init(), plugin_path=str(plugin_path)), call("Skill", "s", skill=f"af:{skills[name]}"), result()]
+                    trace.write_text("".join(json.dumps(event) + "\n" for event in events))
+                    logs = root / "config" / "projects" / "cwd"
+                    logs.mkdir(parents=True)
+                    (logs / "s.jsonl").write_text(json.dumps({"attachment": {"type": "skill_listing", "content": "- af:assistant-workflow: Prepare, plan and build."}}) + "\n")
+                    arm.append({"tracePath": str(trace), "turns": 1, "costUsd": 0.1})
+                index += 1
+            cases.append({"name": name, "arms": {"with": arm}})
+        (output / "aggregate-result.json").write_text(json.dumps({"cases": cases, "costUsd": 0.1 * index, "partial": False, "claudeVersion": self.version}))
+        return 0, "Error: request rejected" if self.empty_when else None
+
+    def main(self, batch, authorized, fill=None, host="9.9"):
+        arguments = ["run_trials.py", "--batch", batch, "--arm", "arm", "--set", "activation", "--repeats", "3", "--host-version", host,
+                     "--max-cost-usd", "50", "--authorized-calls", str(authorized), "--run"] + (["--fill-from", fill] if fill else [])
+        with mock.patch.object(sys, "argv", arguments):
+            return run_trials.main()
+
+    def read(self, batch):
+        folder = self.base / "results" / batch
+        return [json.loads(line) for line in (folder / "results.jsonl").read_text().splitlines()], json.loads((folder / "summary.json").read_text())
+
+    def test_empty_runs_are_not_observed_and_keep_the_host_error(self):
+        self.empty_when = lambda index, repeat: index >= 100
+        self.assertEqual(self.main("half", 228), 4)
+        rows, summary = self.read("half")
+        self.assertFalse(summary["valid"])
+        self.assertEqual((summary["observed_runs"], summary["empty_runs"]), (100, 128))
+        self.assertEqual(summary["host_errors"], [{"error": "API error 402: insufficient balance", "runs": 128}])
+        self.assertEqual(summary["cases_reason"], "Error: request rejected")
+        self.assertEqual(sum(row["stop"] == "empty_run" for row in rows), 128)
+        self.assertEqual({row.get("host_error") for row in rows if row["stop"] == "empty_run"}, {"API error 402: insufficient balance"})
+        self.assertFalse(any(row["batch_valid"] for row in rows))
+        self.assertEqual(run_trials.host_error({"error": "bad k-secret " + "x" * 500}, "k-secret")[:12], "bad [key] xx")
+        self.assertEqual(len(run_trials.host_error({"error": "x" * 500}, "k")), 200)
+
+    def test_a_clean_batch_keeps_no_host_reason(self):
+        self.assertEqual(self.main("full", 228), 0)
+        self.assertIsNone(self.read("full")[1]["cases_reason"])
+
+    def test_fill_runs_only_the_missing_trials_and_writes_the_merged_arm(self):
+        self.empty_when = lambda index, repeat: index >= 117
+        self.main("half", 228)
+        self.empty_when = None
+        self.calls.clear()
+        self.assertEqual(self.main("filled", 228, fill="half"), 2)
+        self.assertEqual(self.calls, [])
+        self.assertEqual(self.main("filled", 111, fill="half"), 0)
+        missing = sorted(case["id"] for case in self.cases)[39:]
+        self.assertEqual(self.calls[0]["names"], missing)
+        self.assertEqual((self.calls[0]["repeats"], set(self.calls[0]["runs"].values())), (3, {3}))
+        rows, summary = self.read("filled")
+        self.assertTrue(summary["valid"])
+        self.assertEqual((summary["fill_from"], summary["kept_trials"], summary["filled_trials"], summary["calls"]), ("half", 117, 111, 111))
+        self.assertEqual(len(rows), 228)
+        self.assertEqual(Counter((row["case"], row["repeat"]) for row in rows), Counter({(case["id"], index): 1 for case in self.cases for index in range(3)}))
+        self.assertEqual(Counter(row["trial_batch"] for row in rows), Counter({"half": 117, "filled": 111}))
+        self.assertTrue(all(row["batch"] == "filled" and row["batch_valid"] for row in rows))
+        self.assertEqual(list((self.base / "tmp").iterdir()), [])
+
+    def test_fill_refuses_a_different_host_or_tree_and_uneven_gaps(self):
+        self.empty_when = lambda index, repeat: index >= 118
+        self.main("half", 228)
+        self.empty_when = None
+        self.assertEqual(self.main("filled", 110, fill="half"), 2)
+        self.assertIn("different numbers of repeats", sys.stderr.getvalue())
+        shutil.rmtree(self.base / "results" / "half")
+        self.empty_when = lambda index, repeat: index >= 117
+        self.main("half", 228)
+        self.empty_when = None
+        self.assertEqual(self.main("filled", 111, fill="half", host="10.0"), 2)
+        self.assertIn("host_version differs", sys.stderr.getvalue())
+        manifest = self.plugin / "generation.json"
+        manifest.write_text(json.dumps({**json.loads(manifest.read_text()), "description_sha256": "other"}))
+        self.assertEqual(self.main("filled", 111, fill="half"), 2)
+        self.assertIn("description_sha256 differs", sys.stderr.getvalue())
+        self.assertEqual(len(self.calls), 2)
+
+    def test_fill_that_fails_again_is_invalid(self):
+        self.empty_when = lambda index, repeat: index >= 117
+        self.main("half", 228)
+        self.empty_when = lambda index, repeat: index >= 0
+        self.assertEqual(self.main("filled", 111, fill="half"), 4)
+        rows, summary = self.read("filled")
+        self.assertFalse(summary["valid"])
+        self.assertFalse(any(row["batch_valid"] for row in rows))
+
+
+    def write_source(self, rows, name="half"):
+        folder = self.base / "results" / name
+        (folder / "results.jsonl").write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+    def test_old_no_trace_rows_are_filled_and_reported_invalid(self):
+        self.empty_when = lambda index, repeat: index >= 117
+        self.main("half", 228)
+        rows, _ = self.read("half")
+        # Batches from before this change wrote empty runs as no_trace with no turns and no cost, and called themselves valid.
+        self.write_source([dict(row, stop="no_trace", turns=0, cost_usd=0, batch_valid=True) if row["stop"] == "empty_run" else dict(row, batch_valid=True)
+                           for row in rows])
+        with mock.patch.object(sys, "argv", ["report.py", str(self.base / "results" / "half" / "results.jsonl")]):
+            report.main()
+        self.assertIn("Invalid batches, left out above: half", sys.stdout.getvalue())
+        self.empty_when = None
+        self.assertEqual(self.main("filled", 111, fill="half"), 0)
+        self.assertTrue(self.read("filled")[1]["valid"])
+
+    def test_a_gap_in_one_repeat_lands_on_that_repeat_and_keeps_the_arm_shape(self):
+        self.empty_when = lambda index, repeat: repeat == 2
+        self.main("half", 228)
+        self.empty_when = None
+        self.calls.clear()
+        self.assertEqual(self.main("filled", 76, fill="half"), 0)
+        self.assertEqual((self.calls[0]["repeats"], set(self.calls[0]["runs"].values()), len(self.calls[0]["names"])), (1, {1}, 76))
+        rows, summary = self.read("filled")
+        self.assertTrue(summary["valid"])
+        self.assertEqual((summary["cases"], summary["repeats"], summary["filled_cases"], summary["filled_repeats"]), (76, 3, 76, 1))
+        self.assertEqual({row["repeat"] for row in rows if row["trial_batch"] == "filled"}, {2})
+        self.assertEqual(Counter((row["case"], row["repeat"]) for row in rows), Counter({(case["id"], index): 1 for case in self.cases for index in range(3)}))
+
+    def test_a_fill_of_a_fill_keeps_where_each_trial_came_from(self):
+        self.empty_when = lambda index, repeat: repeat == 2
+        self.main("half", 228)
+        self.empty_when = lambda index, repeat: index >= 38
+        self.assertEqual(self.main("filled", 76, fill="half"), 4)
+        self.empty_when = None
+        self.assertEqual(self.main("again", 38, fill="filled"), 0)
+        rows, summary = self.read("again")
+        self.assertTrue(summary["valid"])
+        self.assertEqual(Counter(row["trial_batch"] for row in rows), Counter({"half": 152, "filled": 38, "again": 38}))
+
+    def test_fill_refuses_a_source_without_every_case(self):
+        self.empty_when = lambda index, repeat: index >= 117
+        self.main("half", 228)
+        rows, _ = self.read("half")
+        self.write_source([row for row in rows if row["case"] != rows[0]["case"]])
+        self.empty_when = None
+        self.assertEqual(self.main("filled", 111, fill="half"), 2)
+        self.assertIn("does not hold every activation case", sys.stderr.getvalue())
+
+    def test_an_extra_empty_run_invalidates_the_batch(self):
+        aggregate = {"cases": [{"name": "a", "arms": {"with": [{"tracePath": "t", "turns": 1, "costUsd": 0.1}, {"turns": 0, "costUsd": 0}]}}]}
+        self.assertFalse(run_trials.run_counts_match(aggregate, [{"id": "a"}], 1))
+        self.assertEqual(run_trials.observed_runs(aggregate), 1)
 
 
 class RunnerBatch(unittest.TestCase):
@@ -1308,7 +1493,7 @@ class RunnerBatch(unittest.TestCase):
                           {"name": "not-selected", "arms": {"with": [{"tracePath": trace}]}}]
         self.assertEqual(self.main(), 4)
         stops = {row["case"]: row["stop"] for row in self.rows()}
-        self.assertEqual(stops, {self.IDS[0]: "no_trace", self.IDS[1]: "not_run"})
+        self.assertEqual(stops, {self.IDS[0]: "empty_run", self.IDS[1]: "not_run"})
         self.assertTrue(all(row["phase"] for row in self.rows()))
         self.assertFalse(self.summary()["valid"])
 
@@ -1406,6 +1591,15 @@ class RunnerBatch(unittest.TestCase):
         self.assertNotIn("secret-value", sys.stdout.getvalue() + sys.stderr.getvalue())
         self.assertNotIn("secret-value", (self.base / "results" / "b" / "summary.json").read_text())
         self.assert_clean()
+
+    def test_key_only_in_the_summary_is_counted_redacted_and_fails_the_exit(self):
+        plan = run_trials.run_plan
+        with mock.patch.object(run_trials, "run_plan", lambda *items: {**plan(*items), "note": "x secret-value y"}):
+            self.assertEqual(self.main(), 4)
+        text = (self.base / "results" / "b" / "summary.json").read_text()
+        self.assertNotIn("secret-value", text)
+        self.assertEqual(json.loads(text)["key_found_in_output"], 1)
+        self.assertEqual(json.loads(text)["note"], "x [key] y")
 
     def test_other_run_directories_are_left_alone(self):
         other = self.base / "tmp" / "e-other"
