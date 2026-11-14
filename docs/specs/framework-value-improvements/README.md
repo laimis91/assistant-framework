@@ -61,7 +61,7 @@ Follow-up decisions, settled 2026-11-06 when the user accepted the set with the 
 
 Still open:
 
-- **`a-review-00` collision.** The one R-RUN-10 regression: on short review requests the host's built-in `code-review` skill is chosen instead of `assistant-review`. See [Baseline arms and reruns](#baseline-arms-and-reruns-2026-11-14). A description cue for current uncommitted changes, branches and pull requests is in place, with its rerun and an R-DESC-6 check of neighbouring cases pending; see [`a-review-00` description cue](../skill-activation.md#a-review-00-description-cue-2026-11-14).
+- **`a-review-00` collision.** The one R-RUN-10 regression: on short review requests the host's built-in `code-review` skill is chosen instead of `assistant-review`. See [Baseline arms and reruns](#baseline-arms-and-reruns-2026-11-14). A description cue for current uncommitted changes, branches and pull requests is in place, and `a-review-00` passed 3 of 3 on it; an R-DESC-6 check of neighbouring cases is pending; see [`a-review-00` description cue](../skill-activation.md#a-review-00-description-cue-2026-11-14).
 - **Two cleanup behaviour cases.** `apply-uses-fixed-form-after-digest-confirmation` still runs out of its cap with no answer, and the `--yes` forbidden-substring hit in `dry-run-report-precedes-any-removal` needs a grader decision.
 
 Done since integration: the R-RUN-10 baseline arms, and the reruns of the four capped behaviour cases and the six cleanup cases (8 of 10 pass). See [Baseline arms and reruns](#baseline-arms-and-reruns-2026-11-14).
