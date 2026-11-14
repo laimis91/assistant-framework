@@ -1,6 +1,6 @@
 # Framework value improvements — specification set
 
-Status: **Accepted by the user**, 2026-11-06. Baseline: main d11756d. S01 to S11 are implemented (see their rows). Integrated on branch `fvi/integration` from main 5861363 (2026-11-12): final count of 17 first-class skills reconciled, held-out set refrozen after the user's R-EVAL-3 approval of all 28 held-out changes since d11756d, aggregate validation and a fresh integrated review, with commands and results recorded in the integration pull request. The authorized live activation trials and live behaviour eval runs followed on 2026-11-13; see [Live runs after integration](#live-runs-after-integration-2026-11-13).
+Status: **Accepted by the user**, 2026-11-06. Baseline: main d11756d. S01 to S11 are implemented (see their rows). Integrated on branch `fvi/integration` from main 5861363 (2026-11-12): final count of 17 first-class skills reconciled, held-out set refrozen after the user's R-EVAL-3 approval of all 28 held-out changes since d11756d, aggregate validation and a fresh integrated review, with commands and results recorded in the integration pull request. The authorized live activation trials and live behaviour eval runs followed on 2026-11-13; see [Live runs after integration](#live-runs-after-integration-2026-11-13). The R-RUN-10 baseline arms and the behaviour reruns followed on 2026-11-13, and the fill that completed the second baseline arm ran on 2026-11-14; see [Baseline arms and reruns](#baseline-arms-and-reruns-2026-11-14).
 
 Source: [framework value assessment](../../research/assistant-framework-value-assessment-2026-10-26.md). The user accepted the S01–S11 slice map and its decisions on 6 November 2026: matched evaluation for S01 and S05 only; new skills bundled by default with `--skill` for single installs; a cleanup skill plus uninstall script (S11); no word or character budgets.
 
@@ -61,8 +61,10 @@ Follow-up decisions, settled 2026-11-06 when the user accepted the set with the 
 
 Still open:
 
-- **R-RUN-10 baseline arms.** The 76 `activation_cases` ran with one arm, so no regression verdict exists. The two baseline arms need fresh authorization: about 456 calls and $126.
-- **Behaviour eval reruns.** Four cases produced no answer within the per-run cap, and the cleanup cases need a fixture home with the ownership helper and a filesystem sandbox before their result means anything. Any rerun needs fresh authorization.
+- **`a-review-00` collision.** The one R-RUN-10 regression: on short review requests the host's built-in `code-review` skill is chosen instead of `assistant-review`. See [Baseline arms and reruns](#baseline-arms-and-reruns-2026-11-14).
+- **Two cleanup behaviour cases.** `apply-uses-fixed-form-after-digest-confirmation` still runs out of its cap with no answer, and the `--yes` forbidden-substring hit in `dry-run-report-precedes-any-removal` needs a grader decision.
+
+Done since integration: the R-RUN-10 baseline arms, and the reruns of the four capped behaviour cases and the six cleanup cases (8 of 10 pass). See [Baseline arms and reruns](#baseline-arms-and-reruns-2026-11-14).
 
 Unowned report items not covered above (document-to-action-items, meeting-action-items, hermes-agent-skill-authoring, github reference structure) are proposed as deferred.
 
@@ -95,9 +97,24 @@ Total 9 of 26. The grader checks required and forbidden substrings, so it does n
 Limits:
 
 - **Reads outside the workspace.** The Read tool was not sandboxed. Despite the temporary home, the cleanup subjects read the real installed homes, found no ownership helper there and correctly refused to proceed. That caused the apply and dry-run misses. The one forbidden-word hit, "rmdir", is the answer saying it will not use it. Some thinking answers also quote the real repository. All tools were read-only, so nothing changed.
-- **Run coverage.** One trial per case and one model. No shell, so command-running behaviour was not exercised. The four capped cases were not rerun.
+- **Run coverage.** One trial per case and one model. No shell, so command-running behaviour was not exercised. The four capped cases were not rerun here; they were rerun later, see [Baseline arms and reruns](#baseline-arms-and-reruns-2026-11-14).
 - **No before/after claim.** The S07 before-condition did not run.
 - **Runner not committed.** The runner script is local, not part of the repository.
+
+## Baseline arms and reruns, 2026-11-14
+
+The user authorized the two baseline arms (456 calls, $126) and the behaviour reruns (10 calls, $22). Per-run records stay in local Git-ignored evaluation state.
+
+- **R-RUN-10 verdict.** Both baseline arms ran the 76 `activation_cases` on the adopted c1 plugin (main d11756d), against the integrated `current` arm. 71 of the 76 cases are conclusive in all three arms. Details are in [skill activation, Baseline arms and regression verdict](../skill-activation.md#baseline-arms-and-regression-verdict-2026-11-14).
+  - One regression: `a-review-00` passes in both baselines and fails 3 of 3 on `current`, where the host's built-in `code-review` skill is chosen instead of `assistant-review`.
+  - Eight cases fail in both baselines and pass on `current`: `a-docs-03`, `a-spike-00`, `a-spike-01`, `a-thinking-04`, `a-thinking-05`, `a-ui-qa-00`, `a-ui-qa-01` and `a-ui-qa-02`.
+  - Among the conclusive cases, the baselines disagree only on `a-research-01`, so it is not gated. Five cases are inconclusive in at least one arm.
+  - Spend: $122.07 of the $126 cap.
+- **Behaviour reruns.** 8 of 10 pass, for $7.04 of the $22 cap. Each case ran once with the same task-only packet and grader as before.
+  - The four cases that earlier ran out of the per-run cap now pass with a $2.50 cap: `exact-symptom-reproduction-rejects-nearby-failure`, `http-200-interstitial-is-rejected`, `substantial-report-catches-unknown-citation-id` and `architecture-doc-diagram-uses-source-evidence`.
+  - The six `assistant-cleanup` cases ran with a $1.50 cap in a fixture home installed from main 79e6a74 that holds the ownership helper. A filesystem sandbox denied reads of the real agent homes and user folders, and no response contains a real-home path. Four pass, including `ambiguous-and-unrelated-items-explained-and-kept`, which failed before.
+  - `apply-uses-fixed-form-after-digest-confirmation` ran out of its cap with no answer.
+  - `dry-run-report-precedes-any-removal` fails on the forbidden substring `--yes`. The response quotes the skill's fixed apply form as the step to run only after the dry-run digest is confirmed, so this is likely a grader false positive.
 
 ## Corrections to the source report found while drafting
 
