@@ -368,11 +368,25 @@ The host aborted the empty trials at once and its error was not kept, so the cau
 
 ## `a-review-00` description cue, 2026-11-14
 
-Status: `a-review-00` passes 3 of 3 on the changed tree; the neighbouring-case check is pending. The user authorized the rerun with 3 calls and a $5 cap. It ran on d852f01, `deepseek-flash`, host 2.1.325 (the baselines ran on 2.1.321, which is no longer installed), in the isolated condition, and cost $1.82. `assistant-review` alone activated in every trial, and every listing was valid. Two trials stopped at the turn limit after activation, with the host's `unrecognized_model` notice for `deepseek-flash`. That pass does not settle R-DESC-6 for this description change: the "a branch or a pull request" cue could draw review-comment, CI-fix, create-pr or narrow-question turns toward `assistant-review`, so R-RUN-10 on the `activation_cases` collection, or at least the review, workflow review-comment and create-pr, and skill-creator neighbour cases, is still to run. The R-DESC-7 crowded-listing check was not repeated for the 62 added characters.
+Status: `a-review-00` passes 3 of 3 on the changed tree, and the neighbouring-case check found no new `assistant-review` activation. The host's `code-review` skill still wins some other short review requests. All runs used `deepseek-flash` on host 2.1.325 in the isolated condition, on the plugin built from d852f01. The baselines ran on 2.1.321, which is no longer installed, so no baseline exists on this host. No API key was found in any output. Per-run records stay in local Git-ignored evaluation state.
+
+| Batch | Cases | Calls | Cost (cap) | Result |
+|---|---|---|---|---|
+| `a-review-00` rerun | 1 | 3 | $1.82 ($5) | Valid. `assistant-review` alone in all 3 trials |
+| Neighbouring `activation_cases` | 6 | 18 | $4.90 ($15) | Valid. All 18 trials pass |
+| Neighbouring development cases | 15 | 43 of 46, including the passed listing probe | $17.43 ($17) | Partial: the cap stopped the batch before `d-uiqa-vs-review` ran |
+| Neighbouring held-out cases, run only | 13 | 40, including the passed listing probe | $11.73 ($20) | Valid |
+
+The user authorized the rerun with 3 calls and a $5 cap, then the neighbouring check with 104 calls and a $45 cap; that check used 101 calls and $34.06. In 39 trials the host stopped at the 8-turn limit after activation, reporting its `unrecognized_model` notice for `deepseek-flash`; there were no empty runs.
+
+- **Over-activation.** `assistant-review` was never extra or forbidden in any trial. On the review-comment, CI-fix and create-pr rows it never activated, and `a-review-02`, the nearby negative, activated nothing. `a-review-03`, `a-skill-creator-03`, `-04`, `d-skill-assess` and `h-sc-assess` went to `assistant-skill-creator` in every trial.
+- **Unchanged against earlier runs.** Compared with `dev-1` on 79e6a74 and the c1 held-out arm, the failing cases fail as before: the `assistant-verification` misses on `d-seed-bot-comment`, `c-review-keyword`, `h-seed-ci`, `h-seed-comment` and `h-wf-ci-known`; `h-review-2` going to `assistant-ci-audit`; and `assistant-skill-creator` on `h-review-skill-plan`.
+- **Host `code-review` competition remains.** `d-review-code`, "Code review src/auth.py please.", chose the host skill in 3 of 3 trials, against 2 of 3 in `dev-1`. `h-review-3`, "Take a critical look at what you just wrote.", chose it in 2 of 3, against 0 of 3 under c1 on host 2.1.317. The cue targets the current changes, a branch and a pull request, so it does not reach requests that name a file or the assistant's own output. Without a baseline on this host, three trials cannot separate host drift from the description.
+- **Not assessed.** `d-uiqa-vs-review`, cut by the cost cap, and the R-DESC-7 crowded-listing check for the 62 added characters.
 
 - **Diagnosis.** The `assistant-review` description is the same at d11756d and on main, and the listing guidance hash is the same in all three arms, so the regression comes from the neighbouring descriptions or chance, not from a change to `assistant-review`. The tree added the `assistant-advisory-triage`, `-cleanup`, `-spike` and `-ui-qa` descriptions, widened `-docs` and `-thinking`, and removed three skills. Total description characters rose from 3,536 to 4,686, far under the 40,000-character listing budget, so no entry was truncated. The host's `code-review` description leads with reviewing the current diff, which matches the request "Review the current uncommitted changes." more closely than "Reviews code and diffs". In the baselines it was chosen alone in 1 of 6 trials and alongside `assistant-review` in 1 more.
 - **Change.** Under R-DESC-4, the lead clause gains a state and target cue: "Reviews code and diffs (the current uncommitted changes, a branch or a pull request)". No other clause changed, and every positive activation case stays mapped. Total description characters go from 4,686 to 4,748.
-- **Offline checks.** `tools/skills/validate-skills.sh`, the activation suite tests and `./tests/test-p0-p4-contracts.sh` pass; none shows that the description activates.
+- **Offline checks.** `tools/skills/validate-skills.sh` and the 185 activation suite tests pass. `./tests/test-p0-p4-contracts.sh` passed 1,346 checks. Four failed in that worktree, none touching this change: three for want of the locked Ajv dependency, `tools/evals/node_modules` being absent, and one network DNS-deadline test. No offline check shows that the description activates.
 
 ## Known limits
 
