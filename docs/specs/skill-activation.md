@@ -366,6 +366,14 @@ The host aborted the empty trials at once and its error was not kept, so the cau
 - **Inconclusive.** `a-advisory-triage-00`, `a-advisory-triage-01`, `a-cleanup-00`, `a-cleanup-01` and `a-skill-creator-02` are inconclusive in at least one arm. `a-skill-creator-02` is inconclusive in all three, because its command cannot run without Bash.
 - **Unchanged.** `a-clarify-02` fails in all three arms. The other 60 cases pass in all three.
 
+## `a-review-00` description cue, 2026-11-14
+
+Status: changed offline; the authorized rerun of `a-review-00` is pending, so the regression stays open until it passes. A pass there does not settle R-DESC-6 for this description change: the "a branch or a pull request" cue could draw review-comment, CI-fix, create-pr or narrow-question turns toward `assistant-review`, so R-RUN-10 on the `activation_cases` collection, or at least the review, workflow review-comment and create-pr, and skill-creator neighbour cases, is still to run. The R-DESC-7 crowded-listing check was not repeated for the 62 added characters.
+
+- **Diagnosis.** The `assistant-review` description is the same at d11756d and on main, and the listing guidance hash is the same in all three arms, so the regression comes from the neighbouring descriptions or chance, not from a change to `assistant-review`. The tree added the `assistant-advisory-triage`, `-cleanup`, `-spike` and `-ui-qa` descriptions, widened `-docs` and `-thinking`, and removed three skills. Total description characters rose from 3,536 to 4,686, far under the 40,000-character listing budget, so no entry was truncated. The host's `code-review` description leads with reviewing the current diff, which matches the request "Review the current uncommitted changes." more closely than "Reviews code and diffs". In the baselines it was chosen alone in 1 of 6 trials and alongside `assistant-review` in 1 more.
+- **Change.** Under R-DESC-4, the lead clause gains a state and target cue: "Reviews code and diffs (the current uncommitted changes, a branch or a pull request)". No other clause changed, and every positive activation case stays mapped. Total description characters go from 4,686 to 4,748.
+- **Offline checks.** `tools/skills/validate-skills.sh`, the activation suite tests and `./tests/test-p0-p4-contracts.sh` pass; none shows that the description activates.
+
 ## Known limits
 
 - `assistant-verification` stays required before the first edit on implementation rows; the user confirmed this on 2026-11-03. Across the two diagnostic development batches it activated in time in 3 of 15 conclusive trials, usually after `assistant-workflow` had loaded. c1 raises its held-out recall to 70% against 29%, so about 30–35% of conclusive trials still miss it.
