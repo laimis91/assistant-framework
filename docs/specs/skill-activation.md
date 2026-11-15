@@ -390,7 +390,7 @@ The user authorized the rerun with 3 calls and a $5 cap, then the neighbouring c
 
 ## Review collision cues, 2026-11-14
 
-Status: drafted and checked offline. No model run has been made. The planned run below needs the user's authorization, stated as a call count and cost cap. The user asked to finish the open items from [`a-review-00` description cue](#a-review-00-description-cue-2026-11-14).
+Status: drafted and checked offline; the authorized run (182 calls, $83 cap) stopped after four batches. The user authorized 182 calls with an $83 cap for batches A1–A6 and B1–B3, run one at a time with a stop on any invalid batch. A4 hit its $3 cap after 6 of 7 calls and came back invalid, so the run stopped there. The new wording and the neighbouring cases have not run yet. The user asked to finish the open items from [`a-review-00` description cue](#a-review-00-description-cue-2026-11-14).
 
 - **Target.** On host 2.1.325, `d-review-code`, "Code review src/auth.py please.", names a file and still loses to the host's `code-review` skill. The earlier cue did not cover a request that names a file.
 - **Change.** Under R-DESC-4, the parenthetical in the lead clause becomes "(the current uncommitted changes, named files, a branch or a pull request)". No clause is removed, and every positive activation case stays mapped. The `assistant-review` description is 497 characters, and total description characters go from 4,748 to 4,761.
@@ -408,6 +408,18 @@ Status: drafted and checked offline. No model run has been made. The planned run
     - code diagrams: `d-code-diagram`, `h-code-diagram-1`, `h-code-diagram-2`;
     - file edits: `d-cleanup-vs-refactor`, `d-cleanup-vs-delete`, `c-typo-mid-skill`.
   - The planned run includes all of these.
+- **Part A run, 2026-11-15, host 2.1.325.** All batches used `deepseek-flash`. The arms are `base` (d11756d, tree `b2ea0033…`) and current main (d852f01 tree, identical to 7e9a666, tree `3d5b2442…`). Each batch is 6 trials of one case plus the listing probe.
+
+  | Batch | Arm | Case | Passes | Lost to `code-review` | Valid | Cost |
+  |---|---|---|---|---|---|---|
+  | rc-a1 | base | `d-review-code` | 5/6 | 1 | yes | $3.71 |
+  | rc-a2 | base | `h-review-3` | 6/6 | 0 | yes | $2.48 |
+  | rc-a3 | main | `d-review-code` | 0/6 | 6 | yes | $3.21 |
+  | rc-a4 | main | `h-review-3` | 4/5, 1 not run | 1 | no, cost cap | $3.05 |
+
+  - **Host or wording.** On the same host, the base wording keeps `d-review-code` at 5/6 and main's wording loses it 6/6. So the `d-review-code` loss is caused by main's wording, not the host version. `h-review-3` points the same way (6/6 against 4/5), but A4 is invalid and only diagnostic.
+  - **Host errors.** One trial in rc-a1 and one in rc-a2 reached the eight-turn limit after `assistant-review` had activated. The runner counts them as observed runs.
+  - **Cost.** Trials averaged about $0.50 against the planned $0.35, so the remaining batch caps are too tight. Spend so far is $12.45 of the $83 authorized.
 
 ## Known limits
 
