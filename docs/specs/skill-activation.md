@@ -390,7 +390,7 @@ The user authorized the rerun with 3 calls and a $5 cap, then the neighbouring c
 
 ## Review collision cues, 2026-11-14
 
-Status: drafted and checked offline; the authorized run (182 calls, $83 cap) stopped after four batches. The user authorized 182 calls with an $83 cap for batches A1–A6 and B1–B3, run one at a time with a stop on any invalid batch. A4 hit its $3 cap after 6 of 7 calls and came back invalid, so the run stopped there. The new wording and the neighbouring cases have not run yet. The user asked to finish the open items from [`a-review-00` description cue](#a-review-00-description-cue-2026-11-14).
+Status: the authorized runs are complete. The first run (182 calls, $83 cap) stopped after A4 hit its $3 cap and came back invalid, at $12.45. The user then authorized the remaining 161 calls with new caps totalling $94. Those six batches were all valid, with no empty runs, and cost $52.82. Total spend is $65.27. The new wording passes R-DESC-6 on every case in the run, with the limits below.
 
 - **Target.** On host 2.1.325, `d-review-code`, "Code review src/auth.py please.", names a file and still loses to the host's `code-review` skill. The earlier cue did not cover a request that names a file.
 - **Change.** Under R-DESC-4, the parenthetical in the lead clause becomes "(the current uncommitted changes, named files, a branch or a pull request)". No clause is removed, and every positive activation case stays mapped. The `assistant-review` description is 497 characters, and total description characters go from 4,748 to 4,761.
@@ -419,7 +419,30 @@ Status: drafted and checked offline; the authorized run (182 calls, $83 cap) sto
 
   - **Host or wording.** On the same host, the base wording keeps `d-review-code` at 5/6 and main's wording loses it 6/6. So the `d-review-code` loss is caused by main's wording, not the host version. `h-review-3` points the same way (6/6 against 4/5), but A4 is invalid and only diagnostic.
   - **Host errors.** One trial in rc-a1 and one in rc-a2 reached the eight-turn limit after `assistant-review` had activated. The runner counts them as observed runs.
-  - **Cost.** Trials averaged about $0.50 against the planned $0.35, so the remaining batch caps are too tight. Spend so far is $12.45 of the $83 authorized.
+  - **Cost.** Trials averaged about $0.50 against the planned $0.35. The user re-authorized the remaining batches with caps of about $0.55 per call.
+- **Second run, 2026-11-15, host 2.1.325.** All six batches were valid, with no empty runs. Each of rc-a5, rc-a6, rc-b1, rc-b2 and rc-b3 had one trial that reached the eight-turn limit; the runner counts those as observed runs. The new wording is tree `e8acd14b…`, from commit 4439972.
+
+  | Batch | Arm | Case | Passes | Lost to `code-review` | Cost |
+  |---|---|---|---|---|---|
+  | rc-a4-rerun | main | `h-review-3` | 2/6 | 3 | $4.08 |
+  | rc-a5 | new wording | `d-review-code` | 5/6 | 1 | $2.56 |
+  | rc-a6 | new wording | `h-review-3` | 5/6 | 0 | $2.13 |
+
+  - **Verdict.** On one host, `d-review-code` goes 5/6 on base, 0/6 on main and 5/6 on the new wording, so the new wording restores the base result. `h-review-3` goes 6/6 on base, 6/11 over the two main batches and 5/6 on the new wording. It stays a diagnostic only, and no held-out case was edited.
+  - **Neighbours on the new wording, 3 repeats** (rc-b1 $6.20, rc-b2 $22.37, rc-b3 $15.47):
+    - No neighbouring case activated `assistant-review` when it was not expected.
+    - No forbidden row failed. `a-review-02`, `a-review-03`, `d-skill-assess`, `h-sc-assess`, `h-uiqa-3` and `h-none-2` each pass 3/3.
+    - All seven activation cases pass 3/3.
+    - `d-uiqa-vs-review` passes 2/3, with no skill activated in the third trial. On main it passed 0/3 (`nb-dev`).
+  - **Failures not caused by the wording.** No failing case lost to `assistant-review`. Each one either misses `assistant-verification` beside `assistant-workflow`, or picks `assistant-skill-creator` in `h-review-skill-plan`. Each case did as well as or better than on main, except two that lost one trial each:
+    - `d-seed-ci`: 1/3, 2/3 on main.
+    - `c-large-ci-names`: 2/3, 3/3 on main.
+
+    In both, the trial missed `assistant-verification`, which the new wording does not touch.
+  - **Other failing cases.** These fail the same way on main or are new:
+    - `d-seed-bot-comment`, `c-review-keyword`, `h-seed-comment`, `h-wf-ci-known` and `h-wf-review`: 0/3 on both.
+    - `h-review-skill-plan`: 1/3, 0/3 on main.
+    - `d-cleanup-vs-refactor` and `d-cleanup-vs-delete`: 0/3, with no main batch to compare. They miss `assistant-verification`, and `assistant-review` is not involved.
 
 ## Known limits
 
