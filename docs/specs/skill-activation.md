@@ -439,10 +439,27 @@ Status: the authorized runs are complete. The first run (182 calls, $83 cap) sto
     - `c-large-ci-names`: 2/3, 3/3 on main.
 
     In both, the trial missed `assistant-verification`, which the new wording does not touch.
+
   - **Other failing cases.** These fail the same way on main or are new:
     - `d-seed-bot-comment`, `c-review-keyword`, `h-seed-comment`, `h-wf-ci-known` and `h-wf-review`: 0/3 on both.
     - `h-review-skill-plan`: 1/3, 0/3 on main.
     - `d-cleanup-vs-refactor` and `d-cleanup-vs-delete`: 0/3, with no main batch to compare. They miss `assistant-verification`, and `assistant-review` is not involved.
+
+## Mid-build review of the assistant's own work, 2026-11-15
+
+Status: the cases and cue are written and pass the offline checks. No trial has run yet, and the run plan waits for the user's authorization.
+
+- **Gap.** No development case asked for a review, partway through a build, of work the assistant itself had just produced in the conversation. The user chose to add development cases for that state rather than target `h-review-3`, which R-EVAL-4 does not allow.
+- **Independence.** The cases were written from the state alone, without opening `heldout.json`. That case's final turn is quoted under [`a-review-00` description cue](#a-review-00-description-cue-2026-11-14) in this spec, and its author had read that quote. So the cases avoid its wording, but they are not blind to it. The same holds for the cue. The draft cue dropped under [Review collision cues](#review-collision-cues-2026-11-14) was never recorded, and this cue was not taken from it.
+- **Cases.** Both use the `building` prefix, where the assistant has added `on_item` to `src/sync_job.py` with `on_retry` still to do, and both match the review row:
+  - `d-review-own-work` asks with the keyword "review" for the code written so far in the session, report only;
+  - `d-review-own-work-soft` asks whether that work is solid enough to build on, without the keyword.
+- **Change.** Under R-DESC-4, the parenthetical in the lead clause becomes "(the current uncommitted changes, named files, work just produced in the conversation, a branch or a pull request)". No clause is removed, and every positive activation case stays mapped. The `assistant-review` description is 537 characters, and total description characters go from 4,761 to 4,801.
+- **Over-activation risk.** "work just produced in the conversation" could draw other mid-build turns toward `assistant-review`.
+  - **Where that fails a trial:** `d-none-read`, a narrow question on the same prefix that forbids every skill.
+  - **Where it fails only if `assistant-review` replaces the required skill:** `d-seed-remind`, `d-tdd-mid`, `d-seed-fix-findings` and `d-seed-more-rounds`. On the last two, the assistant has just produced review findings. On the three implement rows an extra `assistant-review` is excused, because the row requires `assistant-workflow` and its body directs review. On `d-tdd-mid` it only lowers precision.
+  - The planned run includes all of these.
+- **Offline checks.** `tools/skills/validate-skills.sh` passes under a UTF-8 locale; under the shell's ASCII default its scan reports an invalid byte before it validates. The 185 activation suite tests pass, and `suite.py validate` passes with 74 development cases. `tests/test-p0-p4-contracts.sh` passes 1,349 of 1,350; the one failure is the Draft 2020-12 test, which needs the locked Ajv dependency installed in this worktree and does not touch descriptions. No offline check shows that the description activates.
 
 ## Known limits
 
