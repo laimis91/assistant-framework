@@ -382,11 +382,67 @@ The user authorized the rerun with 3 calls and a $5 cap, then the neighbouring c
 - **Over-activation.** `assistant-review` was never extra or forbidden in any trial. On the review-comment, CI-fix and create-pr rows it never activated, and `a-review-02`, the nearby negative, activated nothing. `a-review-03`, `a-skill-creator-03`, `-04`, `d-skill-assess` and `h-sc-assess` went to `assistant-skill-creator` in every trial.
 - **Unchanged against earlier runs.** Compared with `dev-1` on 79e6a74 and the c1 held-out arm, the failing cases fail as before: the `assistant-verification` misses on `d-seed-bot-comment`, `c-review-keyword`, `h-seed-ci`, `h-seed-comment` and `h-wf-ci-known`; `h-review-2` going to `assistant-ci-audit`; and `assistant-skill-creator` on `h-review-skill-plan`.
 - **Host `code-review` competition remains.** `d-review-code`, "Code review src/auth.py please.", chose the host skill in 3 of 3 trials, against 2 of 3 in `dev-1`. `h-review-3`, "Take a critical look at what you just wrote.", chose it in 2 of 3, against 0 of 3 under c1 on host 2.1.317. The cue targets the current changes, a branch and a pull request, so it does not reach requests that name a file or the assistant's own output. Without a baseline on this host, three trials cannot separate host drift from the description.
-- **Not assessed.** `d-uiqa-vs-review`, cut by the cost cap, and the R-DESC-7 crowded-listing check for the 62 added characters.
+- **Not assessed.** `d-uiqa-vs-review`, cut by the cost cap. The R-DESC-7 crowded-listing check for the 62 added characters followed in [Review collision cues](#review-collision-cues-2026-11-14).
 
 - **Diagnosis.** The `assistant-review` description is the same at d11756d and on main, and the listing guidance hash is the same in all three arms, so the regression comes from the neighbouring descriptions or chance, not from a change to `assistant-review`. The tree added the `assistant-advisory-triage`, `-cleanup`, `-spike` and `-ui-qa` descriptions, widened `-docs` and `-thinking`, and removed three skills. Total description characters rose from 3,536 to 4,686, far under the 40,000-character listing budget, so no entry was truncated. The host's `code-review` description leads with reviewing the current diff, which matches the request "Review the current uncommitted changes." more closely than "Reviews code and diffs". In the baselines it was chosen alone in 1 of 6 trials and alongside `assistant-review` in 1 more.
 - **Change.** Under R-DESC-4, the lead clause gains a state and target cue: "Reviews code and diffs (the current uncommitted changes, a branch or a pull request)". No other clause changed, and every positive activation case stays mapped. Total description characters go from 4,686 to 4,748.
 - **Offline checks.** `tools/skills/validate-skills.sh` and the 185 activation suite tests pass. `./tests/test-p0-p4-contracts.sh` passed 1,346 checks. Four failed in that worktree, none touching this change: three for want of the locked Ajv dependency, `tools/evals/node_modules` being absent, and one network DNS-deadline test. No offline check shows that the description activates.
+
+## Review collision cues, 2026-11-14
+
+Status: the authorized runs are complete. The first run (182 calls, $83 cap) stopped after A4 hit its $3 cap and came back invalid, at $12.45. The user then authorized the remaining 161 calls with new caps totalling $94. Those six batches were all valid, with no empty runs, and cost $52.82. Total spend is $65.27. The new wording passes R-DESC-6 on every case in the run, with the limits below.
+
+- **Target.** On host 2.1.325, `d-review-code`, "Code review src/auth.py please.", names a file and still loses to the host's `code-review` skill. The earlier cue did not cover a request that names a file.
+- **Change.** Under R-DESC-4, the parenthetical in the lead clause becomes "(the current uncommitted changes, named files, a branch or a pull request)". No clause is removed, and every positive activation case stays mapped. The `assistant-review` description is 497 characters, and total description characters go from 4,748 to 4,761.
+- **`h-review-3` is not targeted.** That held-out case also lost to the host skill, but no development case asks for a review of work just produced mid-build. A draft cue for that state was written after reading the case and its result, which R-EVAL-4 does not allow, so it was dropped before any run. Whether to add a development case for that state, or a cue reviewed under R-EVAL-3, is the user's decision. `h-review-3` still runs as a host diagnostic. Its result is not evidence for this wording.
+- **R-DESC-7.** This was checked with no model call, as before, using host 2.1.323 from `PATH`. The setup was a fresh home, the crowded plugin with 40 stubs built from this tree, the API base URL on a closed local port and a placeholder key. The session log's listing kept all 17 descriptions word for word for `claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5-2` and the two `[1m]` variants. The listing is 17,187 characters, below the roughly 30,000 at which the host reduces entries to names. It also covers the crowded check left open for the earlier 62 characters, within the limits in [Known limits](#known-limits).
+- **Offline checks.** `tools/skills/validate-skills.sh` and the 185 activation suite tests pass. `tests/test-p0-p4-contracts.sh` passes 1,349 of 1,350; the one failure is the Draft 2020-12 test, which needs the locked Ajv dependency installed in this worktree and does not touch descriptions. No offline check shows that the description activates.
+- **Over-activation risk.** "named files" could draw file-naming requests toward `assistant-review`.
+  - **Rows where that fails a trial**, because they forbid `assistant-review`:
+    - skill assessment: `d-skill-assess`, `h-sc-assess`, `a-review-03`, `a-skill-creator-03` and `-04`;
+    - narrow question: `h-none-2`.
+  - **Rows where it only lowers precision:**
+    - review comments that name a file: `d-seed-bot-comment`, `h-seed-comment`, `c-review-keyword`, `c-large-pasted-review`, `h-sc-review-feedback`;
+    - security audits: `d-security-audit`, `d-security-not-advisory`, `h-security-1`;
+    - stress tests: `d-thinking`, `h-thinking-2`;
+    - code diagrams: `d-code-diagram`, `h-code-diagram-1`, `h-code-diagram-2`;
+    - file edits: `d-cleanup-vs-refactor`, `d-cleanup-vs-delete`, `c-typo-mid-skill`.
+  - The planned run includes all of these.
+- **Part A run, 2026-11-15, host 2.1.325.** All batches used `deepseek-flash`. The arms are `base` (d11756d, tree `b2ea0033…`) and current main (d852f01 tree, identical to 7e9a666, tree `3d5b2442…`). Each batch is 6 trials of one case plus the listing probe.
+
+  | Batch | Arm | Case | Passes | Lost to `code-review` | Valid | Cost |
+  |---|---|---|---|---|---|---|
+  | rc-a1 | base | `d-review-code` | 5/6 | 1 | yes | $3.71 |
+  | rc-a2 | base | `h-review-3` | 6/6 | 0 | yes | $2.48 |
+  | rc-a3 | main | `d-review-code` | 0/6 | 6 | yes | $3.21 |
+  | rc-a4 | main | `h-review-3` | 4/5, 1 not run | 1 | no, cost cap | $3.05 |
+
+  - **Host or wording.** On the same host, the base wording keeps `d-review-code` at 5/6 and main's wording loses it 6/6. So the `d-review-code` loss is caused by main's wording, not the host version. `h-review-3` points the same way (6/6 against 4/5), but A4 is invalid and only diagnostic.
+  - **Host errors.** One trial in rc-a1 and one in rc-a2 reached the eight-turn limit after `assistant-review` had activated. The runner counts them as observed runs.
+  - **Cost.** Trials averaged about $0.50 against the planned $0.35. The user re-authorized the remaining batches with caps of about $0.55 per call.
+- **Second run, 2026-11-15, host 2.1.325.** All six batches were valid, with no empty runs. Each of rc-a5, rc-a6, rc-b1, rc-b2 and rc-b3 had one trial that reached the eight-turn limit; the runner counts those as observed runs. The new wording is tree `e8acd14b…`, from commit 4439972.
+
+  | Batch | Arm | Case | Passes | Lost to `code-review` | Cost |
+  |---|---|---|---|---|---|
+  | rc-a4-rerun | main | `h-review-3` | 2/6 | 3 | $4.08 |
+  | rc-a5 | new wording | `d-review-code` | 5/6 | 1 | $2.56 |
+  | rc-a6 | new wording | `h-review-3` | 5/6 | 0 | $2.13 |
+
+  - **Verdict.** On one host, `d-review-code` goes 5/6 on base, 0/6 on main and 5/6 on the new wording, so the new wording restores the base result. `h-review-3` goes 6/6 on base, 6/11 over the two main batches and 5/6 on the new wording. It stays a diagnostic only, and no held-out case was edited.
+  - **Neighbours on the new wording, 3 repeats** (rc-b1 $6.20, rc-b2 $22.37, rc-b3 $15.47):
+    - No neighbouring case activated `assistant-review` when it was not expected.
+    - No forbidden row failed. `a-review-02`, `a-review-03`, `d-skill-assess`, `h-sc-assess`, `h-uiqa-3` and `h-none-2` each pass 3/3.
+    - All seven activation cases pass 3/3.
+    - `d-uiqa-vs-review` passes 2/3, with no skill activated in the third trial. On main it passed 0/3 (`nb-dev`).
+  - **Failures not caused by the wording.** No failing case lost to `assistant-review`. Each one either misses `assistant-verification` beside `assistant-workflow`, or picks `assistant-skill-creator` in `h-review-skill-plan`. Each case did as well as or better than on main, except two that lost one trial each:
+    - `d-seed-ci`: 1/3, 2/3 on main.
+    - `c-large-ci-names`: 2/3, 3/3 on main.
+
+    In both, the trial missed `assistant-verification`, which the new wording does not touch.
+  - **Other failing cases.** These fail the same way on main or are new:
+    - `d-seed-bot-comment`, `c-review-keyword`, `h-seed-comment`, `h-wf-ci-known` and `h-wf-review`: 0/3 on both.
+    - `h-review-skill-plan`: 1/3, 0/3 on main.
+    - `d-cleanup-vs-refactor` and `d-cleanup-vs-delete`: 0/3, with no main batch to compare. They miss `assistant-verification`, and `assistant-review` is not involved.
 
 ## Known limits
 
