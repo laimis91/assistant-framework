@@ -483,6 +483,34 @@ Status: the authorized run is complete. The cue showed no gain over main on the 
     - `d-review-code` and `d-uiqa-vs-review` each lost one of three trials to the host's `code-review`.
     - Per-run records stay in local Git-ignored evaluation state.
 
+## Verification beside workflow, 2026-11-15
+
+Status: the change is on branch `claude/bold-fermi-78fb92`. No model call has run, and the run plan waits for the user's approval.
+
+- **Diagnosis.** This comes from development results only: `dev-1`, `nb-dev` and `rc-b2`. When `assistant-workflow` activated on a case that also requires `assistant-verification`, verification activated in 60 of 115 trials.
+  - When verification activated, it came after `assistant-workflow` in 59 of those 60 trials. So the workflow body, not the verification description, is what loads it.
+  - Most misses activated `assistant-workflow` alone and then edited, gave a final answer or reached the turn limit.
+  - Recall is lowest on small cases: 16/47 on small cases, 26/47 on medium and 18/21 on large. By phase it is 7/29 on review feedback and 7/20 on new work, against 18/21 after plan approval.
+  - Step 2 of the workflow body said "Trivial safe local work can proceed directly". That reads as permission to skip the selection for small fixes. The controller reference's `plan_mode=none` path skips only the plan and still carries known verification into Build.
+- **Change.** Only the body of step 2 in `skills/assistant-workflow/SKILL.md` changes. Selection is required before a Plan fixes verification obligations, or before Build, on non-trivial work. Only trivial safe local work, such as a one-word typo, may skip loading `assistant-verification` and go to Build without a plan, carrying its known and binding checks. Any other change loads `assistant-verification` before its first edit, even a small review-comment fix, CI fix, cleanup or deletion. No description changes, so description characters stay at 4,761 and R-DESC-7 is not affected.
+- **Routing.** The `typo` row stays as [OD-1](#accepted-defaults) decided, and the body matches the oracle's rule that verification is required on non-trivial implementation rows.
+- **R-EVAL-4.** The change was written from development cases and the routing table. No held-out case file was read. Per-case held-out names and pass counts in this spec were visible to the author, so the fresh-actor condition holds only for case content. The change does not name or target a held-out case.
+- **Offline checks.** `tools/skills/validate-skills.sh` and the 185 activation suite tests pass. No offline check shows that the body change raises activation.
+- **Risks.**
+  - `assistant-verification` could now load on preparation, resume, PR-creation and TDD turns, where it is optional. `a-verification-03`, a TDD request where verification is not expected, fails only if verification activates first.
+  - It could also load on typo turns, where it would count as an extra activation, not a failure.
+- **Run plan, awaiting approval.** All batches use host 2.1.325 and `deepseek-flash`, with 3 repeats and caps of about $0.55 per call. The arms are this branch and main, whose skills match the `rc-b2` tree `e8acd14b…`.
+
+  | Batch | Arm | Set | Cases | Calls | Cap |
+  |---|---|---|---|---|---|
+  | vw-v1 | branch | development | the 25 cases requiring workflow and verification, plus probe | 76 | $42 |
+  | vw-v2 | main | development | the 17 of those 25 with no `rc-b2` baseline, plus probe | 52 | $29 |
+  | vw-v3 | branch | development | 19 neighbours where workflow is required or optional, plus probe | 58 | $32 |
+  | vw-v4 | branch | activation | `a-workflow-00`…`-05` and `a-verification-00`…`-03`, no probe | 30 | $17 |
+  | vw-v5 (optional) | branch | held-out | 41 cases whose rows route to workflow, chosen by row only, plus probe | 124 | $68 |
+
+  The four core batches come to 216 calls with $120 in caps. With vw-v5 it is 340 calls and $188.
+
 ## Known limits
 
 - `assistant-verification` stays required before the first edit on implementation rows; the user confirmed this on 2026-11-03. Across the two diagnostic development batches it activated in time in 3 of 15 conclusive trials, usually after `assistant-workflow` had loaded. c1 raises its held-out recall to 70% against 29%, so about 30–35% of conclusive trials still miss it.
