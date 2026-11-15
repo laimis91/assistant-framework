@@ -447,7 +447,7 @@ Status: the authorized runs are complete. The first run (182 calls, $83 cap) sto
 
 ## Mid-build review of the assistant's own work, 2026-11-15
 
-Status: the cases and cue are written and pass the offline checks. No trial has run yet, and the run plan waits for the user's authorization.
+Status: the authorized run is complete. On the new development cases, the cue shows no gain over main. Whether to keep it is the user's decision.
 
 - **Gap.** No development case asked for a review, partway through a build, of work the assistant itself had just produced in the conversation. The user chose to add development cases for that state rather than target `h-review-3`, which R-EVAL-4 does not allow.
 - **Independence.** The cases were written from the state alone, without opening `heldout.json`. That case's final turn is quoted under [`a-review-00` description cue](#a-review-00-description-cue-2026-11-14) in this spec, and its author had read that quote. So the cases avoid its wording, but they are not blind to it. The same holds for the cue. The draft cue dropped under [Review collision cues](#review-collision-cues-2026-11-14) was never recorded, and this cue was not taken from it.
@@ -460,6 +460,28 @@ Status: the cases and cue are written and pass the offline checks. No trial has 
   - **Where it fails only if `assistant-review` replaces the required skill:** `d-seed-remind`, `d-tdd-mid`, `d-seed-fix-findings` and `d-seed-more-rounds`. On the last two, the assistant has just produced review findings. On the three implement rows an extra `assistant-review` is excused, because the row requires `assistant-workflow` and its body directs review. On `d-tdd-mid` it only lowers precision.
   - The planned run includes all of these.
 - **Offline checks.** `tools/skills/validate-skills.sh` passes under a UTF-8 locale; under the shell's ASCII default its scan reports an invalid byte before it validates. The 185 activation suite tests pass, and `suite.py validate` passes with 74 development cases. `tests/test-p0-p4-contracts.sh` passes 1,349 of 1,350; the one failure is the Draft 2020-12 test, which needs the locked Ajv dependency installed in this worktree and does not touch descriptions. No offline check shows that the description activates.
+- **Run, 2026-11-16, host 2.1.325.** The user authorized 108 calls with a $62 cap. Every batch used `deepseek-flash` in the isolated condition and passed its listing probe. No batch had an empty run, and no API key appeared in any output. Spend was $40.33. The arms were:
+  - `base`: d11756d, tree `b2ea0033…`;
+  - `main`: 140ff3a, tree `e8acd14b…`;
+  - `own`: 0d2bc3a, tree `1cee9f31…`.
+
+  | Batch | Arm | Cases | Result | Valid | Cost (cap) |
+  |---|---|---|---|---|---|
+  | ow-a-base | base | the two new cases × 3 | `d-review-own-work` 3/3; `-soft` 2/2, one trial not run | no, cost cap | $4.19 ($4) |
+  | ow-a-main | main | the two new cases × 3 | `d-review-own-work` 2/3, no skill in the third; `-soft` 2/2, one trial not run | no, cost cap | $4.38 ($4) |
+  | ow-a-own | own | the two new cases × 3 | `d-review-own-work` 2/3, the host's `code-review` in the third; `-soft` 3/3 | yes | $4.23 ($4) |
+  | ow-c1 | own | `h-review-3` × 6, run only as a diagnostic | 6/6 | yes | $2.98 ($4) |
+  | ow-b1 | own | 7 `activation_cases` × 3 | all pass; one `a-review-02` trial inconclusive, with no skill activated | yes | $5.95 ($12) |
+  | ow-b2 | own | 12 development neighbours × 3 | see below | yes | $13.88 ($21) |
+  | ow-b3 | own | 7 held-out neighbours × 3, run only | see below | yes | $4.72 ($13) |
+
+  - **Verdict on the cue.** Both base and main already pass both new cases by majority, so these cases do not show that the routing needs the cue (R-DESC-4). The base and main batches are invalid and only diagnostic. Three trials per case cannot separate the arms either way. `h-review-3` went 6/6 on the cue, against 6/11 on main in [Review collision cues](#review-collision-cues-2026-11-14), but that is a held-out diagnostic and not evidence for this wording.
+  - **Over-activation.** The cue added no forbidden activation: `d-none-read`, `h-none-2`, `a-review-02`, `a-review-03`, `d-skill-assess` and `h-sc-assess` never activated `assistant-review`. `d-seed-remind`, `d-tdd-mid`, `d-seed-after-research` and `d-workflow-compacted-active` pass 3/3. `d-seed-more-rounds` chose `assistant-review` in place of `assistant-workflow` in 2 of 3 trials and missed `assistant-verification` in the third. It did the same in all 3 trials of `dev-1` on 77b9240, host 2.1.321, before any review cue, so the cue did not cause it.
+  - **Other failures, as on earlier runs.**
+    - `d-seed-fix-findings` (0/3), `h-wf-review` (0/1, with 2 inconclusive) and one `h-sc-review-feedback` trial miss `assistant-verification`.
+    - `h-review-2` goes to `assistant-ci-audit`, and `h-review-skill-plan` to `assistant-skill-creator`.
+    - `d-review-code` and `d-uiqa-vs-review` each lost one of three trials to the host's `code-review`.
+    - Per-run records stay in local Git-ignored evaluation state.
 
 ## Known limits
 
