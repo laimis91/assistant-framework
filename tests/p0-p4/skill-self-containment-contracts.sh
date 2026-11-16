@@ -80,6 +80,7 @@ Run `<framework-tools>/example/run.sh`.
 Run `{agent_state_dir}/tools/example/run.sh`.
 Run `tools/example/run.sh` and read `docs/example/guide.md`.
 Run `~/.codex/tools/example/run.sh`.
+Run `/home/alice/.claude/tools/example/run.sh` and `${HOME}/.gemini/tools/example/run.sh`.
 Run `tools/framework-ownership/ownership.py`.
 Edit `tools/skills/sync-example.sh` as a maintainer.
 FIXTURE
@@ -97,6 +98,8 @@ for expected in \
     "runtime path leaves the skill folder: tools/example/run.sh" \
     "runtime path leaves the skill folder: docs/example/guide.md" \
     "runtime path leaves the skill folder: ~/.codex/tools/example/run.sh" \
+    "runtime path leaves the skill folder: /home/alice/.claude/tools/example/run.sh" \
+    "runtime path leaves the skill folder: \${HOME}/.gemini/tools/example/run.sh" \
     "runtime path leaves the skill folder: tools/framework-ownership/ownership.py" \
     'runtime path leaves the skill folder: parents[3] / "tools/example/helper.py"' \
     "allowlist entry no longer matches; remove it: tools/framework-ownership/ownership.py"; do

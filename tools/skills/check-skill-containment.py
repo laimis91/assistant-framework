@@ -27,7 +27,8 @@ RUNTIME_PATH = re.compile(
     r"|\{agent_state_dir\}/tools[^\s`)\"']*"
     r"|parents\[\d+\]\s*/\s*\"tools/[^\"]*\""
     r"|(?<![\w./-])(?:tools|docs)/[\w.-]+/[^\s`)\"']*"
-    r"|(?:~|\$HOME|\$\{?CODEX_HOME\}?)/(?:\.[\w-]+/)?tools/[^\s`)\"']*"
+    r"|(?:~|\$\{?HOME\}?|\$\{?CODEX_HOME\}?)/(?:\.[\w-]+/)?tools/[^\s`)\"']*"
+    r"|(?<![\w~}$./-])(?:/[\w.@-]+)*/\.(?:claude|codex|gemini|agents)/tools/[^\s`)\"']*"
 )
 TEXT_SUFFIXES = {".md", ".yaml", ".yml", ".json", ".py", ".sh", ".ps1", ".toml", ".txt"}
 
