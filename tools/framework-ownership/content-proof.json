@@ -819,6 +819,96 @@
     }
    }
   },
+  "managed_tool/cognitive-complexity/cognitivecomplexity.csproj": {
+   "files": {
+    "": {
+     "claude": [
+      "6208e3750fc9100e80ab54bd0ff57b3ddeac5c268abad8c7a86d530b70fbb2f3"
+     ],
+     "codex": [
+      "6208e3750fc9100e80ab54bd0ff57b3ddeac5c268abad8c7a86d530b70fbb2f3"
+     ],
+     "gemini": [
+      "6208e3750fc9100e80ab54bd0ff57b3ddeac5c268abad8c7a86d530b70fbb2f3"
+     ]
+    }
+   }
+  },
+  "managed_tool/cognitive-complexity/cognitivecomplexitywalker.cs": {
+   "files": {
+    "": {
+     "claude": [
+      "13d02a5856589cbc5b2e4dca66eda640811f5cc852733fa20cf1529480bba700"
+     ],
+     "codex": [
+      "13d02a5856589cbc5b2e4dca66eda640811f5cc852733fa20cf1529480bba700"
+     ],
+     "gemini": [
+      "13d02a5856589cbc5b2e4dca66eda640811f5cc852733fa20cf1529480bba700"
+     ]
+    }
+   }
+  },
+  "managed_tool/cognitive-complexity/models.cs": {
+   "files": {
+    "": {
+     "claude": [
+      "ce3c3b4fe616732c7ce0f989175f498111954c4502e07dd9590720b21d543ee9"
+     ],
+     "codex": [
+      "ce3c3b4fe616732c7ce0f989175f498111954c4502e07dd9590720b21d543ee9"
+     ],
+     "gemini": [
+      "ce3c3b4fe616732c7ce0f989175f498111954c4502e07dd9590720b21d543ee9"
+     ]
+    }
+   }
+  },
+  "managed_tool/cognitive-complexity/program.cs": {
+   "files": {
+    "": {
+     "claude": [
+      "cca7eed63f670d23f8d58616cdde7eea3775c2c9a6d03c1cf049e3914b5cdfc1"
+     ],
+     "codex": [
+      "cca7eed63f670d23f8d58616cdde7eea3775c2c9a6d03c1cf049e3914b5cdfc1"
+     ],
+     "gemini": [
+      "cca7eed63f670d23f8d58616cdde7eea3775c2c9a6d03c1cf049e3914b5cdfc1"
+     ]
+    }
+   }
+  },
+  "managed_tool/cognitive-complexity/run-complexity.sh": {
+   "files": {
+    "": {
+     "claude": [
+      "de6eb9ac4a2cb79f95a998c9c56e7d116516ccd88460b62224c7655f65bfbc54"
+     ],
+     "codex": [
+      "de6eb9ac4a2cb79f95a998c9c56e7d116516ccd88460b62224c7655f65bfbc54"
+     ],
+     "gemini": [
+      "de6eb9ac4a2cb79f95a998c9c56e7d116516ccd88460b62224c7655f65bfbc54"
+     ]
+    }
+   }
+  },
+  "managed_tool/cognitive-complexity/testsample.cs": {
+   "files": {
+    "": {
+     "claude": [
+      "75dbef59dfcde970db8c684fc75d50e91ac71c9b7211eff03901f1c9980f0c05"
+     ],
+     "codex": [
+      "75dbef59dfcde970db8c684fc75d50e91ac71c9b7211eff03901f1c9980f0c05"
+     ],
+     "gemini": [
+      "75dbef59dfcde970db8c684fc75d50e91ac71c9b7211eff03901f1c9980f0c05"
+     ]
+    }
+   }
+  },
   "managed_tool/memory-graph": {
    "files": {
     ".gitignore": {
@@ -1805,6 +1895,21 @@
      "gemini": [
       "cea46f54098c49cacb72e83f0bea5b026cb1161ecf9c242f5e9bcaf53b2ab628",
       "f2a768baf25d1a7ac1382327950de025fa0db92afacd784617c6654be5c4149d"
+     ]
+    }
+   }
+  },
+  "managed_tool/progress/stagnation.py": {
+   "files": {
+    "": {
+     "claude": [
+      "ef288087082152be0ab0fc170cbff758a405e6533957446a8efacb1c5d6b4119"
+     ],
+     "codex": [
+      "ef288087082152be0ab0fc170cbff758a405e6533957446a8efacb1c5d6b4119"
+     ],
+     "gemini": [
+      "ef288087082152be0ab0fc170cbff758a405e6533957446a8efacb1c5d6b4119"
      ]
     }
    }

@@ -1407,6 +1407,236 @@
       "retired_in": "68da3fd9c653d02ed58561fde66d057d0e5f16dc",
       "content_proof": "skill/assistant-ideate",
       "note": "install.ps1 installed Codex skills under ~/.agents/skills."
+    },
+    {
+      "id": "managed_tool/cognitive-complexity/cognitivecomplexity.csproj",
+      "root": "agent_home",
+      "path": "tools/cognitive-complexity/CognitiveComplexity.csproj",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "kind": "managed_tool",
+      "node_type": "file",
+      "source_path": "tools/cognitive-complexity/CognitiveComplexity.csproj",
+      "retired_in": "32c90bef1641048f14c9d67e6fe6f48b58b48de2",
+      "content_proof": "managed_tool/cognitive-complexity/cognitivecomplexity.csproj",
+      "note": "Both installers synced tools/cognitive-complexity into <agent home>/tools until slice B of docs/specs/self-contained-skills.md removed it. No installer removes it; cleanup and uninstall prove it by content."
+    },
+    {
+      "id": "managed_tool/cognitive-complexity/cognitivecomplexitywalker.cs",
+      "root": "agent_home",
+      "path": "tools/cognitive-complexity/CognitiveComplexityWalker.cs",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "kind": "managed_tool",
+      "node_type": "file",
+      "source_path": "tools/cognitive-complexity/CognitiveComplexityWalker.cs",
+      "retired_in": "32c90bef1641048f14c9d67e6fe6f48b58b48de2",
+      "content_proof": "managed_tool/cognitive-complexity/cognitivecomplexitywalker.cs",
+      "note": "Both installers synced tools/cognitive-complexity into <agent home>/tools until slice B of docs/specs/self-contained-skills.md removed it. No installer removes it; cleanup and uninstall prove it by content."
+    },
+    {
+      "id": "managed_tool/cognitive-complexity/models.cs",
+      "root": "agent_home",
+      "path": "tools/cognitive-complexity/Models.cs",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "kind": "managed_tool",
+      "node_type": "file",
+      "source_path": "tools/cognitive-complexity/Models.cs",
+      "retired_in": "32c90bef1641048f14c9d67e6fe6f48b58b48de2",
+      "content_proof": "managed_tool/cognitive-complexity/models.cs",
+      "note": "Both installers synced tools/cognitive-complexity into <agent home>/tools until slice B of docs/specs/self-contained-skills.md removed it. No installer removes it; cleanup and uninstall prove it by content."
+    },
+    {
+      "id": "managed_tool/cognitive-complexity/program.cs",
+      "root": "agent_home",
+      "path": "tools/cognitive-complexity/Program.cs",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "kind": "managed_tool",
+      "node_type": "file",
+      "source_path": "tools/cognitive-complexity/Program.cs",
+      "retired_in": "32c90bef1641048f14c9d67e6fe6f48b58b48de2",
+      "content_proof": "managed_tool/cognitive-complexity/program.cs",
+      "note": "Both installers synced tools/cognitive-complexity into <agent home>/tools until slice B of docs/specs/self-contained-skills.md removed it. No installer removes it; cleanup and uninstall prove it by content."
+    },
+    {
+      "id": "managed_tool/cognitive-complexity/testsample.cs",
+      "root": "agent_home",
+      "path": "tools/cognitive-complexity/TestSample.cs",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "kind": "managed_tool",
+      "node_type": "file",
+      "source_path": "tools/cognitive-complexity/TestSample.cs",
+      "retired_in": "32c90bef1641048f14c9d67e6fe6f48b58b48de2",
+      "content_proof": "managed_tool/cognitive-complexity/testsample.cs",
+      "note": "Both installers synced tools/cognitive-complexity into <agent home>/tools until slice B of docs/specs/self-contained-skills.md removed it. No installer removes it; cleanup and uninstall prove it by content."
+    },
+    {
+      "id": "managed_tool/cognitive-complexity/run-complexity.sh",
+      "root": "agent_home",
+      "path": "tools/cognitive-complexity/run-complexity.sh",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "kind": "managed_tool",
+      "node_type": "file",
+      "source_path": "tools/cognitive-complexity/run-complexity.sh",
+      "retired_in": "32c90bef1641048f14c9d67e6fe6f48b58b48de2",
+      "content_proof": "managed_tool/cognitive-complexity/run-complexity.sh",
+      "note": "Both installers synced tools/cognitive-complexity into <agent home>/tools until slice B of docs/specs/self-contained-skills.md removed it. No installer removes it; cleanup and uninstall prove it by content."
+    },
+    {
+      "id": "source_only_tool/cognitive-complexity/.publish",
+      "root": "agent_home",
+      "path": "tools/cognitive-complexity/.publish",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "kind": "source_only_tool",
+      "node_type": "directory",
+      "installer_generated": true,
+      "note": "Never tracked; build output that run-complexity.sh or dotnet build wrote inside the installed tools/cognitive-complexity. Proven by exact location."
+    },
+    {
+      "id": "source_only_tool/cognitive-complexity/bin",
+      "root": "agent_home",
+      "path": "tools/cognitive-complexity/bin",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "kind": "source_only_tool",
+      "node_type": "directory",
+      "installer_generated": true,
+      "note": "Never tracked; build output that run-complexity.sh or dotnet build wrote inside the installed tools/cognitive-complexity. Proven by exact location."
+    },
+    {
+      "id": "source_only_tool/cognitive-complexity/obj",
+      "root": "agent_home",
+      "path": "tools/cognitive-complexity/obj",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "kind": "source_only_tool",
+      "node_type": "directory",
+      "installer_generated": true,
+      "note": "Never tracked; build output that run-complexity.sh or dotnet build wrote inside the installed tools/cognitive-complexity. Proven by exact location."
+    },
+    {
+      "id": "managed_tool_empty_directory/cognitive-complexity",
+      "root": "agent_home",
+      "path": "tools/cognitive-complexity",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "kind": "managed_tool_empty_directory",
+      "node_type": "directory",
+      "source_path": "tools/cognitive-complexity",
+      "retired_in": "32c90bef1641048f14c9d67e6fe6f48b58b48de2",
+      "note": "Removed only when every remaining child is a removable cognitive-complexity entry."
+    },
+    {
+      "id": "managed_tool/progress/stagnation.py",
+      "root": "agent_home",
+      "path": "tools/progress/stagnation.py",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "kind": "managed_tool",
+      "node_type": "file",
+      "source_path": "tools/progress/stagnation.py",
+      "retired_in": "32c90bef1641048f14c9d67e6fe6f48b58b48de2",
+      "content_proof": "managed_tool/progress/stagnation.py",
+      "note": "Both installers synced it into <agent home>/tools/progress until slice C of docs/specs/self-contained-skills.md moved it to skills/assistant-workflow/scripts. Reinstall replaces tools/progress; cleanup and uninstall prove a stale copy by content."
+    },
+    {
+      "id": "managed_tool/progress/stagnation.py@agents-tools",
+      "root": "agents_tools",
+      "path": "progress/stagnation.py",
+      "agents": [
+        "codex"
+      ],
+      "layouts": [
+        "windows"
+      ],
+      "kind": "managed_tool",
+      "node_type": "file",
+      "source_path": "tools/progress/stagnation.py",
+      "retired_in": "32c90bef1641048f14c9d67e6fe6f48b58b48de2",
+      "content_proof": "managed_tool/progress/stagnation.py",
+      "note": "install.ps1 mirrored it into ~/.agents/tools/progress for Codex until slice C moved it into the workflow skill."
     }
   ]
 }
