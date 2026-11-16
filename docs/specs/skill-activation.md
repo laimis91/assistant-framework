@@ -439,10 +439,49 @@ Status: the authorized runs are complete. The first run (182 calls, $83 cap) sto
     - `c-large-ci-names`: 2/3, 3/3 on main.
 
     In both, the trial missed `assistant-verification`, which the new wording does not touch.
+
   - **Other failing cases.** These fail the same way on main or are new:
     - `d-seed-bot-comment`, `c-review-keyword`, `h-seed-comment`, `h-wf-ci-known` and `h-wf-review`: 0/3 on both.
     - `h-review-skill-plan`: 1/3, 0/3 on main.
     - `d-cleanup-vs-refactor` and `d-cleanup-vs-delete`: 0/3, with no main batch to compare. They miss `assistant-verification`, and `assistant-review` is not involved.
+
+## Mid-build review of the assistant's own work, 2026-11-15
+
+Status: the authorized run is complete. The cue showed no gain over main on the new development cases, so the user dropped it on 2026-11-16. The two cases are kept, and the `assistant-review` description stays as on main.
+
+- **Gap.** No development case asked for a review, partway through a build, of work the assistant itself had just produced in the conversation. The user chose to add development cases for that state rather than target `h-review-3`, which R-EVAL-4 does not allow.
+- **Independence.** The cases were written from the state alone, without opening `heldout.json`. That case's final turn is quoted under [`a-review-00` description cue](#a-review-00-description-cue-2026-11-14) in this spec, and its author had read that quote. So the cases avoid its wording, but they are not blind to it. The same holds for the cue. The draft cue dropped under [Review collision cues](#review-collision-cues-2026-11-14) was never recorded, and this cue was not taken from it.
+- **Cases.** Both use the `building` prefix, where the assistant has added `on_item` to `src/sync_job.py` with `on_retry` still to do, and both match the review row:
+  - `d-review-own-work` asks with the keyword "review" for the code written so far in the session, report only;
+  - `d-review-own-work-soft` asks whether that work is solid enough to build on, without the keyword.
+- **Cue tried and dropped.** Under R-DESC-4, the run tested this parenthetical in the lead clause: "(the current uncommitted changes, named files, work just produced in the conversation, a branch or a pull request)". It added 40 characters, taking the description to 537 and the total to 4,801. Since it was dropped, the description and the 4,761 total are unchanged from main.
+- **Over-activation risk, as planned for the cue.** "work just produced in the conversation" could draw other mid-build turns toward `assistant-review`.
+  - **Where that fails a trial:** `d-none-read`, a narrow question on the same prefix that forbids every skill.
+  - **Where it fails only if `assistant-review` replaces the required skill:** `d-seed-remind`, `d-tdd-mid`, `d-seed-fix-findings` and `d-seed-more-rounds`. On the last two, the assistant has just produced review findings. On the three implement rows an extra `assistant-review` is excused, because the row requires `assistant-workflow` and its body directs review. On `d-tdd-mid` it only lowers precision.
+  - The planned run includes all of these.
+- **Offline checks.** `tools/skills/validate-skills.sh` passes under a UTF-8 locale; under the shell's ASCII default its scan reports an invalid byte before it validates. The 185 activation suite tests pass, and `suite.py validate` passes with 74 development cases. `tests/test-p0-p4-contracts.sh` passes 1,349 of 1,350; the one failure is the Draft 2020-12 test, which needs the locked Ajv dependency installed in this worktree and does not touch descriptions. That run included the cue. After it was dropped, the validator, the 185 tests and `suite.py validate` passed again, and `skills/` matches main.
+- **Run, 2026-11-16, host 2.1.325.** The user authorized 108 calls with a $62 cap. Every batch used `deepseek-flash` in the isolated condition and passed its listing probe. No batch had an empty run, and no API key appeared in any output. Spend was $40.33. The arms were:
+  - `base`: d11756d, tree `b2ea0033…`;
+  - `main`: 140ff3a, tree `e8acd14b…`;
+  - `own`: 0d2bc3a, tree `1cee9f31…`.
+
+  | Batch | Arm | Cases | Result | Valid | Cost (cap) |
+  |---|---|---|---|---|---|
+  | ow-a-base | base | the two new cases × 3 | `d-review-own-work` 3/3; `-soft` 2/2, one trial not run | no, cost cap | $4.19 ($4) |
+  | ow-a-main | main | the two new cases × 3 | `d-review-own-work` 2/3, no skill in the third; `-soft` 2/2, one trial not run | no, cost cap | $4.38 ($4) |
+  | ow-a-own | own | the two new cases × 3 | `d-review-own-work` 2/3, the host's `code-review` in the third; `-soft` 3/3 | yes | $4.23 ($4) |
+  | ow-c1 | own | `h-review-3` × 6, run only as a diagnostic | 6/6 | yes | $2.98 ($4) |
+  | ow-b1 | own | 7 `activation_cases` × 3 | all pass; one `a-review-02` trial inconclusive, with no skill activated | yes | $5.95 ($12) |
+  | ow-b2 | own | 12 development neighbours × 3 | see below | yes | $13.88 ($21) |
+  | ow-b3 | own | 7 held-out neighbours × 3, run only | see below | yes | $4.72 ($13) |
+
+  - **Verdict on the cue.** Both base and main already pass both new cases by majority, so these cases do not show that the routing needs the cue (R-DESC-4). It was dropped for that reason. The base and main batches are invalid and only diagnostic. Three trials per case cannot separate the arms either way. `h-review-3` went 6/6 on the cue, against 6/11 on main in [Review collision cues](#review-collision-cues-2026-11-14), but that is a held-out diagnostic and not evidence for this wording.
+  - **Over-activation.** The cue added no forbidden activation: `d-none-read`, `h-none-2`, `a-review-02`, `a-review-03`, `d-skill-assess` and `h-sc-assess` never activated `assistant-review`. `d-seed-remind`, `d-tdd-mid`, `d-seed-after-research` and `d-workflow-compacted-active` pass 3/3. `d-seed-more-rounds` chose `assistant-review` in place of `assistant-workflow` in 2 of 3 trials and missed `assistant-verification` in the third. It did the same in all 3 trials of `dev-1` on 77b9240, host 2.1.321, before any review cue, so the cue did not cause it.
+  - **Other failures, as on earlier runs.**
+    - `d-seed-fix-findings` (0/3), `h-wf-review` (0/1, with 2 inconclusive) and one `h-sc-review-feedback` trial miss `assistant-verification`.
+    - `h-review-2` goes to `assistant-ci-audit`, and `h-review-skill-plan` to `assistant-skill-creator`.
+    - `d-review-code` and `d-uiqa-vs-review` each lost one of three trials to the host's `code-review`.
+    - Per-run records stay in local Git-ignored evaluation state.
 
 ## Known limits
 
