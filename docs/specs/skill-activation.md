@@ -485,7 +485,7 @@ Status: the authorized run is complete. The cue showed no gain over main on the 
 
 ## Verification beside workflow, 2026-11-15
 
-Status: the change is on branch `claude/bold-fermi-78fb92`. No model call has run, and the run plan waits for the user's approval.
+Status: the authorized runs are complete. The user approved the four core batches, 216 calls with $120 in caps, and then a rerun of vw-v1, 76 calls with a $42 cap. All five batches were valid, with no empty runs and no API key in any output. Total spend is $88.44. On the 25 target cases the committed wording passes 62 of 69 conclusive trials, against 39 of 65 on main, and no neighbouring case regresses.
 
 - **Diagnosis.** This comes from development results only: `dev-1`, `nb-dev` and `rc-b2`. When `assistant-workflow` activated on a case that also requires `assistant-verification`, verification activated in 60 of 115 trials.
   - When verification activated, it came after `assistant-workflow` in 59 of those 60 trials. So the workflow body, not the verification description, is what loads it.
@@ -499,7 +499,7 @@ Status: the change is on branch `claude/bold-fermi-78fb92`. No model call has ru
 - **Risks.**
   - `assistant-verification` could now load on preparation, resume, PR-creation and TDD turns, where it is optional. `a-verification-03`, a TDD request where verification is not expected, fails only if verification activates first.
   - It could also load on typo turns, where it would count as an extra activation, not a failure.
-- **Run plan, awaiting approval.** All batches use host 2.1.325 and `deepseek-flash`, with 3 repeats and caps of about $0.55 per call. The arms are this branch and main, whose skills match the `rc-b2` tree `e8acd14b…`.
+- **Run plan.** All batches use host 2.1.325 and `deepseek-flash`, with 3 repeats and caps of about $0.55 per call. The arms are this branch and main, whose skills match the `rc-b2` tree `e8acd14b…`.
 
   | Batch | Arm | Set | Cases | Calls | Cap |
   |---|---|---|---|---|---|
@@ -510,6 +510,31 @@ Status: the change is on branch `claude/bold-fermi-78fb92`. No model call has ru
   | vw-v5 (optional) | branch | held-out | 41 cases whose rows route to workflow, chosen by row only, plus probe | 124 | $68 |
 
   The four core batches come to 216 calls with $120 in caps. With vw-v5 it is 340 calls and $188.
+- **Results, 2026-11-16, host 2.1.325.** All batches used `deepseek-flash` and 3 repeats. The committed wording is plugin tree `4d7660d9…` (commit 28d9154). Main is tree `e8acd14b…`. Its target baseline is vw-v2 for 17 cases and `rc-b2` for the other 8, on the same host and suite.
+
+  | Batch | Arm | Runs | Cost |
+  |---|---|---|---|
+  | vw-v1 | draft wording, tree `1fdc1f5a…` | 76 | $22.95 |
+  | vw-v2 | main | 52 | $16.07 |
+  | vw-v1b | committed wording | 76 | $22.55 |
+  | vw-v3 | committed wording | 58 | $16.74 |
+  | vw-v4 | committed wording | 30 | $10.13 |
+
+  - **Draft arm.** vw-v1 ran on the wording from before review, because its plugin was generated before the review fixes. It is reported as evidence for the draft only: 59 of 71 conclusive trials passed. The user then authorized vw-v1b on the committed text.
+  - **Targets, committed wording against main.**
+    - Pass rate: 62 of 69 conclusive trials, against 39 of 65.
+    - `assistant-verification` activated in 62 of 71 trials where `assistant-workflow` activated, against 39 of 71.
+    - No target case passed less often than on main. No extra or forbidden skill activated.
+    - Cases that rose: `d-seed-fix-findings` and `d-seed-go-step` from 0/3 to 3/3, `d-security-change` from 1/3 to 3/3, `d-seed-bot-comment` from 0/2 conclusive to 3/3, and `c-review-keyword` from 0/3 to 2/3. `d-cleanup-vs-delete` passes 2/3, against 0/1 conclusive on main. `d-seed-ci` is 3/3 against 1/1 conclusive on main.
+  - **Targets still failing.**
+    - `d-cleanup-vs-refactor`: 0/3, as on main. All three trials loaded `assistant-workflow` and gave a final answer without verification.
+    - One failing trial each in `d-seed-approve`, `d-seed-more-rounds`, `c-review-keyword` and `d-cleanup-vs-delete`. `d-seed-approve` is 2/3 in both arms.
+  - **Neighbours, vw-v3.** 55 of 57 conclusive trials pass. The 5 cases with an `rc-b2` baseline match it, except `c-pr-pasted`, at 2/3 against 3/3; its failing trial activated no skill, so the workflow body was never read.
+    - `d-spike-vs-research` lost one trial to a missing `assistant-spike`, with no skill activated, as one trial did in `dev-1`.
+    - `assistant-verification` did not load on any typo, preparation, PR or docs case. It loaded once on each TDD case, where it is optional, and on all 3 trials of `d-workflow-resume-backlog`.
+    - The only extra activations are `assistant-skill-creator` on the two skill-file typo cases, as before this change.
+  - **Activation cases, vw-v4.** 29 of 29 conclusive trials pass, with one truncated `a-workflow-02` trial inconclusive. `a-verification-03` passes 3/3 with `assistant-tdd`, and verification never activated first. The other cases have no baseline on this host, so the comparison with earlier hosts is diagnostic.
+  - **Limits.** Three repeats per case cannot separate small differences from chance. vw-v5, the held-out batch, did not run, so there is no held-out evidence for this wording. All trials ran on `deepseek-flash`.
 
 ## Known limits
 
