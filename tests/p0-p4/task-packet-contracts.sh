@@ -522,9 +522,8 @@ def install_runner(target):
     shutil.copytree(root / "tools/evals", target / "tools/evals")
     shutil.copytree(root / "tools/progress", target / "tools/progress")
 def install_workflow(target):
-    shutil.copytree(root / "tools/progress", target.parent.parent / "tools/progress", dirs_exist_ok=True)
     target.mkdir(parents=True, exist_ok=True)
-    for relative in ("SKILL.md", "evals/cases.json", "scripts/task-packet-admission.py"):
+    for relative in ("SKILL.md", "evals/cases.json", "scripts/task-packet-admission.py", "scripts/stagnation.py"):
         destination = target / relative; destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / "skills/assistant-workflow" / relative, destination)
     shutil.copytree(root / "skills/assistant-workflow/contracts", target / "contracts", dirs_exist_ok=True)

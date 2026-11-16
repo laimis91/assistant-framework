@@ -3156,7 +3156,7 @@ handoffs:
         type: object
         required: conditional
         condition: "repeated or persisted semantic work has a progress consumer"
-        description: "Canonical ProgressState v1 in the existing task/journal context; see references/operating-guidance.md and ProgressState.parse in stagnation.py."
+        description: "Canonical ProgressState v1 in the existing task/journal context; see references/operating-guidance.md and ProgressState.parse in scripts/stagnation.py."
         validation: "Independent outcome/guard, policy source, assessed history, evidence and current action admission are retained; derive counts, reject replay, preserve completed-cycle-before-blocker ordering; optional fixed coordinator members share one admission and complete terminal-cycle barrier under the common helper; no phase-local allowance."
 
     return_fields:
@@ -4036,7 +4036,7 @@ handoffs:
         type: object
         required: conditional
         condition: "repeated or persisted semantic work has a progress consumer"
-        description: "Canonical ProgressState v1 in the existing task/journal context; see references/operating-guidance.md and ProgressState.parse in stagnation.py."
+        description: "Canonical ProgressState v1 in the existing task/journal context; see references/operating-guidance.md and ProgressState.parse in scripts/stagnation.py."
         validation: "Independent outcome/guard, policy source, assessed history, evidence and current action admission are retained; derive counts, reject replay, preserve completed-cycle-before-blocker ordering; optional fixed coordinator members share one admission and complete terminal-cycle barrier under the common helper; no phase-local allowance."
 
     return_fields:

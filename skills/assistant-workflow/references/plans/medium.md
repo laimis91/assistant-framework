@@ -153,7 +153,11 @@ Unix: `python3 scripts/task-packet-admission.py`; PowerShell follows the install
 e.g. `py -3 scripts/task-packet-admission.py` or
 `& 'C:\Path With Spaces\python.exe' scripts/task-packet-admission.py`, never `.py`
 association. Missing/unsupported Python, including manual installs or removal,
-blocks helper/Workflow eval admission; install and rerun. Import-safe
+means executable admission cannot run: report that packet/delegated admission did
+not run, then continue on the ordinary hands-on path with a fresh independent
+review, or stop for the user when the task requires strict admission. Never
+record or claim admission as passed. Installing Python and rerunning restores
+admission. Import-safe
 `admission(request)` equals JSON stdin/stdout: exits 0 `accepted`/1 `blocked`;
 limits 2 MiB/256 packets; standard library only. No network/commands/arbitrary
 reference loading/persistence/retries/dispatch/scheduling. Owners attest

@@ -144,4 +144,25 @@ else
     fail "skills not self-contained with their requires closure: ${closure_failures[*]}"
 fi
 
+test_start "workflow admission helper loads its stagnation helper from a lone skill copy"
+admission_root="$(mktemp -d)"
+p0p4_register_cleanup "$admission_root"
+cp -R "$FRAMEWORK_DIR/skills/assistant-workflow" "$admission_root/assistant-workflow"
+admission_out="/tmp/p0p4-skill-admission-import.out"
+if [[ -e "$FRAMEWORK_DIR/tools/progress/stagnation.py" ]]; then
+    fail "tools/progress/stagnation.py still exists; it belongs in skills/assistant-workflow/scripts/"
+elif (cd "$admission_root" && python3 -I -B -c '
+import importlib.util, sys
+path = "assistant-workflow/scripts/task-packet-admission.py"
+spec = importlib.util.spec_from_file_location("admission_probe", path)
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+assert hasattr(module.PROGRESS, "ProgressState"), "stagnation helper lacks ProgressState"
+') >"$admission_out" 2>&1; then
+    pass
+else
+    fail "admission helper did not load from a lone workflow copy; see $admission_out"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

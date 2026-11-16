@@ -75,7 +75,8 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && grep -Fq "Keep orchestration proportional" "$agents_file" \
             && grep -Fq "including when no skill matches" "$agents_file" \
             && cmp -s "$FRAMEWORK_DIR/tools/progress/operating-guidance.md" "$INSTALL_HOME/.codex/tools/progress/operating-guidance.md" \
-            && cmp -s "$FRAMEWORK_DIR/tools/progress/stagnation.py" "$INSTALL_HOME/.codex/tools/progress/stagnation.py" \
+            && cmp -s "$FRAMEWORK_DIR/tools/progress/wire-boundary.md" "$INSTALL_HOME/.codex/tools/progress/wire-boundary.md" \
+            && [[ ! -e "$INSTALL_HOME/.codex/tools/progress/stagnation.py" ]] \
             && grep -Fq "approve a plan before medium+ or elevated-risk development edits" "$agents_file" \
             && grep -Fq "Stop for the user only to:" "$agents_file" \
             && grep -Fq "Use subagents when the user asks or applicable project or skill instructions require them; no separate spawn consent is needed." "$agents_file" \

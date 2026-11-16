@@ -13,7 +13,7 @@ outcome, policy/window/source, work ordinal, consecutive count, status
 history/evidence refs and any current action admission. Do not put mutable state
 at approved Plan top level or create another allowance per phase.
 
-`stagnation.py` is a pure Python 3.9+ helper, not a semantic evaluator or controller.
+Workflow's `scripts/stagnation.py` is a pure Python 3.9+ helper, not a semantic evaluator or controller.
 Its frozen request/result and semantic values validate the JSON wire boundary;
 structurally resolved references do not establish truth or materiality. The
 caller owns source resolution, substantive assessment, authority, persistence

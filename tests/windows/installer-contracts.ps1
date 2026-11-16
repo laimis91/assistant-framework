@@ -2431,7 +2431,7 @@ requires:
             [Environment]::SetEnvironmentVariable('CODEX_HOME', $null, 'Process')
             $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-NoHooks')
             Assert-Equal 0 $result.ExitCode "Default full progress install failed: $($result.Output)"
-            foreach ($progressFile in @('operating-guidance.md', 'stagnation.py')) {
+            foreach ($progressFile in @('operating-guidance.md', 'wire-boundary.md')) {
                 $ordinary = Join-Path $isolatedUserProfile ('.codex\tools\progress\' + $progressFile)
                 $mirror = Join-Path $isolatedUserProfile ('.agents\tools\progress\' + $progressFile)
                 Assert-Equal ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($ordinary))) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($mirror))) 'Default full progress mirror mismatch'
@@ -2463,7 +2463,7 @@ requires:
                 $example = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $installedSkill) '..\..\tools\change-impact\example.completion.v1.json'))
                 Assert-True ([System.IO.File]::Exists($installedSkill)) "$skill selective installation omitted its installed SKILL.md"
                 $progress = Join-Path $skillProfile '.agents\tools\progress'
-                foreach ($progressFile in @('operating-guidance.md', 'stagnation.py')) {
+                foreach ($progressFile in @('operating-guidance.md', 'wire-boundary.md')) {
                     $mirror = Join-Path $progress $progressFile
                     $ordinary = Join-Path $codexHome ('tools\progress\' + $progressFile)
                     Assert-True ([System.IO.File]::Exists($mirror)) "$skill omitted the skill-relative common progress mirror"
@@ -2526,7 +2526,7 @@ requires:
             foreach ($phase in @('fresh', 'upgrade')) {
                 $result = Invoke-Installer -Arguments @('-Agent', 'codex', '-Skill', 'assistant-workflow', '-NoHooks')
                 Assert-Equal 0 $result.ExitCode "Writer $phase install failed: $($result.Output)"
-                foreach ($progressFile in @('operating-guidance.md', 'stagnation.py')) {
+                foreach ($progressFile in @('operating-guidance.md', 'wire-boundary.md')) {
                     $ordinary = Join-Path $codexHome ('tools\progress\' + $progressFile)
                     $mirror = Join-Path $isolatedUserProfile ('.agents\tools\progress\' + $progressFile)
                     Assert-Equal ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($ordinary))) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($mirror))) 'Repeated/custom-home progress mirror mismatch'

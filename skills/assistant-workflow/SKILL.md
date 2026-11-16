@@ -139,8 +139,11 @@ Preserve unchanged CheckSpecs/TddChoice, task-wide `tdd_mode`, due selected IDs,
 exact binding tuples, and canonical evidence assessment through actual consumers.
 Derive packet `tdd_applies` from selected/applicable IDs; never fabricate RED or
 infer old authorization. Admission needs its independently resolved authority
-and supported Python runtime. Full serialized objects belong to these consumer
-boundaries; an ordinary human update can summarize the same decision and evidence.
+and Python 3.9+; Python is needed only for executable packet admission and its
+`scripts/stagnation.py` helper, never for ordinary, light or standard non-packet
+work, and the stagnation guard holds without it. Without Python, follow the
+plan template's admission fallback; never claim admission passed. Full
+serialized objects belong to these consumer boundaries; an ordinary human update can summarize the same decision and evidence.
 
 Repeated correction uses the
 [common task-level stagnation guard](references/operating-guidance.md);

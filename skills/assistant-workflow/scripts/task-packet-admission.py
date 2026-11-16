@@ -28,7 +28,7 @@ from pathlib import Path
 
 
 _progress_spec = importlib.util.spec_from_file_location(
-    "assistant_shared_progress", Path(__file__).resolve().parents[3] / "tools/progress/stagnation.py")
+    "assistant_shared_progress", Path(__file__).resolve().parent / "stagnation.py")
 PROGRESS = importlib.util.module_from_spec(_progress_spec)
 sys.modules[_progress_spec.name] = PROGRESS
 _progress_spec.loader.exec_module(PROGRESS)
