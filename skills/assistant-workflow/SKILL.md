@@ -30,11 +30,14 @@ Use the reuse-first ordering in the Build reference before creating code or help
    question. Use assistant-clarify for unclear intent and assistant-debugging
    for an unknown failure mechanism.
 2. **Select verification and plan.** Before a Plan fixes verification obligations
-   or direct Build begins, use assistant-verification to select or refresh the
-   canonical decision for material claims, credible failures, and binding project
-   requirements. Preserve its CheckSpecs and TddChoice. Trivial safe local work
-   can proceed directly; bounded small work can use a short inline plan without
-   waiting. Medium+, risky,
+   or Build begins for non-trivial work, use assistant-verification to select or
+   refresh the canonical decision for material claims, credible failures, and
+   binding project requirements. Preserve its CheckSpecs and TddChoice. Only
+   trivial safe local work, such as a one-word typo, may skip loading
+   assistant-verification and go to Build without a plan, carrying its known and
+   binding checks. Any other change loads assistant-verification before its first
+   edit, even a small review-comment fix, CI fix, cleanup or deletion; bounded
+   small work can then use a short inline plan without waiting. Medium+, risky,
    destructive, public-contract/data/security, or material scope changes require
    an approved plan before implementation. Reuse existing approval within its
    scope. Split coherent work only for an actual acceptance, dependency,
