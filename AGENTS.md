@@ -32,6 +32,8 @@ Root `skills/assistant-*` directories are the editable source of truth. See `REA
 
 # Skills
 tools/skills/validate-skills.sh
+tools/skills/sync-operating-guidance.sh --check   # --apply after editing tools/progress/*.md
+python3 tools/skills/check-skill-containment.py
 
 # Contract suites
 ./tests/test-p0-p4-contracts.sh

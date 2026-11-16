@@ -177,9 +177,9 @@ retain exact RED/GREEN gates.
 The prior source Writer must be terminal before same-packet redispatch, including
 verification. RUNNING stages reuse their admission; completed cycles precede
 subsequent blockers. The
-[common task-level stagnation guard](../../../../tools/progress/operating-guidance.md)
-controls stagnation. The common policy is `tools/progress/operating-guidance.md`, resolved from the repository or
-installed provider root containing `skills/` and `tools/`. It owns transition/migration
+[common task-level stagnation guard](../operating-guidance.md)
+controls stagnation. The common policy is `references/operating-guidance.md` in this
+skill folder, a synced copy of the framework's canonical guidance. It owns transition/migration
 wire and action-bound unblocks. Optional frozen `action.member_scope` binds exact
 canonical members through independent approved grouping authority. Isolated siblings
 join one admission once; ordinary dispatch gates remain. One complete terminal

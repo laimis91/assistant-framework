@@ -7,7 +7,7 @@ description: "Clarify ambiguous or multi-intent requests. Use when the user asks
 
 ## Shared operating guidance
 
-Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+Load [the common outcome guidance and shared stagnation policy](references/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
 
 
 Turn an ambiguous or mixed request into a clear next action. Preserve the user's intent and vocabulary; do not characterize their prompt as chaotic or blame them for missing context.

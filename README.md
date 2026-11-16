@@ -770,12 +770,16 @@ configuration when reinstalling.
 
 ### Common guidance and unmatched activities
 
-All 17 first-class assistant skills reference
-`tools/progress/operating-guidance.md`. Unix installs put tools beside skills
-under `~/.claude`, configured `CODEX_HOME` (default `~/.codex`), or `~/.gemini`.
-Windows Codex also mirrors progress into `~/.agents/tools/progress`, so
-`../../tools/progress/operating-guidance.md` from shared skills resolves with
-both default and custom `CODEX_HOME`. Existing installer safeguards preserve
+The canonical guidance is `tools/progress/operating-guidance.md` with its
+`wire-boundary.md`. Each of the 17 first-class assistant skills carries a
+byte-identical copy of both in its own `references/` folder and links to that
+copy, so a skill folder works on its own. After editing the canonical files, run
+`tools/skills/sync-operating-guidance.sh --apply`; the contract suites fail on
+drift. The installed instruction block and agent definitions still point at the
+canonical copy. Unix installs put tools beside skills under `~/.claude`,
+configured `CODEX_HOME` (default `~/.codex`), or `~/.gemini`. Windows Codex also
+mirrors progress into `~/.agents/tools/progress` for the shared progress helper,
+with both default and custom `CODEX_HOME`. Existing installer safeguards preserve
 user files; full, single-skill, repeated and dry-run installs use the same route.
 In the shared `tools/` and `docs/evals/` roots both installers replace only the
 framework's own top-level entries and retire only exact obsolete tool paths, so

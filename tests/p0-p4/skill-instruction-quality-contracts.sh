@@ -76,7 +76,7 @@ for file_and_term in \
     "$spike_skill::cleanup command" \
     "$spike_skill::existing \`constraints\` input" \
     "$spike_skill::candidate_search_constraints" \
-    "$spike_skill::../../tools/progress/operating-guidance.md" \
+    "$spike_skill::references/operating-guidance.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/triage-rubric.md::assistant-spike" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/candidate-search.md::assistant-spike"; do
     file="${file_and_term%%::*}"
@@ -274,7 +274,7 @@ ui_qa_skill="$FRAMEWORK_DIR/skills/assistant-ui-qa/SKILL.md"
 qa_loop="$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md"
 ui_qa_failures=()
 for file_and_term in \
-    "$ui_qa_skill::../../tools/progress/operating-guidance.md" \
+    "$ui_qa_skill::references/operating-guidance.md" \
     "$ui_qa_skill::UI not exercised" \
     "$ui_qa_skill::list every in-scope flow as not tested" \
     "$ui_qa_skill::Never report a flow as tested without having driven it" \
@@ -606,8 +606,10 @@ done
 if [[ -f "$security_dir/install-boundaries.md" ]] && p0p4_contains_text_ci "$security_dir/install-boundaries.md" "probe statically first"; then
     security_companion_failures+=("skills/assistant-security/install-boundaries.md: copies the Review probe text")
 fi
-if grep -Eq '^requires:' "$security_skill"; then
-    security_companion_failures+=("skills/assistant-security/SKILL.md: declares requires")
+# R-S06-19 keeps the advisory-triage handoff as instruction text; R-SC-3 allows only assistant-review.
+security_requires="$(awk '/^---$/{n++; next} n==1 && /^requires:/{r=1; next} n==1 && r && /^  - /{print substr($0,5); next} {r=0}' "$security_skill" | tr '\n' ' ')"
+if [[ -n "$security_requires" && "$security_requires" != "assistant-review " ]]; then
+    security_companion_failures+=("skills/assistant-security/SKILL.md: requires more than assistant-review: $security_requires")
 fi
 if [[ "${#security_companion_failures[@]}" -eq 0 ]]; then
     pass

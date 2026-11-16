@@ -1,13 +1,16 @@
 ---
 name: assistant-ui-qa
 description: "Explores a running web or app UI for unknown defects through the session's browser tools: flows, valid, invalid and empty states, console and network errors, screenshots, and reproducible issue reports with severity and coverage. Use when the user asks to test, dogfood, or click through a running app or page in a test environment. Not for writing UI tests, diagnosing a known failure, code review, or acceptance verdicts."
+requires:
+  - assistant-workflow
+  - assistant-review
 ---
 
 # Exploratory UI QA
 
 ## Shared operating guidance
 
-Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+Load [the common outcome guidance and shared stagnation policy](references/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
 
 Explore a running UI to find defects a user would hit, and report them so that
 someone else can reproduce them. This runs on its own: no Workflow task, plan or

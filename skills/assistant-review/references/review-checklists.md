@@ -15,7 +15,7 @@ material expansion returns to selection and approval, never a score target.
 Use this checklist when reviewing changes that add or modify autonomous loops: agent loops, review/fix loops, research/search loops, retry loops, tool-calling loops, multi-agent orchestration, background jobs, or any workflow that repeatedly calls models, tools, APIs, or subagents.
 
 1. **Bounded execution**
-   - For framework correction/reasoning, use the one shared task guard in `tools/progress/operating-guidance.md`; no independent round/retry ceiling. For application/tool/API loops, retain applicable explicit user, product and operational bounds.
+   - For framework correction/reasoning, use the one shared task guard in [operating-guidance.md](operating-guidance.md); no independent round/retry ceiling. For application/tool/API loops, retain applicable explicit user, product and operational bounds.
    - Retain source-backed access/cost/time limits and accurate exit reasons.
 
 2. **Stop condition**
@@ -32,7 +32,7 @@ Use this checklist when reviewing changes that add or modify autonomous loops: a
 
 5. **Progress/stagnation detection**
    - A completed semantic cycle needs durable acceptance gains or useful novel evidence that changes the next action; scores/finding counts alone are diagnostic.
-   - Framework correction loops in the reviewed change follow the [common task-level stagnation guard](../../../tools/progress/operating-guidance.md); application/tool/API loops keep the bounds in item 1. At a stall, retain identity, count, frontier and oscillation history and report a concrete unblock. Context/evaluator changes and generic continuation never reset the guard.
+   - Framework correction loops in the reviewed change follow the [common task-level stagnation guard](operating-guidance.md); application/tool/API loops keep the bounds in item 1. At a stall, retain identity, count, frontier and oscillation history and report a concrete unblock. Context/evaluator changes and generic continuation never reset the guard.
 
 6. **Cost/token guardrails**
    - Loops that call paid APIs, large models, web search, subagents, or large-context prompts need cost/time/token awareness.
@@ -142,7 +142,7 @@ load it; this is no new gate or universal test matrix.
 
 ## Document Review Checklist
 
-1. **Intent**: restate it; every requirement testable and traceable. Apply the [coverage check](../../../tools/progress/operating-guidance.md#request-alignment); a requested outcome with no direct answer, or unrequested scope presented as requested, is a finding.
+1. **Intent**: restate it; every requirement testable and traceable. Apply the [coverage check](operating-guidance.md#request-alignment); a requested outcome with no direct answer, or unrequested scope presented as requested, is a finding.
 2. **Gaps**: conflicts, assumptions, missing failure paths, owners; per step, rollback and verification; pre-mortem.
 3. **Plan versus code**: trace both ways; unplanned behavior is scope creep or a gap.
 4. **Ticket**: testable criteria, linked dependencies; Jira write-back needs approval.

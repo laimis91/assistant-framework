@@ -7,7 +7,7 @@ description: "Gathers and synthesizes source-backed information. Use for researc
 
 ## Shared operating guidance
 
-Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md).
+Load [the common outcome guidance and shared stagnation policy](references/operating-guidance.md).
 
 
 Answer with source-backed evidence, conclusions, conflicts and gaps. Scale effort
@@ -27,7 +27,7 @@ to decision risk; stop searching when further work cannot materially help within
    and conflicts, not source counts; copies add no independent support. Report
    material conflicts and gaps; omit empty sections.
 
-Apply [request alignment](../../tools/progress/operating-guidance.md#request-alignment) to
+Apply [request alignment](references/operating-guidance.md#request-alignment) to
 research answers: organize them around the requested outcomes, leading with the
 requested conclusions or recommendations, one row or section per outcome unless
 the user or target format requires another structure. Citations, evidence

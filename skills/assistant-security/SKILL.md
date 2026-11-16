@@ -1,13 +1,15 @@
 ---
 name: assistant-security
 description: "Analyzes threats, vulnerabilities, dependencies, and attack surfaces. Use for security work, and before changing auth, external input, secrets, sensitive data, persistence, network or shell calls, dependencies or config, or external integrations."
+requires:
+  - assistant-review
 ---
 
 # Analyze Security Risks
 
 ## Shared operating guidance
 
-Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+Load [the common outcome guidance and shared stagnation policy](references/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
 
 
 Inspect the requested surface and report concrete attack paths, their impact, and the smallest useful remediation. Infer scope and method from context; ask only when missing source, access, or deployment facts prevent a trustworthy conclusion. Keep analysis read-only unless remediation is authorized. When the request is to decide what to do with an incoming security advisory or vulnerability report rather than to analyze code, use `assistant-advisory-triage`.

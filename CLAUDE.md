@@ -21,6 +21,8 @@ Root `skills/assistant-*` directories are the editable source of truth. Keep beh
 ```bash
 tools/skills/validate-skills.sh          # Skill frontmatter and structure
 ./tests/test-p0-p4-contracts.sh          # Contract suites
+tools/skills/sync-operating-guidance.sh --apply   # After editing tools/progress/*.md: resync skill copies
+python3 tools/skills/check-skill-containment.py   # Skill folders stay self-contained
 ```
 
 ### Cognitive Complexity Tool

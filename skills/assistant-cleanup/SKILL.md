@@ -7,7 +7,7 @@ description: "Remove retired or legacy Assistant Framework skills, agents, hooks
 
 ## Shared operating guidance
 
-Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+Load [the common outcome guidance and shared stagnation policy](references/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
 
 
 Remove Assistant Framework items that an update retired from one installed agent home, using only the installed ownership helper. The helper proves each item is framework-owned before it can be removed; you never decide that yourself. This skill is not for code cleanup, dead code, refactoring, deleting project files, or removing other software.

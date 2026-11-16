@@ -116,7 +116,7 @@ else
         'regression oracle' \
         'separate worktree' \
         'uncommitted work' \
-        '[the shared stagnation guard](../../../tools/progress/operating-guidance.md)' \
+        '[the shared stagnation guard](operating-guidance.md)' \
         '(lifecycle-verification.md)'; do
         if ! p0p4_contains_text "$debugging_reproduction" "$term"; then reproduction_failures+=("missing: $term"); fi
     done

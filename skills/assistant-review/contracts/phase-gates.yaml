@@ -187,14 +187,14 @@ gates:
 
       - id: EV1
         check: "Decision is EXIT_CLEAN, EXIT_ISSUES_FIXED, EXIT_INCOMPLETE_COVERAGE, ESCALATE_PIVOT_RESTART, or CONTINUE. Escalation requires the shared task guard or an applicable material-change decision; positive round ordinals have no cumulative ceiling."
-        on_fail: "Select a supported decision using the common task guard in tools/progress/operating-guidance.md. Retain completed checkpoints before later blockers; preserve authority, coverage and acceptance gates."
+        on_fail: "Select a supported decision using the common task guard in references/operating-guidance.md. Retain completed checkpoints before later blockers; preserve authority, coverage and acceptance gates."
 
       - id: EV2
         check: "EXIT_CLEAN or EXIT_ISSUES_FIXED only if the current final snapshot recomputed scope-manifest/content identity still matches, the complete aggregated union has exact manifest-derived tuple closure and zero must-fix and zero should-fix findings remain; prior incomplete or invalidated batches require terminal accounting in history but do not permanently block a later complete replacement batch; needs_context, blocked, timed_out, failed, or invalidated current expected pass forces coverage_complete=false and HAS_REMAINING_ITEMS, never CLEAN or ISSUES_FIXED; any below-threshold aggregate rubric score is recorded as residual risk with the evidence-bounded claim"
         on_fail: "Address or explicitly defer evidence-backed findings and record coverage gaps. Do not manufacture a finding or another round solely to raise a score."
 
       - id: EV3
-        check: "Positive unbounded round ordinal; Use the common task-level guard in tools/progress/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
+        check: "Positive unbounded round ordinal; Use the common task-level guard in references/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
         on_fail: "Retain completed checkpoints and actual blockers; reconcile unknown results. Continue FIX only while the shared task guard and existing authority/readiness gates permit. At stagnation, stop; only independently validated material-unblock evidence permits its exact newly feasible action without resetting history or granting another window."
 
       - id: EV4
@@ -328,7 +328,7 @@ gates:
 
       - id: QA5
         check: "QA loop exit decision is accepted, accepted_with_concerns, rejected, or blocked; when a carried approved_feature_preparation_qa_acceptance_obligation exists, every successful pair accepted/CLEAN, accepted/ISSUES_FIXED, accepted_with_concerns/CLEAN, or accepted_with_concerns/ISSUES_FIXED requires requested_scope_status=fulfilled, execution_prerequisite_status=met, exact carried binding, and evidence. Otherwise return rejected/HAS_REMAINING_ITEMS or blocked/BLOCKED. a positive round ordinal has no policy ceiling; the shared guard governs continuation"
-        on_fail: "Positive unbounded round ordinal; Use the common task-level guard in tools/progress/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
+        on_fail: "Positive unbounded round ordinal; Use the common task-level guard in references/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
 
       - id: QA6
         check: "Domain rubrics from references/domain-rubrics.md are loaded and applied only when scoped by acceptance criteria, Done Contract, domain_context, or explicit rubric_refs"
@@ -338,7 +338,7 @@ gates:
       - id: QA7
         check: "QA uses the same task guard for repeated correction; only genuine semantic stagnation or material change triggers the applicable decision, preserving acceptance failures"
         condition: "qa_evaluation_mode == required"
-        on_fail: "Positive unbounded round ordinal; Use the common task-level guard in tools/progress/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
+        on_fail: "Positive unbounded round ordinal; Use the common task-level guard in references/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
 
   # ─────────────────────────────────────────────
   # EXIT — after loop completes
@@ -413,7 +413,7 @@ invariants:
   - id: INV_BATCH
     check: "Each round counts started review batches, not individual perspective passes, including incomplete or invalidated batches. positive round ordinals have no policy ceiling; no batch may claim clean before all expected responses are terminal and coverage is complete."
     scope: all_rounds
-    on_fail: "Positive unbounded round ordinal; Use the common task-level guard in tools/progress/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
+    on_fail: "Positive unbounded round ordinal; Use the common task-level guard in references/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
 
   - id: INV5
     check: "Score changes and finding-count deltas remain diagnostic, with evidence and stable finding identities; they never grant continuation or suppress findings"
@@ -464,10 +464,10 @@ invariants:
     on_fail: "Run code review first and record QAEvaluator only as the independent acceptance lane."
 
   - id: INV_QA2
-    check: "Positive unbounded round ordinal; Use the common task-level guard in tools/progress/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
+    check: "Positive unbounded round ordinal; Use the common task-level guard in references/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
     scope: all_rounds
     condition: "qa_evaluation_mode == required"
-    on_fail: "Positive unbounded round ordinal; Use the common task-level guard in tools/progress/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
+    on_fail: "Positive unbounded round ordinal; Use the common task-level guard in references/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
 
   - id: INV_QA3
     check: "QAEvaluator does not invent domain rubrics, subjective standards, or domain-quality penalties when no acceptance criteria, Done Contract, domain_context, or rubric_refs scope them"

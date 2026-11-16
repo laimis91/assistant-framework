@@ -534,7 +534,7 @@ gates:
         on_fail: "Pause Build, classify the blocker, update Harness Run State/Trace Ledger/Replay Packet when harness-capable, create pivot_restart_decision when restart/pivot/replan is selected, and obtain reapproval before continuing if scope, files, behavior, risk, verification, or acceptance criteria change"
 
       - id: B_ORDINARY_REPAIR_BOUNDS
-        check: "Use the common task-level guard in tools/progress/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
+        check: "Use the common task-level guard in references/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
         condition: "an ordinary non-harness Build implementation or verification failure is retried within the same approved scope"
         on_fail: "Stop same-scope repair. Route an unknown-cause failure through assistant-debugging; otherwise reconcile the retained shared progress state (legacy build_repair_state totals are observations only), then route to replan/restart through pivot_restart_decision or return blocked. Productive fourth and later attempts continue; the source-bound effective window of consecutive unproductive semantic cycles (default three) stops correction under the same retained guard."
 
@@ -679,7 +679,7 @@ gates:
         on_fail: "Return to Build, validate the fix, rehash, and run a fresh complete assistant-review batch; bypass only with explicit digest-equality evidence."
 
       - id: R_PIVOT_RESTART_DECISION
-        check: "Positive unbounded round ordinal; Use the common task-level guard in tools/progress/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
+        check: "Positive unbounded round ordinal; Use the common task-level guard in references/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
         on_fail: "Pause Review, create pivot_restart_decision with trigger, evidence, affected_slice_or_round, options_considered, selected_action, reapproval_required, next_agent, recovery_pointer, and exact_next_action. Update Harness Run State, Trace Ledger, Replay Packet, and Artifact Reference Ledger when harness-capable before continuing."
 
       - id: R3
@@ -844,7 +844,7 @@ invariants:
     on_fail: "Remove accidental strict/harness/QA requirements, or re-triage with explicit independent criteria before promoting controller_intensity to strict."
 
   - id: INV_BUILD_REPAIR_BOUNDED
-    check: "Use the common task-level guard in tools/progress/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
+    check: "Use the common task-level guard in references/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
     scope: all_phases
     on_fail: "Stop retrying and record terminal_pivot or blocked with a pivot_restart_decision/evidence reference before any continuation."
 

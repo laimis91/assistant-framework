@@ -7,7 +7,7 @@ description: "Reviews code and diffs (the current uncommitted changes, named fil
 
 ## Shared operating guidance
 
-Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md).
+Load [the common outcome guidance and shared stagnation policy](references/operating-guidance.md).
 
 
 Find scoped defects/regressions in diff and connected callers/contracts/tests/
@@ -109,7 +109,7 @@ One fresh `plan_coverage_and_feasibility` plan-review pass checks original requi
 feasibility/order, oracles, completion allocation and avoidable work. Corrections receive fresh closure review before
 approval; already-running approved plans retain authority. Final acceptance review solely owns request/plan/delivery reconciliation, including task-wide
 work and spec obligations: missing criteria, extra scope, changed-files or verification mismatch.
-It uses the common guide's [coverage check](../../tools/progress/operating-guidance.md#request-alignment).
+It uses the common guide's [coverage check](references/operating-guidance.md#request-alignment).
 Missing work/findings remains `HAS_REMAINING_ITEMS`.
 
 ## Result

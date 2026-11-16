@@ -129,7 +129,8 @@ fi
 test_start "request-alignment definitions have one owner"
 request_alignment_owner_errors=()
 for lead in "${request_alignment_definition_leads[@]}"; do
-    owners="$(git -C "$FRAMEWORK_DIR" grep -l -F -- "$lead" -- skills/ agents/ tools/progress/ 2>/dev/null || true)"
+    # Synced skill copies are excluded; skill-self-containment-contracts.sh keeps them byte-identical.
+    owners="$(git -C "$FRAMEWORK_DIR" grep -l -F -- "$lead" -- skills/ agents/ tools/progress/ ':!skills/*/references/operating-guidance.md' 2>/dev/null || true)"
     if [[ "$owners" != "tools/progress/operating-guidance.md" ]]; then
         request_alignment_owner_errors+=("$lead -> ${owners//$'\n'/ }")
     fi

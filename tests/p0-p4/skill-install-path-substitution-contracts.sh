@@ -104,8 +104,8 @@ fi
 test_start "all first-class skill entries resolve the common outcome guidance"
 progress_path_failures=()
 for entry in "$FRAMEWORK_DIR"/skills/assistant-*/SKILL.md; do
-    if ! grep -Fq '../../tools/progress/operating-guidance.md' "$entry" \
-        || [[ ! -f "$(dirname "$entry")/../../tools/progress/operating-guidance.md" ]]; then
+    if ! grep -Fq 'references/operating-guidance.md' "$entry" \
+        || ! cmp -s "$FRAMEWORK_DIR/tools/progress/operating-guidance.md" "$(dirname "$entry")/references/operating-guidance.md"; then
         progress_path_failures+=("$entry")
     fi
 done
