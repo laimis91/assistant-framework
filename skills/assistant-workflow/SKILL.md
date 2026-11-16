@@ -11,7 +11,7 @@ requires:
 
 ## Shared operating guidance
 
-Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+Load [the common outcome guidance and shared stagnation policy](references/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
 
 
 Complete the requested change with the smallest complete implementation and
@@ -61,7 +61,7 @@ Use the reuse-first ordering in the Build reference before creating code or help
    routing fields from ordinary human responses. Also give a direct answer to
    each question the user asked, with its evidence.
 
-Apply [request alignment](../../tools/progress/operating-guidance.md#request-alignment)
+Apply [request alignment](references/operating-guidance.md#request-alignment)
 to the artifacts Workflow writes for the user: preparation results,
 specifications, plans, Jira ticket text and the handoff. A plan or spec answers
 each open question the request raised or lists it as an unresolved decision;
@@ -131,7 +131,7 @@ executable admission also loads `build_admission` or `completion_admission`.
 These current v16 interfaces and prerequisites remain authoritative. Load
 [build-worker-protocol.md](references/build-worker-protocol.md) for packet/worker
 Build execution; generated size plans remain views of `references/plan-template.md`.
-Persisted progress state follows [the progress wire boundary](../../tools/progress/wire-boundary.md).
+Persisted progress state follows [the progress wire boundary](references/wire-boundary.md).
 Use [legacy compatibility](references/legacy-compatibility.md) only when resuming
 older packets. Missing/invalid selectors load the full named authoritative file.
 
@@ -143,7 +143,7 @@ and supported Python runtime. Full serialized objects belong to these consumer
 boundaries; an ordinary human update can summarize the same decision and evidence.
 
 Repeated correction uses the
-[common task-level stagnation guard](../../tools/progress/operating-guidance.md);
+[common task-level stagnation guard](references/operating-guidance.md);
 record completed evidence before later blockers.
 Scope, access, cost, safety, acceptance, or verification changes require a new
 decision. Missing required evidence blocks completion. Medium+, strict, and

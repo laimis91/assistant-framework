@@ -94,7 +94,7 @@ require_terms "skill creator harness patterns" "$skill_creator_patterns" \
     "Code Review And QA Separation" \
     "Conditional Domain Rubrics" \
     "Bounded Review / QA Loops" \
-    "tools/progress/operating-guidance.md" \
+    "[common task-level stagnation guard](operating-guidance.md)" \
     "Pivot / Restart Decisions" \
     "legacy_code_bug" \
     "Agentic Loop Safety"

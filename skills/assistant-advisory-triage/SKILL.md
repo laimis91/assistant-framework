@@ -7,7 +7,7 @@ description: "Decides what to do with an incoming security advisory, advisory dr
 
 ## Shared operating guidance
 
-Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep the triage method, authority and completion evidence below; single-pass work needs no progress artifact.
+Load [the common outcome guidance and shared stagnation policy](references/operating-guidance.md) for this activity. Keep the triage method, authority and completion evidence below; single-pass work needs no progress artifact.
 
 Decide what a maintainer should do with an incoming security advisory, advisory draft or vulnerability report: `close`, `keep open`, or `keep open but narrow`. The common failure is closing a report because the fix is on main while a shipped release is still affected. Judge each advisory on its own evidence, and say how each fact was established.
 

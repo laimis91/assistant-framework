@@ -7,7 +7,7 @@ labels are diagnostics only; they cannot reset or stop work, change severity or
 confidence by round, force another review, or certify completion. In particular,
 a numeric STAGNATION label is not a semantic guard decision.
 
-Repeated work follows the [shared task policy](../../../tools/progress/operating-guidance.md).
+Repeated work follows the [shared task policy](operating-guidance.md).
 
 A score entry retains positive round ordinal, weighted_score, aggregated finding
 count, dimension scores, adjacent delta and diagnostic status. Never reinterpret

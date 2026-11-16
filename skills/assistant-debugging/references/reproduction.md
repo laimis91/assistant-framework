@@ -77,5 +77,5 @@ rule in `SKILL.md`.
 ## Repetition
 
 Repeated reproduction attempts are governed only by
-[the shared stagnation guard](../../../tools/progress/operating-guidance.md).
+[the shared stagnation guard](operating-guidance.md).
 This reference adds no attempt count or threshold of its own.

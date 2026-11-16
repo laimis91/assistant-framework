@@ -179,7 +179,7 @@ gates.
 - Classify failing expectations against accepted behavior before repair using
   build-worker-protocol.md; incidental assertions never justify production changes.
   Preserve reduced-testing scope/source through dispatch, review and resume.
-- Use the [common task-level stagnation guard](../../../tools/progress/operating-guidance.md); preserve authority, coverage and acceptance gates, and the same guard across plan versions and sessions.
+- Use the [common task-level stagnation guard](operating-guidance.md); preserve authority, coverage and acceptance gates, and the same guard across plan versions and sessions.
 
 ## Harness Boundary
 

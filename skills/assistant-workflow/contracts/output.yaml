@@ -1653,7 +1653,7 @@ artifacts:
     type: object
     required: conditional
     condition: "repeated or persisted semantic work has a progress consumer"
-    description: "Canonical ProgressState v1 in the existing task/journal context; see tools/progress/operating-guidance.md and ProgressState.parse in stagnation.py."
+    description: "Canonical ProgressState v1 in the existing task/journal context; see references/operating-guidance.md and ProgressState.parse in stagnation.py."
     validation: "Independent outcome/guard, policy source, assessed history, evidence and current action admission are retained; derive counts, reject replay, preserve completed-cycle-before-blocker ordering; optional fixed coordinator members share one admission and complete terminal-cycle barrier under the common helper; no phase-local allowance."
     # Only the scalar display/evaluator projection is declared here. The helper
     # remains authoritative for the full runtime state and transition semantics.
@@ -2387,7 +2387,7 @@ artifacts:
         type: enum
         required: true
         enum_values: [reset_context, return_to_build, dispatch_debugging, dispatch_explorer, dispatch_architect, run_candidate_search, replan, restart_slice, restart_phase, block_for_user, accept_with_limitations]
-        validation: "Positive unbounded round ordinal; Use the common task-level guard in tools/progress/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
+        validation: "Positive unbounded round ordinal; Use the common task-level guard in references/operating-guidance.md: the source-bound effective window of consecutive unproductive semantic cycles (default three); productive work has no cumulative ceiling. Retain completed checkpoints before later blockers, and preserve authority, coverage and acceptance gates."
         on_missing: fail
       - name: reapproval_required
         type: boolean

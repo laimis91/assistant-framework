@@ -172,7 +172,7 @@ Contract placement:
 ## Pattern 7: Bounded Review / QA Loops
 
 Framework correction loops share the
-[common task-level stagnation guard](../../../tools/progress/operating-guidance.md).
+[common task-level stagnation guard](operating-guidance.md).
 Preserve explicit user/resource bounds and product-loop safety policies.
 
 ```text
@@ -211,7 +211,7 @@ Scoring fields:
 
 Score deltas, finding counts and drift labels are diagnostics. They cannot grant
 continuation, stop productive work, change finding standards or demand a pivot.
-Use the [common task-level stagnation guard](../../../tools/progress/operating-guidance.md)
+Use the [common task-level stagnation guard](operating-guidance.md)
 and assessed semantic evidence. Retain current
 acceptance failures and complete coverage independently of score movement.
 
@@ -264,7 +264,7 @@ Apply this pattern to every repeated agent/tool/model loop.
 
 Required design fields:
 
-- framework semantic work: the [common task-level stagnation guard](../../../tools/progress/operating-guidance.md)
+- framework semantic work: the [common task-level stagnation guard](operating-guidance.md)
 - application/tool/API execution: retain explicit user/product/resource bounds and accurate exits
 - stop condition: success, clean exit, max-budget exit, blocker exit
 - retry policy: operational transient retries retain their source-backed policy; framework correction uses the same guard
@@ -298,6 +298,7 @@ For a loop-based Process skill, require the matching patterns:
 Most loop-based Process skills use all of these. Simple retry-only skills still
 need bounded execution, stop conditions, error routing, and progress signals.
 
-Full rationale and implementation references live in
-`docs/harness-design-guide.md` and
-`skills/assistant-workflow/references/harness-controller.md`.
+When working in the Assistant Framework repository itself, full rationale and
+implementation references live in `docs/harness-design-guide.md` and
+`skills/assistant-workflow/references/harness-controller.md`. Installed skills
+do not carry them; this file is complete without them.

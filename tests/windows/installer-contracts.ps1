@@ -2469,7 +2469,9 @@ requires:
                     Assert-True ([System.IO.File]::Exists($mirror)) "$skill omitted the skill-relative common progress mirror"
                     Assert-Equal ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($ordinary))) ([Convert]::ToBase64String([System.IO.File]::ReadAllBytes($mirror))) 'Common progress mirror differs from configured CODEX_HOME'
                 }
-                Assert-Contains ([System.IO.File]::ReadAllText($installedSkill)) '../../tools/progress/operating-guidance.md' 'Installed skill lacks portable common guidance'
+                Assert-Contains ([System.IO.File]::ReadAllText($installedSkill)) 'references/operating-guidance.md' 'Installed skill lacks skill-local common guidance'
+                $localGuidance = Join-Path (Split-Path -Parent $installedSkill) 'references\operating-guidance.md'
+                Assert-True ([System.IO.File]::Exists($localGuidance)) "$skill omitted its skill-local operating guidance copy"
 
                 if ($skill -eq 'assistant-debugging') {
                     Assert-True ([System.IO.File]::Exists((Join-Path $skillProfile '.agents\skills\assistant-review\SKILL.md'))) 'assistant-debugging selective installation omitted its canonical assistant-review producer'

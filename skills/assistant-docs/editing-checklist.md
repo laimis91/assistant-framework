@@ -10,6 +10,6 @@ Use when revising or editing existing prose.
   promotional language, filler and generic conclusions. Judge each phrase by
   what it claims and whether the source supports it, not by whether it contains
   a particular word.
-- Apply [request alignment](../../tools/progress/operating-guidance.md#request-alignment)
+- Apply [request alignment](references/operating-guidance.md#request-alignment)
   for coverage and relevance: the edit serves what the user asked to change.
 - Show the change as a diff or the changed section, so the user can check it.

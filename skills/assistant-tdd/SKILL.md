@@ -7,7 +7,7 @@ description: "Use for tests-first TDD requests, project TDD rules, or workflow-s
 
 ## Shared operating guidance
 
-Load [the common outcome guidance and shared stagnation policy](../../tools/progress/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
+Load [the common outcome guidance and shared stagnation policy](references/operating-guidance.md) for this activity. Keep specialist methods, authority and completion evidence below; single-pass work needs no progress artifact.
 
 
 Use TDD only when requested, required by project policy, or activated for selected
