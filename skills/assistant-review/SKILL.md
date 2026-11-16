@@ -57,7 +57,10 @@ Structured batches load [review-loop.md](references/review-loop.md) before the f
 - Review relevant spec, regression, testing, maintainability, bugfix,
   semantic/behavioral contract, loop-safety and security concerns. Apply matching
   [checklists](references/review-checklists.md) and [principles](references/review-principles.md);
-  exclude unrelated sections. Medium+ retains its Design Coherence Pass.
+  exclude unrelated sections. Medium+ retains its Design Coherence Pass. For a
+  changed function with nested branches or loops, use the advisory
+  [cognitive-complexity estimate](references/cognitive-complexity.md); it never
+  blocks by itself.
 - Review carried Architecture Decision Packs, including invalid ones, using the
   matching checklist. Preserve freshness, types/lifecycle/compatibility/quality
   evidence and `review_intensive` independent challenge.

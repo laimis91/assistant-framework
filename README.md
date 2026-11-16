@@ -354,10 +354,6 @@ Triggers on: verify a change, choose tests, test strategy, assess evidence, are 
 
 ## Tools
 
-### Cognitive Complexity
-
-Roslyn-based analyzer that scores method complexity. Used by the workflow skill's quality review stage. See `tools/cognitive-complexity/`.
-
 ### Skill Validator
 
 Source validator for first-class skill metadata and contract structure:
@@ -633,7 +629,6 @@ tools/
     run-skill-evals.sh             <- Provider-neutral per-skill eval fixture helper
     run-framework-instruction-evals.sh <- Provider-neutral framework instruction eval helper
     run-codex-framework-evals.sh   <- Opt-in paired Codex behavioral adapter
-  cognitive-complexity/             <- Roslyn-based complexity analyzer
   framework-ownership/
     retired-items.json             <- Inventory of retired framework items
     content-proof.json             <- Generated content fingerprints for the inventory

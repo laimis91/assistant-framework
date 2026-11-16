@@ -1577,9 +1577,7 @@ class Uninstall(unittest.TestCase):
 
     def test_uninstall_of_a_used_tool_directory(self):
         self.install("claude")
-        tool = os.path.join(self.h.agent_home("claude"), "tools", "cognitive-complexity")
-        if not os.path.isdir(tool):
-            tool = os.path.join(self.h.agent_home("claude"), "tools", "progress")
+        tool = os.path.join(self.h.agent_home("claude"), "tools", "progress")
         for name in ("bin/Debug/x.dll", "obj/project.assets.json", ".publish/run", "__pycache__/x.cpython-39.pyc", "loose.pyc"):
             write(os.path.join(tool, name), b"\x00build output\n")
         code, out, err = self.confirmed("claude")

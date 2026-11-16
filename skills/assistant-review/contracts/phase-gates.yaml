@@ -293,9 +293,9 @@ gates:
         on_fail: "Fix failing tests before incrementing round"
 
       - id: V3
-        check: "For C# projects: cognitive complexity analysis was run on changed files"
-        condition: "project is C# and complexity tool is available"
-        on_fail: "Run complexity analysis and flag methods exceeding threshold"
+        check: "Each changed function with nested branches or loops that the reviewer flags as hard to follow carries a cognitive-complexity estimate from references/cognitive-complexity.md, and no finding rests on that estimate alone as blocking"
+        condition: "the reviewed change adds or edits executable code"
+        on_fail: "Estimate the flagged functions with references/cognitive-complexity.md, show the counted lines, and downgrade any finding that rests only on the estimate to should-fix"
 
       - id: V4
         check: "After any source fix, invalidate the current batch and refresh build_test_verification_ref.evidence_ref to current passed selected/binding verification with canonical decision, assessment, results, exclusions, and source binding before every pass in the next frozen-snapshot batch; not_applicable is absent. For active TDD, require the actual complete current assistant-tdd cycle_log for the same decision and selected/applicable ID, including right-reason authorizing RED and passing GREEN and REFACTOR invocations, before that batch."

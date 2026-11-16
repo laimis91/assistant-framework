@@ -70,12 +70,6 @@ ALLOWED_PATHS = {
         "names an installed directory under audit, not a dependency",
     ("assistant-workflow/contracts/input.yaml", "docs/readme/document/changelog"):
         "request keywords, not a path",
-    ("assistant-workflow/references/prompts/pr-review.md", "<framework-tools>/cognitive-complexity/run-complexity.sh"):
-        "pending slice B",
-    ("assistant-workflow/references/prompts/pr-review.md", "{agent_state_dir}/tools"):
-        "pending slice B",
-    ("assistant-ci-audit/references/test-maintenance.md", "tools/cognitive-complexity/run-complexity.sh"):
-        "pending slice B",
     ("assistant-workflow/scripts/task-packet-admission.py", 'parents[3] / "tools/progress/stagnation.py"'):
         "pending slice C",
     ("assistant-workflow/references/change-impact.md", "../../tools/change-impact/validate-change-impact.cjs"):
