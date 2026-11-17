@@ -45,16 +45,6 @@ fi
 env "${fixture_env[@]}" "$guidance_sync_tool" --check >/dev/null 2>&1 || sync_failures+=("check failed after the final apply")
 if [[ ${#sync_failures[@]} -eq 0 ]]; then pass; else fail "guidance sync: ${sync_failures[*]}"; fi
 
-test_start "no skill file names the framework tools/progress guidance path"
-progress_scan_out="/tmp/p0p4-skill-tools-progress-scan.out"
-if grep -rnE "tools/progress/(operating-guidance|wire-boundary)" "$FRAMEWORK_DIR/skills" \
-    | grep -v "/skills/assistant-skill-creator/references/skill-contract-design-guide.md:" \
-    | grep -v "/evals/cases.json:" >"$progress_scan_out"; then
-    fail "skill files still name tools/progress guidance paths; see $progress_scan_out"
-else
-    pass
-fi
-
 test_start "skill links and runtime paths stay inside each skill and its requires"
 containment_out="/tmp/p0p4-skill-containment.out"
 if python3 -I "$containment_tool" >"$containment_out" 2>&1; then

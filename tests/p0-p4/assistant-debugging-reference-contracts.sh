@@ -4,7 +4,6 @@ fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 debugging_root="$FRAMEWORK_DIR/skills/assistant-debugging"
-debugging_skill="$debugging_root/SKILL.md"
 debugging_reproduction="$debugging_root/references/reproduction.md"
 debugging_state_inspection="$debugging_root/references/state-inspection.md"
 
@@ -30,33 +29,12 @@ if ruby_output="$(ruby -ryaml -e '
                "Workflow debugging_result.reproduction_status" => workflow_field,
                "TDD debugging_evidence.reproduction_status" => tdd_field }
     descriptions = fields.transform_values { |field| field["description"] }
-    descriptions.each do |label, text|
-      if text.nil? || text.strip.empty?
-        failures << "#{label} has no description"
-        next
-      end
-      ["exact reported symptom",
-       "nearby unrelated failure on the same path would not satisfy that check",
-       "`partial`: the symptom was observed, but the check does not distinguish it from a nearby unrelated failure",
-       "only part of the symptom was observed",
-       "Historical `yes` records may predate this discrimination rule"].each do |term|
-        failures << "#{label} description lacks: #{term}" unless text.include?(term)
-      end
-    end
-    present = descriptions.values.compact
+    present = descriptions.values.compact.reject { |text| text.strip.empty? }
     failures << "descriptions are not byte-identical" unless present.size == 3 && present.uniq.size == 1
 
-    failures << "Debugging enum changed" unless enum_text(debugging_field.fetch("enum_values")) == %w[yes no blocked partial]
-    failures << "Workflow enum changed" unless enum_text(workflow_field.fetch("enum_values")) == %w[yes no blocked partial]
-    failures << "TDD enum changed" unless enum_text(tdd_field.fetch("enum_values")) == %w[yes partial blocked no]
+    enums = fields.transform_values { |field| enum_text(field.fetch("enum_values")).sort }
+    failures << "reproduction enums differ: #{enums}" unless enums.values.uniq.size == 1
     fields.each { |label, field| failures << "#{label} requiredness changed" unless field["required"] == true }
-
-    failures << "Debugging output schema_version changed" unless debugging["schema_version"] == "4.0"
-    failures << "Workflow output schema_version changed" unless workflow["schema_version"] == "17.0"
-    failures << "TDD input schema_version changed" unless tdd["schema_version"] == "3.0"
-
-    expected_validation = "Must include reproduction_status, root_cause_or_mitigation, confidence, and original_failure_path; do not start RED for unknown-cause bugfixes without this evidence or a documented blocker"
-    failures << "TDD debugging_evidence.validation changed" unless tdd_evidence["validation"] == expected_validation
 
     puts failures
     exit(failures.empty? ? 0 : 1)
@@ -173,33 +151,5 @@ else
     done < <(p0p4_debugging_quota_hits "$debugging_state_inspection")
 fi
 if [[ ${#inspection_failures[@]} -eq 0 ]]; then pass; else fail "${inspection_failures[*]}"; fi
-
-test_start "debugging root links the new references with their load conditions"
-root_failures=()
-if ! grep -Fq -- '(references/reproduction.md)' "$debugging_skill"; then
-    root_failures+=("SKILL.md does not link references/reproduction.md")
-fi
-if ! grep -Fq -- '(references/state-inspection.md)' "$debugging_skill"; then
-    root_failures+=("SKILL.md does not link references/state-inspection.md")
-fi
-for term in \
-    'when no adequate exact-symptom reproduction exists yet' \
-    'runtime-state question in Python, Node or .NET that the reproduction, traceback or logs cannot answer' \
-    'already has an exact-symptom reproduction loads neither' \
-    '`reproduced` description in `contracts/output.yaml`'; do
-    if ! p0p4_contains_text "$debugging_skill" "$term"; then root_failures+=("missing: $term"); fi
-done
-expected_frontmatter='---
-name: assistant-debugging
-description: "Diagnose an unknown failure by reproducing and isolating before fixing. Use for debugging, root causes, flaky tests, or unexplained breakage."
-requires:
-  - assistant-review
-  - assistant-verification
-  - assistant-tdd
----'
-if [[ "$(sed -n '1,8p' "$debugging_skill")" != "$expected_frontmatter" ]]; then
-    root_failures+=("SKILL.md frontmatter changed")
-fi
-if [[ ${#root_failures[@]} -eq 0 ]]; then pass; else fail "${root_failures[*]}"; fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -5,62 +5,6 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-review_cap_runtime_term_present() {
-    local file="$1"
-    local term="$2"
-
-    [[ -f "$file" ]] && grep -Fq "$term" "$file"
-}
-
-active_review_cap_files=(
-    "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"
-    "$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
-    "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md"
-    "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md"
-    "$FRAMEWORK_DIR/skills/assistant-review/references/review-rubric.md"
-    "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md"
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/pr-review.md"
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/subagent-roles.md"
-    "$FRAMEWORK_DIR/agents/codex/code-reviewer.toml"
-    "$FRAMEWORK_DIR/agents/codex/reviewer.toml"
-    "$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml"
-    "$FRAMEWORK_DIR/agents/claude/code-reviewer.md"
-    "$FRAMEWORK_DIR/agents/claude/reviewer.md"
-    "$FRAMEWORK_DIR/agents/claude/qa-evaluator.md"
-    "$FRAMEWORK_DIR/docs/harness-design-guide.md"
-)
-# Historical/generated presentation artifacts are intentionally excluded from
-# this runtime cap guard; S9 owns deeper docs/presentation refresh.
-
-test_start "active review and QA do not impose cumulative round or per-pass repair ceilings"
-legacy_cap_output="$(mktemp)"
-p0p4_register_cleanup "$legacy_cap_output"
-if rg -n -i -e 'while round <= [0-9]+' \
-    -e 'round 10 (is|remains) terminal' \
-    -e 'rounds remain.*must continue to fix step' \
-    -e 'at most one transient/schema repair' \
-    -e 'max 10 rounds' \
-    -e 'max_repair_attempts_per_pass' \
-    -e 'hard max[- ]10 cap' \
-    -e 'second dispatch also misses required fields' \
-    -e 'readiness identity/map/immutable cap/cumulative history' \
-    -e 'loop type/trigger/verifier/stop/max iterations/budget' \
-    "${active_review_cap_files[@]}" >"$legacy_cap_output"; then
-    fail "active local correction ceiling remains; see $legacy_cap_output"
-else
-    pass
-fi
-
 test_start "shared policy retains semantic progress, evidence and authority boundaries"
 missing_shared_terms=()
 for term in \

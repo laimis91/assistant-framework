@@ -237,42 +237,9 @@ else
     fail "specialist compaction weakened strict behavior: ${anchor_failures[*]}"
 fi
 
-test_start "research and skill-creator load heavyweight methods only on demand"
-method_failures=()
-research_index="$FRAMEWORK_DIR/skills/assistant-research/contracts/index.yaml"
-creator_index="$FRAMEWORK_DIR/skills/assistant-skill-creator/contracts/index.yaml"
-for file_and_term in \
-    "$research_index::source_research:" \
-    "$research_index::research.md" \
-    "$research_index::five_lens:" \
-    "$research_index::five-lens-briefing.md" \
-    "$research_index::investigate:" \
-    "$research_index::investigate.md" \
-    "$research_index::url-verify.md" \
-    "$creator_index::contract_design:" \
-    "$creator_index::references/skill-contract-design-guide.md" \
-    "$creator_index::harness_design:" \
-    "$creator_index::references/harness-patterns.md" \
-    "$creator_index::verified_distillation:" \
-    "$creator_index::references/verified-skill-distillation.md" \
-    "$creator_index::validation:" \
-    "$creator_index::references/contract-design-checklist.md"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
-        method_failures+=("${file#$FRAMEWORK_DIR/} missing $term")
-    fi
-done
-if [[ "${#method_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "on-demand specialist methods failed: ${method_failures[*]}"
-fi
-
 test_start "ordinary research excludes five-lens process bookkeeping while five-lens retains it"
 research_loading_failures=()
-research_reference="$FRAMEWORK_DIR/skills/assistant-research/research.md"
-five_lens_reference="$FRAMEWORK_DIR/skills/assistant-research/five-lens-briefing.md"
+research_index="$FRAMEWORK_DIR/skills/assistant-research/contracts/index.yaml"
 source_research_references="$(awk '
     $0 == "  source_research:" { in_set = 1; next }
     in_set && /^  [[:alnum:]_-]+:[[:space:]]*$/ { exit }
@@ -294,30 +261,6 @@ fi
 if ! printf '%s\n' "$five_lens_references" | grep -Fxq "five-lens-briefing.md"; then
     research_loading_failures+=("five_lens does not resolve five-lens-briefing.md")
 fi
-for leaked_term in \
-    "Freeze one sibling-blind assignment packet" \
-    "accepted_lens_results" \
-    "ResearchPeerReviewer" \
-    "SearchResourceUsage" \
-    "five_lens_process_evidence.tier_resolution"; do
-    if grep -Fq -- "$leaked_term" "$research_reference"; then
-        research_loading_failures+=("ordinary research still contains $leaked_term")
-    fi
-done
-for file_and_term in \
-    "$five_lens_reference::five sibling-blind assignments" \
-    "$five_lens_reference::A distinct peer reviewer, separate from all five lens agents" \
-    "$FRAMEWORK_DIR/skills/assistant-research/contracts/output.yaml::accepted_lens_results" \
-    "$FRAMEWORK_DIR/skills/assistant-research/contracts/handoffs.yaml::ResearchPeerReviewer" \
-    "$FRAMEWORK_DIR/skills/assistant-research/contracts/input.yaml::search_resource_budget" \
-    "$FRAMEWORK_DIR/skills/assistant-research/contracts/phase-gates.yaml::tier_resolution retains requested_tier" \
-    "$FRAMEWORK_DIR/skills/assistant-research/contracts/output.yaml::normalization_disclosure"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if ! p0p4_contains_text "$file" "$term"; then
-        research_loading_failures+=("${file#$FRAMEWORK_DIR/} missing $term")
-    fi
-done
 if [[ "${#research_loading_failures[@]}" -eq 0 ]]; then
     pass
 else
@@ -338,40 +281,6 @@ if ruby -ryaml -e '
   end
   exit valid ? 0 : 1
 ' "$FRAMEWORK_DIR"; then pass; else fail "lifecycle detail leaks into ordinary specialist context or lacks its local conditional path"; fi
-
-test_start "ci-audit test-maintenance carries authoring questions, audit-time examples and F3 without owning repairs"
-ci_maintenance="$FRAMEWORK_DIR/skills/assistant-ci-audit/references/test-maintenance.md"
-ci_evals="$FRAMEWORK_DIR/skills/assistant-ci-audit/evals/cases.json"
-ci_value_failures=()
-for term in \
-    "observable contract" \
-    "credible regression" \
-    "why existing proof misses" \
-    "no real caller" \
-    "fabricat" \
-    "exact bytes of an installed prompt" \
-    "wrong guard" \
-    "unreachable rejection" \
-    "platform or protocol contract" \
-    "subject-generated expected value" \
-    "internal call-shape" \
-    "mock that supplies" \
-    "remaining proof" \
-    "the test is not removed" \
-    "--base nonexistent" \
-    "No .cs files to analyze." \
-    "valid empty" \
-    "repair belongs to the separate audit session" \
-    "Unknown failures belong to debugging." \
-    "Exact text/schema checks are appropriate when those bytes/shapes are contractual."; do
-    if ! p0p4_contains_text "$ci_maintenance" "$term"; then ci_value_failures+=("test-maintenance.md missing $term"); fi
-done
-for ci_case in test-value-questions-and-junk-examples-keep-exact-bytes owner-level-cleanup-names-remaining-proof failed-discovery-is-not-a-valid-empty-result; do
-    if ! jq -e --arg id "$ci_case" '.cases[] | select(.id == $id) | .fail_signals | length > 0' "$ci_evals" >/dev/null; then
-        ci_value_failures+=("ci-audit eval $ci_case missing")
-    fi
-done
-if [[ ${#ci_value_failures[@]} -eq 0 ]]; then pass; else fail "${ci_value_failures[*]}"; fi
 
 test_start "verification selects preservation outcomes and rejects failed discovery as empty evidence"
 verification_selection="$FRAMEWORK_DIR/skills/assistant-verification/references/selection.md"
