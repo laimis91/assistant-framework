@@ -1326,10 +1326,21 @@ workflow_case_baseline() {
 # Rows keep one accepted baseline per case and one rejected mutation per eval
 # assertion (R-TC-6); failures accumulate in workflow_row_failures.
 run_workflow_eval_rows() {
-    local row_case row_expected row_filter
+    local row_case row_expected row_filter row_baseline row_response
     while IFS=$'\t' read -r -u 3 row_case row_expected row_filter; do
         [[ -n "$row_case" ]] || continue
-        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$row_case" "$(workflow_case_baseline "$row_case" | jq "$row_filter")" "$row_expected"; then
+        row_baseline="$(workflow_case_baseline "$row_case")"
+        # A jq error or a no-op filter would make a FAIL row pass for the wrong reason
+        # (an empty or unchanged response), so both count as row failures.
+        if ! row_response="$(jq "$row_filter" <<<"$row_baseline")" || [[ -z "$row_response" ]]; then
+            workflow_row_failures+=("$row_case filter did not produce a response: $row_filter")
+            continue
+        fi
+        if [[ "$row_expected" == FAIL && "$(jq -S . <<<"$row_response")" == "$(jq -S . <<<"$row_baseline")" ]]; then
+            workflow_row_failures+=("$row_case mutation left the baseline unchanged: $row_filter")
+            continue
+        fi
+        if ! run_workflow_case_eval "$workflow_dir/evals/cases.json" "$row_case" "$row_response" "$row_expected"; then
             workflow_row_failures+=("$row_case expected $row_expected for $row_filter")
         fi
     done

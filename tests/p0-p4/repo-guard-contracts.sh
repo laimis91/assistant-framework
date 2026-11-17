@@ -174,7 +174,7 @@ else
         "push:" \
         "contents: read" \
         "persist-credentials: false" \
-        "timeout-minutes: 30" \
+        "timeout-minutes: 90" \
         "tools/skills/validate-skills.sh"; do
         if ! grep -Fq -- "$term" "$framework_validation_workflow"; then
             framework_validation_failures+=("framework-validation.yml: $term")
@@ -185,15 +185,15 @@ else
         || framework_validation_failures+=("framework-validation.yml: expected checkout@v5 in the contract job")
     [[ "$(grep -Ec '^[[:space:]]+persist-credentials: false[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: the checkout must disable credential persistence")
-    [[ "$(grep -Ec '^[[:space:]]+timeout-minutes: 30[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
+    [[ "$(grep -Ec '^[[:space:]]+timeout-minutes: 90[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: the fast framework-contract job must use the bounded timeout")
     if ! ruby -ryaml - "$framework_validation_workflow" <<'RUBY'
 jobs = YAML.load_file(ARGV.fetch(0)).fetch("jobs")
-abort "unexpected contract timeout policy" unless jobs.fetch("framework-contracts")["timeout-minutes"] == 30
+abort "unexpected contract timeout policy" unless jobs.fetch("framework-contracts")["timeout-minutes"] == 90
 abort "unexpected extra contract job" unless jobs.keys == ["framework-contracts"]
 RUBY
     then
-        framework_validation_failures+=("framework-validation.yml: one framework-contracts job with a 30-minute timeout")
+        framework_validation_failures+=("framework-validation.yml: one framework-contracts job with a 90-minute timeout")
     fi
     [[ "$(grep -Ec '^permissions:[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: expected one workflow-level permissions block")

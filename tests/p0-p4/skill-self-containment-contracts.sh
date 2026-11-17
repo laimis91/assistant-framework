@@ -126,6 +126,7 @@ Load `references/present.md` and `contracts/index.yaml#entry`.
 Load `references/missing.md` and `evals/cases.json`.
 Load workflow's `references/protocol.md` and Workflow's `scripts/helper.py`.
 Load workflow's `references/absent.md`.
+Load the skill's `references/gone.md` and Review's `references/elsewhere.md`.
 FIXTURE
 ref_out="/tmp/p0p4-skill-containment-refs.out"
 ref_failures=()
@@ -135,10 +136,12 @@ fi
 for expected in \
     "needs-refs/SKILL.md:5: reference path does not exist: references/missing.md" \
     "needs-refs/SKILL.md:5: reference path does not exist: evals/cases.json" \
-    "needs-refs/SKILL.md:7: reference path does not exist: references/absent.md"; do
+    "needs-refs/SKILL.md:7: reference path does not exist: references/absent.md" \
+    "needs-refs/SKILL.md:8: reference path does not exist: references/gone.md"; do
     grep -Fq -- "$expected" "$ref_out" || ref_failures+=("missing report: $expected")
 done
-for unexpected in "references/present.md" "contracts/index.yaml" "references/protocol.md" "scripts/helper.py" "inner.md"; do
+# Review's file is not checked: assistant-review is a framework skill absent from this copy.
+for unexpected in "references/present.md" "contracts/index.yaml" "references/protocol.md" "scripts/helper.py" "inner.md" "references/elsewhere.md"; do
     grep -Fq -- "$unexpected" "$ref_out" && ref_failures+=("reported a resolvable path: $unexpected")
 done
 if [[ ${#ref_failures[@]} -eq 0 ]]; then pass; else fail "backtick reference paths: ${ref_failures[*]}; see $ref_out"; fi

@@ -954,6 +954,16 @@ route_clear_boundary_forbidden_terms=(
     "create a branch while progressive_discovery_state=route_clear"
     "record a credential location while progressive_discovery_state=route_clear"
 )
+route_clear_boundary_condition='uncertainty_shape == progressive and progressive_discovery_state in [mapping, resolving, route_clear, blocked]'
+
+# Each gate's exact condition: a substring elsewhere in phase-gates.yaml must not hide
+# route_clear dropped from one of them.
+if ! phase_gate_has_exact_property_value "D_PROGRESSIVE_DISCOVERY_HOLD" "condition" "$route_clear_boundary_condition" "$phase_gates"; then
+    route_clear_boundary_missing+=("contracts/phase-gates.yaml D_PROGRESSIVE_DISCOVERY_HOLD omits route_clear from the exact no-execution condition")
+fi
+if ! workflow_invariant_has_exact_property_value "INV_PROGRESSIVE_DISCOVERY_BOUNDARY" "condition" "$route_clear_boundary_condition" "$phase_gates"; then
+    route_clear_boundary_missing+=("contracts/phase-gates.yaml INV_PROGRESSIVE_DISCOVERY_BOUNDARY omits route_clear from the exact no-execution condition")
+fi
 
 for term in \
     "mapping, resolving, route_clear, or blocked" \

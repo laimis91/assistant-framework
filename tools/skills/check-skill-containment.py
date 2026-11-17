@@ -21,6 +21,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# Framework skill names, from the repository source, so a copy holding only some
+# skills can tell another framework skill's file from an ordinary possessive.
+FRAMEWORK_SKILLS = {p.parent.name for p in (REPO_ROOT / "skills").glob("*/SKILL.md")}
 
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 RUNTIME_PATH = re.compile(
@@ -173,10 +176,12 @@ def reference_resolves(skills_dir: Path, skill: Path, path: Path, owner: str, ta
     if first in names:
         candidates.append(skills_dir / target)
     if owner:
-        owners = [n for n in (owner.lower(), f"assistant-{owner.lower()}") if n in names]
-        if not owners and not (skill / target).is_file():
-            # Another skill's file named in prose ("Workflow's `scripts/x.py`"); that
-            # skill is not in this copy, so there is nothing to resolve against.
+        owner_names = (owner.lower(), f"assistant-{owner.lower()}")
+        owners = [n for n in owner_names if n in names]
+        if not owners and any(n in FRAMEWORK_SKILLS for n in owner_names):
+            # A framework skill's file named in prose ("Workflow's `scripts/x.py`"); that
+            # skill is not in this copy, so there is nothing to resolve against. Any
+            # other possessive ("the skill's", "the user's") resolves as usual.
             return True
         candidates.extend(skills_dir / name / target for name in owners)
     candidates.extend(root / target for root in allowed_roots[1:])

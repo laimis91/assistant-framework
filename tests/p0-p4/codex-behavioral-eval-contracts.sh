@@ -5821,6 +5821,16 @@ else
     fail "semantic review schemas, finalizer, or manifest closed-world policy is missing"
 fi
 
+test_start "semantic review documentation distinguishes whole-response deletion from bounded synthetic summaries"
+if grep -Fq 'It never persists the whole model response.' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && grep -Fq 'ready synthetic-only semantic packet' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && grep -Fq '`review_summary`' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
+    && ! grep -Fq 'It never persists the model-authored summary.' "$FRAMEWORK_DIR/docs/evals/codex-trials.md"; then
+    pass
+else
+    fail "semantic review docs contradicted the bounded synthetic summary retention contract"
+fi
+
 test_start "semantic schemas declare fail-closed aggregate and eligibility invariants"
 contradictory_verdict="$fixture_root/contradictory-verdict.json"
 contradictory_decision="$fixture_root/contradictory-decision.json"
