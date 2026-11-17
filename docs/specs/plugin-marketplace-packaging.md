@@ -160,7 +160,7 @@ One branch and PR per slice, in order A, B, C, D, E. B needs A, because plugin i
 
 ## Implementation notes
 
-Implemented 2026-11-17 on branch `specs/plugin-marketplace-packaging`, all five slices in one PR at the user's request instead of one PR per slice.
+Implemented 2026-11-17 on branch `specs/plugin-marketplace-packaging`, all five slices in one PR at the user's request instead of one PR per slice; merged to main as f57444ce.
 
 | Item | What happened |
 |---|---|
@@ -175,7 +175,8 @@ Implemented 2026-11-17 on branch `specs/plugin-marketplace-packaging`, all five 
 | `claude plugin validate .` | Passes (Claude Code 2.1.323). |
 | Claude install in a disposable `HOME` | Passes: 16 skills, no `assistant-cleanup`, 0 agents, 0 hooks; containment passes on the cache; the assistant-workflow → assistant-review sibling link resolves; `{agent_state_dir}` ships as written. |
 | Codex install | **Not verified**: no Codex CLI on the build machine. The user runs it. |
-| Cowork, install from GitHub after merge | Not yet run; owed after merge. |
+| Claude install from GitHub after merge | Passes (2026-11-17, main f57444ce, disposable `HOME`): `claude plugin marketplace add laimis91/assistant-framework` and `claude plugin install assistant-framework@assistant-framework` succeed; details show version 0.2.0, 16 skills, 0 agents, 0 hooks; the cache has no `evals/`, containment passes, and the assistant-workflow → assistant-review sibling link resolves. |
+| Cowork install | Not yet run. |
 | Chat upload on desktop and mobile, duplicate behavior (R-MP-12) | Not yet run; the user uploads one ZIP and records the result here. |
 | Live session checks (Slice A dispatch, Slice D block) | Not run; they need model sessions. |
 | Eval reruns (workflow, review, research, security, framework instruction) | Not run; each needs fresh user authorization. |
