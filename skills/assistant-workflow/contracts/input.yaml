@@ -849,7 +849,7 @@ fields:
     required: conditional
     condition: "A plan review is required at dispatch, verification or completion, or completion resolves an independent_review or qa terminal gate"
     description: "Canonical review ref to the retained Review v10 (or historical v9 acceptance) projection"
-    validation: "Each entry has the same canonical_review_ref as its key. Current entries have producer_version 10.0 or 11.0, result CLEAN or ISSUES_FIXED, coverage_complete true and a fresh_dispatch_evidence_ref. A plan entry binds reviewed_plan_identity (never approved_plan_identity), is delegated, validated and completed, and its actor_id is not a writer, Builder or execution actor (including the main binding). An acceptance entry binds the current approved_plan_identity; its actor_id is likewise outside the reviewed work unless it is a completed historical 9.0 direct_fallback source under an attested unchanged approval. Each current 10.0 entry consumed at completion differs from every other consumed review authority (plan review, final review, QA) in actor_id, native_invocation_id and fresh_dispatch_evidence_ref. Plan and final acceptance entries carry request_plan_reconciliation whose required and observed requirement IDs both equal the accepted requirement IDs, with explicit empty unresolved_requirement_ids and unresolved_finding_ids; a missing unresolved list is unknown and blocks. Only acceptance also requires explicit empty unfinished_task_wide_work; a pre-Build plan review does not gate it. QA entries use covered_acceptance_criteria instead."
+    validation: "Each entry has the same canonical_review_ref as its key. Current entries have producer_version 10.0 or 11.0, result CLEAN or ISSUES_FIXED, coverage_complete true and a fresh_dispatch_evidence_ref. A plan entry binds reviewed_plan_identity (never approved_plan_identity), is delegated, validated and completed, and its actor_id is not a writer, Builder or execution actor (including the main binding). An acceptance entry binds the current approved_plan_identity; its actor_id is likewise outside the reviewed work unless it is a completed historical 9.0 direct_fallback source under an attested unchanged approval. Each current 10.0 or 11.0 entry consumed at completion differs from every other consumed review authority (plan review, final review, QA) in actor_id, native_invocation_id and fresh_dispatch_evidence_ref. Plan and final acceptance entries carry request_plan_reconciliation whose required and observed requirement IDs both equal the accepted requirement IDs, with explicit empty unresolved_requirement_ids and unresolved_finding_ids; a missing unresolved list is unknown and blocks. Only acceptance also requires explicit empty unfinished_task_wide_work; a pre-Build plan review does not gate it. QA entries use covered_acceptance_criteria instead."
     on_missing: fail
     object_fields:
       - name: review_subject
@@ -936,7 +936,7 @@ fields:
         required: conditional
         condition: "review_subject == plan, or the entry is a completion terminal-gate source"
         description: "Actual native reviewer actor"
-        validation: "Nonblank, exact and not in writer_actor_ids, builder_actor_ids or any execution_actor_bindings actor_id, except a completed historical 9.0 direct_fallback acceptance source under an attested unchanged approval. A current 10.0 acceptance actor differs from the plan reviewer and every other consumed review authority. Ids compare exactly: surrounding whitespace on this id or a reviewed-work actor id blocks with review_authority."
+        validation: "Nonblank, exact and not in writer_actor_ids, builder_actor_ids or any execution_actor_bindings actor_id, except a completed historical 9.0 direct_fallback acceptance source under an attested unchanged approval. A current 10.0 or 11.0 acceptance actor differs from the plan reviewer and every other consumed review authority. Ids compare exactly: surrounding whitespace on this id or a reviewed-work actor id blocks with review_authority."
         on_missing: fail
       - name: role
         type: enum
@@ -962,7 +962,7 @@ fields:
         type: string
         required: conditional
         condition: "The entry is a completion terminal-gate source"
-        validation: "Nonblank actual native invocation; a current 10.0 entry differs from every other consumed review authority."
+        validation: "Nonblank actual native invocation; a current 10.0 or 11.0 entry differs from every other consumed review authority."
         on_missing: fail
       - name: native_evidence_ref
         type: string
