@@ -36,7 +36,7 @@ changes, an impact artifact, or locality/shared/unresolved claims, load
 `change_impact` and [change-impact.md](references/change-impact.md) before planning or dispatch;
 keep caller-only guidance outside Reviewer bundles.
 
-Structured batches load [review-loop.md](references/review-loop.md) before the first batch; v11 rules:
+Structured batches load [review-loop.md](references/review-loop.md) before the first batch; v10 rules:
 
 - Formal review uses newly created independent actors and self-contained context
   (Codex `fork_turns=none`), bound to retained native creation/handoff/source

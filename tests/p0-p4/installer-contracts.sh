@@ -1369,7 +1369,7 @@ for protocol_agent in codex claude gemini; do
         mkdir -p "$protocol_target/assistant-debugging/contracts"
         printf '%s\n' '---' 'name: assistant-debugging' 'description: Retained debugging consumer.' '---' >"$protocol_target/assistant-debugging/SKILL.md"
         [[ "$protocol_case" == missing-index ]] \
-            || printf '%s\r\n' 'schema_version: "3.0"' 'contract: index' 'skill: assistant-debugging' >"$protocol_target/assistant-debugging/contracts/index.yaml"
+            || printf '%s\r\n' 'schema_version: "4.0"' 'contract: index' 'skill: assistant-debugging' >"$protocol_target/assistant-debugging/contracts/index.yaml"
         protocol_log="$protocol_root/metadata-$protocol_agent-$protocol_case.log"
         protocol_before="$(ownership_install_fingerprint "$protocol_home")"
         protocol_status=0

@@ -606,8 +606,8 @@ fields:
     type: object
     required: conditional
     condition: "persisted review packet was created under v6"
-    description: "v6 to producer 10.0 migration."
-    validation: "Invalidate v6 and rebuild from a freshly rehashed 10.0 snapshot; block CLEAN/ISSUES_FIXED. Retain raw history and preserve each complete identity tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with it and missing source_provenance with review_pass:persisted-v6-migration. Missing aggregate_finding_id: SHA-256 UTF-8 NFC(description) into legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use the base; every colliding record appends :<ordinal> by packet order from 1. Before closure, source_finding_ids uses that ID with review_pass:persisted-v6-migration provenance only when each field is missing."
+    description: "v6 to producer 11.0 migration."
+    validation: "Invalidate v6 and rebuild from a freshly rehashed 11.0 snapshot; block CLEAN/ISSUES_FIXED. Retain raw history and preserve each complete identity tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with it and missing source_provenance with review_pass:persisted-v6-migration. Missing aggregate_finding_id: SHA-256 UTF-8 NFC(description) into legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use the base; every colliding record appends :<ordinal> by packet order from 1. Before closure, source_finding_ids uses that ID with review_pass:persisted-v6-migration provenance only when each field is missing."
     on_missing: fail
     object_fields:
       - name: source_schema_version
@@ -624,7 +624,7 @@ fields:
       - name: rebuilt_snapshot_identity
         type: object
         required: true
-        description: "Fresh 10.0 identity."
+        description: "Fresh 11.0 identity."
         object_fields:
           - name: basis
             type: enum
