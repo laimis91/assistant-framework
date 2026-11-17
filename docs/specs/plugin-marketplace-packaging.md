@@ -179,7 +179,7 @@ Implemented 2026-11-17 on branch `specs/plugin-marketplace-packaging`, all five 
 | Chat upload on desktop and mobile, duplicate behavior (R-MP-12) | Not yet run; the user uploads one ZIP and records the result here. |
 | Live session checks (Slice A dispatch, Slice D block) | Not run; they need model sessions. |
 | Eval reruns (workflow, review, research, security, framework instruction) | Not run; each needs fresh user authorization. |
-| Skill-activation suite | The `cleanup` routing row, the development case `d-cleanup` and the `h-cleanup-*` held-out cases still expect the removed `assistant-cleanup`; changing the frozen held-out set needs the user's authorization. |
+| Skill-activation suite | By the user's choice of 2026-11-17, the `cleanup` routing row is retired and `d-cleanup` and `h-cleanup-1` to `h-cleanup-3` now expect no skill; the held-out set is refrozen. Live activation trials on the changed cases are not yet run and need authorization. |
 
 ## Decisions
 
