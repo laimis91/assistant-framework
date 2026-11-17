@@ -95,7 +95,7 @@ gates:
     checkpoint_end: "--- PHASE: VERIFY COMPLETE ---"
     exit_assertions:
       - id: VF_CHANGE_IMPACT_COMPLETION
-        check: "A triggered completed repair retains the same artifact identity, actual current verification, and assistant-review projection of the canonical review scope/ledger/snapshot bindings; its impact result does not replace assistant-review terminal coverage or result."
+        check: "A triggered completed repair retains the same artifact identity, a passing completion checklist result (checklist_result_ref) checked against the diff by the fresh independent reviewer, actual current verification, and assistant-review projection of the canonical review scope/ledger/snapshot bindings; its impact result does not replace assistant-review terminal coverage or result."
         condition: "a source fix occurred and (impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried)"
         on_fail: "Report verification incomplete or blocked; refresh the evidence, record a fresh completion checklist result, and rerun canonical review as applicable."
       - id: VF1

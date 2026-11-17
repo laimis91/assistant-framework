@@ -1056,7 +1056,11 @@ gates = YAML.load_file("#{root}/skills/assistant-workflow/contracts/phase-gates.
 p1 = gates.fetch('gates').find { |g| g['phase'] == 'PLAN' }.fetch('exit_assertions').find { |g| g['id'] == 'P1' }
 gate_version = p1.fetch('check')[/\bplan_schema_version=(\d+\.\d+)\b/, 1]
 producer_version = File.read("#{root}/skills/assistant-workflow/references/plan-template.md")[/New producers store `plan_schema_version: "([^"]+)"`/, 1]
-raise 'Plan gate/producer/output canonical version drift' unless canonical_versions == [o.fetch('schema_version')] && canonical_versions == [gate_version] && gate_version == producer_version
+# Workflow 17.0 kept plan_schema_version 16.0 (no plan field changed), so the plan
+# schema is pinned on its own and its decoupling must stay documented.
+legacy = File.read("#{root}/skills/assistant-workflow/references/legacy-compatibility.md")
+raise 'Plan gate/producer/output canonical version drift' unless canonical_versions == ['16.0'] && canonical_versions == [gate_version] && gate_version == producer_version
+raise 'plan/contract version decoupling undocumented' unless o.fetch('schema_version') == '17.0' && legacy.include?('v16 → v17 (contract set only)') && legacy.include?('plan_schema_version')
 fields = shape.fetch('object_fields').to_h { |f| [f['name'],f] }
 raise 'normal identity widened' unless fields.fetch('agent')['enum_values'] == %w[intelligent-writer mechanical-writer]
 eligibility = fields.fetch('mechanical_eligibility')

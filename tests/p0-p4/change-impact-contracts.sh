@@ -673,7 +673,6 @@ jq '
       {"operator":"equals","path":["change_impact_evidence","expected_context_ref"],"expected":"fixture#expected"},
       {"operator":"equals","path":["change_impact_evidence","assessment_ref"],"expected":"fixture#assessment"},
       {"operator":"equals","path":["change_impact_evidence","review_projection_ref"],"expected":"fixture#review"},
-      {"operator":"equals","path":["change_impact_review","schema_version"],"expected":"change-impact-review/v1"},
       {"operator":"equals","path":["current_review_delegation_path","artifact","subagent_policy_state"],"expected":"delegation_triggered"},
       {"operator":"equals","path":["current_review_delegation_path","artifact","subagent_execution_mode"],"expected":"delegated"},
       {"operator":"path_absent","path":["fresh_review_result","architecture_decision_pack_review_ref"]},

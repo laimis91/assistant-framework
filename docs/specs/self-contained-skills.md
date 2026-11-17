@@ -1,6 +1,6 @@
 # Self-contained skills
 
-Status: **Accepted by the user**, 2026-11-16 (drafted 2026-11-12). Baseline: main 388ec03 (rebased 2026-11-16 from 68da3fd after S10 retired Telos and Diagrams and merged Ideate into Thinking; all citations rechecked). Revised the same day after an independent plan review (2 blockers, 7 major, 3 minor findings; all addressed below) and a final review (1 blocker, 1 major; both addressed). Slice A implemented 2026-11-16 on branch `self-contained/slice-a-guidance-sync` (pending PR); slices B–D not implemented.
+Status: **Accepted by the user**, 2026-11-16 (drafted 2026-11-12). Baseline: main 388ec03 (rebased 2026-11-16 from 68da3fd after S10 retired Telos and Diagrams and merged Ideate into Thinking; all citations rechecked). Revised the same day after an independent plan review (2 blockers, 7 major, 3 minor findings; all addressed below) and a final review (1 blocker, 1 major; both addressed). Slice A implemented 2026-11-16 and merged (laimis91/assistant-framework#121). Slices B, C and D implemented 2026-11-17 on branch `self-contained/slices-b-c-d` in one PR, by user decision of 2026-11-17 (see Delivery slices).
 Source: user decisions of 2026-11-12 in the marketplace-packaging discussion: make skills self-contained before packaging them as Claude Code and Codex plugins; replace the .NET cognitive-complexity scorer with a markdown method; treat Node and Python as possibly unavailable.
 
 ## Problem and intended outcome
@@ -40,7 +40,7 @@ Skills must keep working without the block, and no `SessionStart` hook is used t
 
 ### Cognitive complexity (slice B)
 
-- **R-SC-8. Markdown method.** A new reference, `skills/assistant-review/references/cognitive-complexity.md`, gives a language-neutral method based on the published SonarSource cognitive-complexity rules: +1 for each break in linear flow (branch, loop, catch, jump to a label, recursion, each sequence of mixed boolean operators), +1 per nesting level for nested flow breaks, no increment for shorthand that aids reading. It includes worked examples and states that the result is an estimate.
+- **R-SC-8. Markdown method.** A new reference, `skills/assistant-review/references/cognitive-complexity.md`, gives a language-neutral method based on the published SonarSource cognitive-complexity rules: +1 for each break in linear flow (branch, loop, catch, jump to a label, recursion, each sequence of like boolean operators), +1 per nesting level for nested flow breaks, no increment for shorthand that aids reading. It includes worked examples and states that the result is an estimate.
 - **R-SC-9. Advisory, not a gate.** Reviewers use the estimate to point at functions that are hard to follow, alongside the existing "needless complexity" rubric criterion. No numeric score blocks a review or a build (D-SC-2).
 - **R-SC-10. Consumers.** `assistant-workflow/references/prompts/pr-review.md` (including its `{agent_state_dir}/tools` path at :106), `assistant-ci-audit/references/test-maintenance.md` and the reviewer agent prompts (`agents/claude/code-reviewer.md`, `agents/claude/reviewer.md`, `agents/codex/code-reviewer.toml`, `agents/codex/reviewer.toml`) stop calling `run-complexity.sh` and use the method. `assistant-workflow` requires `assistant-review` already; `assistant-ci-audit` gets the method by an inline summary or a synced copy, not a cross-skill link.
 - **R-SC-11. Removal.** `tools/cognitive-complexity/` is deleted. README, `CLAUDE.md`, `AGENTS.md` build commands, and the framework-ownership tests (`tests/framework-ownership/test_ownership.py`, `tests/windows/framework-ownership-contracts.ps1`) stop naming it. Installers stop syncing it. Stale installed copies (including `.publish/`, `obj/`, `bin/` build output) are removed by the cleanup skill and uninstall, not by reinstall: the retired-item inventory gets entries with content-proof fingerprints, and `source_only_tool` entries marked `installer_generated` for the build output. Installers do not remove retired tool directories (install.sh:1053-1057).
@@ -68,7 +68,7 @@ Skills must keep working without the block, and no `SessionStart` hook is used t
 
 ## Delivery slices
 
-Each slice is one branch and one PR, in order A, B, C, D. A is a prerequisite for the others; B, C and D are independent of each other in source but share the inventory file, so they land one at a time.
+Each slice was planned as one branch and one PR, in order A, B, C, D. A is a prerequisite for the others; B, C and D are independent of each other in source but share the inventory file. On 2026-11-17 the user chose to land B, C and D together in one PR; they stay separate commits, and each deletion is its own commit.
 
 | Slice | Requirements | Behavior change | Evals to rerun |
 |---|---|---|---|
@@ -93,3 +93,5 @@ Each slice is one branch and one PR, in order A, B, C, D. A is a prerequisite fo
 - **D-SC-4.** Undeclared cross-skill links are fixed by declaring `requires` (R-SC-3), not by copying the target files. Recommended: plugins will bundle dependent skills together.
 - **D-SC-5.** `assistant-cleanup` stays installer-only and is excluded from plugin packaging (R-SC-6). Recommended.
 - **D-SC-6.** Stale installed tool directories are removed by cleanup and uninstall, not by reinstall (R-SC-11, R-SC-20). Recommended: matches the current installer rule for retired directories.
+- **D-SC-7.** The expanded-work checklist lives once, in `assistant-review/references/change-impact.md#expanded-work-checklist`; the workflow and debugging references link to it instead of restating it (R-SC-17). Both skills already require assistant-review, so the link stays inside their declared dependencies. Implemented 2026-11-17.
+- **D-SC-8.** Slice D keeps `plan_schema_version` at 16.0 under workflow contract set 17.0, and admission accepts review producers 10.0 and 11.0 as current. Slice D changes no plan field, so in-flight plans need no admission migration or re-review; an older packet's `validator_result_ref` stays readable but is not a current checklist result. Implemented 2026-11-17; see `assistant-workflow/references/legacy-compatibility.md`.

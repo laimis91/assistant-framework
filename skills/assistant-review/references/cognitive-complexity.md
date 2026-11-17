@@ -44,8 +44,8 @@ Start at 0 and walk the function body top to bottom.
    no increment of its own.
 4. **No increment for shorthand that aids reading:** null-coalescing and
    optional chaining (`??`, `?.`), a function call, an early return, `try`,
-   `finally`, `using` or `with` blocks, and plain boolean assignment without
-   mixed operators.
+   `finally`, `using` or `with` blocks, and assigning a single boolean value
+   with no operator.
 
 ## Worked examples
 

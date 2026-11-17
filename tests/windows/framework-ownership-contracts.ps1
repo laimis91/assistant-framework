@@ -440,7 +440,7 @@ function Get-FrameworkItemsLeft {
         if (Test-Path -LiteralPath (Join-Path (Join-Path $AgentHome 'tools') $name)) { [void]$left.Add("tools/$name") }
     }
     if ($Agent -eq 'codex') {
-        foreach ($name in @('change-impact', 'progress')) {
+        foreach ($name in @('progress')) {
             if (Test-Path -LiteralPath (Join-Path (Join-Path (Join-Path $TestHome.Home '.agents') 'tools') $name)) { [void]$left.Add("<agents_tools>/$name") }
         }
     }

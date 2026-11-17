@@ -24,8 +24,8 @@ artifacts:
     type: object
     required: conditional
     condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
-    validation: "Records unchanged artifact_identity, phase, impact_scope, capture/expected/assessment refs, and checklist result for expanded impact. Local diagnosis records causal evidence with ordinary regression verification and a local self-check plus fresh independent review, without checklist refs. Before a source fix, shared or unresolved diagnosis has valid pre-build evidence; after a fix, completion requires actual verification and assistant-review's canonical review projection. Audit-only diagnosis may report gaps without claiming a future repair or clean review."
-    on_fail: "Preserve the incomplete diagnosis and report the blocked/unverified gate; do not narrow consumers to the reported symptom or substitute manual validation."
+    validation: "Records unchanged artifact_identity, phase, impact_scope, capture/expected/assessment refs, and checklist result for expanded impact. Local diagnosis records causal evidence with ordinary regression verification and a local self-check plus fresh independent review, without checklist refs. Before a source fix, shared or unresolved diagnosis has valid pre-build evidence; after a fix, completion requires a passing completion checklist result (checklist_result_ref) checked against the diff by the fresh independent reviewer, actual verification, and assistant-review's canonical review projection. Audit-only diagnosis may report gaps without claiming a future repair or clean review."
+    on_fail: "Preserve the incomplete diagnosis and report the blocked/unverified gate; do not narrow consumers to the reported symptom or replace the expanded-work checklist with a status alone."
     object_fields:
       - {name: artifact_identity, type: string, required: true}
       - {name: phase, type: enum, required: true, enum_values: [discovery, pre_build, completion]}

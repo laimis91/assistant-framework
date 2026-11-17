@@ -2649,8 +2649,8 @@ worker_stage_protocol:
                 'stage-mismatch' { $handoffsText = $handoffsText.Replace('current_matching_red', 'none') }
                 'early-completion' { $handoffsText = $handoffsText.Replace('completes_build: false', 'completes_build: true') }
                 'duplicate-index' { $indexText += "skill: assistant-workflow`n" }
-                'duplicate-handoffs' { $handoffsText += "schema_version: `"16.0`"`n" }
-                'malformed' { $indexText = "schema_version: `"16.0`ncontract: index`nskill: assistant-workflow`n" }
+                'duplicate-handoffs' { $handoffsText += "schema_version: `"17.0`"`n" }
+                'malformed' { $indexText = "schema_version: `"17.0`ncontract: index`nskill: assistant-workflow`n" }
                 'wrong-identity' { $indexText = $indexText.Replace('contract: index', 'contract: output') }
                 'bom-crlf' {
                     $utf8 = New-Object System.Text.UTF8Encoding($true)
