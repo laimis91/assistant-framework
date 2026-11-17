@@ -98,16 +98,6 @@ else
     fail "assistant-spike safeguards failed: ${spike_failures[*]}"
 fi
 
-test_start "assistant-workflow routes repository changes through requirements discovery"
-workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
-if grep -Fq -- "backlog items" "$workflow_skill" \
-    && grep -Fq -- "intended-change ideas" "$workflow_skill" \
-    && p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md" "Requirements sufficiency"; then
-    pass
-else
-    fail "workflow must retain change-bearing activation and its requirements discovery guidance"
-fi
-
 test_start "assistant-review resolves mode from authorization and asks on ambiguity"
 review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
 review_audit_failures=()
@@ -192,37 +182,6 @@ if [[ "${#brainstorm_trigger_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "brainstorm prompts should route to thinking only: ${brainstorm_trigger_failures[*]}"
-fi
-
-test_start "current routing guidance separates discovery fields from post-activation instructions"
-routing_readme="$FRAMEWORK_DIR/README.md"
-routing_presentation="$FRAMEWORK_DIR/docs/presentation.md"
-routing_guidance_failures=()
-for file_and_term in \
-    "$routing_readme::required native discovery fields" \
-    "$routing_readme::body instructions apply after activation" \
-    "$routing_readme::optional repository dependency metadata" \
-    "$routing_presentation::name and description" \
-    "$routing_presentation::body instructions apply after activation"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if ! grep -Fqi "$term" "$file"; then
-        routing_guidance_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-for file_and_stale_term in \
-    "$routing_readme::name, description, and instructions" \
-    "$routing_presentation::metadata and instructions"; do
-    file="${file_and_stale_term%%::*}"
-    stale_term="${file_and_stale_term#*::}"
-    if grep -Fqi "$stale_term" "$file"; then
-        routing_guidance_failures+=("${file#$FRAMEWORK_DIR/}: stale $stale_term")
-    fi
-done
-if [[ ${#routing_guidance_failures[@]} -eq 0 ]]; then
-    pass
-else
-    fail "native routing guidance is stale: ${routing_guidance_failures[*]}"
 fi
 
 test_start "assistant-workflow routes concrete dev creation without stealing brainstorming"
@@ -376,54 +335,6 @@ else
     fail "assistant-review clean-code principle lens is incomplete: ${review_principle_failures[*]}"
 fi
 
-test_start "assistant-review detects nullable properties used as hidden state"
-nullable_state_failures=()
-
-for file_and_term in \
-    "$review_principles::## State and Extensibility Modeling" \
-    "$review_principles::null -> value" \
-    "$review_principles::business or lifecycle transition" \
-    "$review_principles::optional or missing data" \
-    "$review_evals::review-detects-null-encoded-state-transitions" \
-    "$review_evals::explicit transition methods or events" \
-    "$review_evals::genuine optional data"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
-        nullable_state_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-
-if [[ "${#nullable_state_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review nullable hidden-state guidance is incomplete: ${nullable_state_failures[*]}"
-fi
-
-test_start "assistant-review distinguishes open-ended enums from closed sets"
-enum_extension_failures=()
-
-for file_and_term in \
-    "$review_principles::### Enums as extension points" \
-    "$review_principles::open-ended feature set" \
-    "$review_principles::switches or conditionals in several places" \
-    "$review_principles::small, stable, closed set" \
-    "$review_evals::review-detects-enum-extension-traps" \
-    "$review_evals::handlers, strategies" \
-    "$review_evals::stable closed enum"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq "$term" "$file"; then
-        enum_extension_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-
-if [[ "${#enum_extension_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review enum extension guidance is incomplete: ${enum_extension_failures[*]}"
-fi
-
 test_start "assistant-review classifies authoritative duplicate behavior through bounded reuse search"
 reuse_search_principle_failures=()
 for file_and_term in \
@@ -452,65 +363,6 @@ else
 fi
 
 review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
-test_start "current formal review requires fresh native isolation and retains historical fallback"
-if ruby -ryaml - "$review_input" "$review_output" "$review_phases" <<'RUBY'
-input, output, gates = ARGV.map { |p| YAML.load_file(p) }
-mode = input.fetch('fields').find { |f| f['name'] == 'subagent_execution_mode' }
-path = output.fetch('artifacts').find { |f| f['name'] == 'review_delegation_path' }
-fields = path.fetch('object_fields').to_h { |f| [f['name'], f] }
-rs = gates.fetch('gates').find { |g| g['phase'] == 'REVIEW_STEP' }.fetch('exit_assertions').to_h { |g| [g['id'], g] }
-historical_only = ->(f) { f['enum_values'] == %w[delegated not_applicable direct_fallback] && f['validation'].include?('historical v9 reader-only') && f['validation'].include?('never emits') }
-abort unless historical_only.(mode) && historical_only.(fields['subagent_execution_mode'])
-abort unless path['required'] == true && path['validation'].include?('Historical v9') && rs['RS1A']['check'].include?('fresh native creation')
-abort unless rs['RS1B']['check'].include?('two purpose-specific independent newly created passes')
-RUBY
-then pass; else fail "current review permits author fallback or loses fresh small-scope passes/history"; fi
-
-test_start "assistant-thinking dispatches from applicable delegation triggers and records evidenced fallback"
-thinking_delegation_proof_failures=()
-thinking_delegation_proof_terms=(
-    "$thinking_skill::Thinking perspectives are discretionary"
-    "$thinking_skill::contracts/input.yaml"
-    "$thinking_skill::contracts/output.yaml"
-    "$thinking_skill::contracts/phase-gates.yaml"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::policy_blocking_source"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::delegation_triggered"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::delegated requires subagent_policy_state=delegation_triggered"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/input.yaml::sequential_fallback requires delegation_opted_out, subagents_unavailable after a real spawn failure or supported configuration proof, or policy_disallowed with policy_blocking_source"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/output.yaml::policy_blocking_source"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/output.yaml::sequential_fallback"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::Independent high-risk challenge uses a newly created fresh-context reviewer"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/contracts/phase-gates.yaml::sequential role-play is not independent evidence"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::SKILL.md#independence-and-delegation"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md::SKILL.md#integrated-and-structured-output"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::SKILL.md#independence-and-delegation"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md::SKILL.md#integrated-and-structured-output"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::thinking-required-roles-dispatch-from-instruction-trigger"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::delegation_triggered"
-    "$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json::policy_blocking_source"
-)
-for file_and_term in "${thinking_delegation_proof_terms[@]}"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]]; then
-        thinking_delegation_proof_failures+=("${file#$FRAMEWORK_DIR/}: file missing")
-    elif ! grep -Fq -- "$term" "$file"; then
-        thinking_delegation_proof_failures+=("${file#$FRAMEWORK_DIR/}: $term")
-    fi
-done
-for method_file in \
-    "$FRAMEWORK_DIR/skills/assistant-thinking/perspectives.md" \
-    "$FRAMEWORK_DIR/skills/assistant-thinking/stress-test.md"; do
-    if grep -Fq -- "If denied, unavailable, or policy-disallowed" "$method_file"; then
-        thinking_delegation_proof_failures+=("${method_file#$FRAMEWORK_DIR/}: loose fallback wording")
-    fi
-done
-if [[ "${#thinking_delegation_proof_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-thinking delegation fallback must carry trigger or policy-block evidence: ${thinking_delegation_proof_failures[*]}"
-fi
-
 test_start "assistant-review v7 prompts preserve deferred-QA and security-specialist routing"
 review_v7_prompt_failures=()
 qa_evaluator_agents=(

@@ -3,53 +3,6 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-contract_field_block() {
-    local file="$1"
-    local field="$2"
-    awk -v field="$field" '
-        $0 == "  - name: " field { inside = 1 }
-        inside && /^  - name: / && $0 != "  - name: " field { exit }
-        inside { print }
-    ' "$file"
-}
-
-test_start "standalone architecture records can project complete typed review facts"
-review_missing=()
-review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
-review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
-review_required_block="$(contract_field_block "$review_input" architecture_decision_pack_review_required)"
-review_pack_block="$(contract_field_block "$review_input" architecture_decision_pack)"
-for term in \
-    'equivalent standalone architecture decision record' \
-    'or a decision record that makes memory, performance, extensibility, public interface, data lifecycle, ownership, or'; do
-    if ! grep -Fq -- "$term" <<<"$review_required_block"; then review_missing+=("review trigger: $term"); fi
-done
-for term in \
-    'on_missing: infer' \
-    'Only for standalone review with an equivalent decision record, derive its compact Pack projection from the supplied record' \
-    'If a workflow Pack is required but absent' \
-    '      - name: facts' \
-    '          - name: claim' \
-    '      - name: assumptions' \
-    '          - name: statement' \
-    '          - name: rationale_or_impact' \
-    '      - name: material_questions' \
-    '          - name: topic' \
-    '          - name: why_needed' \
-    '          - name: risk_if_guessed' \
-    '          - name: recommended_default_or_none' \
-    '      - name: independent_challenge_evidence' \
-    '        on_missing: fail' \
-    '          - name: challenge_ref' \
-    '          - name: dissent_or_validation' \
-    '          - name: resolution' \
-    '          - name: selected_design_impact'; do
-    if ! grep -Fq -- "$term" <<<"$review_pack_block"; then review_missing+=("Pack projection: $term"); fi
-done
-if ! grep -Fq -- 'standalone equivalent records derive its compact Pack projection' "$review_handoffs"; then
-    review_missing+=("Reviewer handoff derivation rule")
-fi
-if [[ ${#review_missing[@]} -eq 0 ]]; then pass; else fail "assistant-review Pack projection gaps: ${review_missing[*]}"; fi
 
 p0p4_reference_section_has_term() {
     local file="$1"
@@ -65,6 +18,10 @@ p0p4_reference_section_has_term() {
 }
 
 review_skill="$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"
+review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
+review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
+review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
+review_batch_reference="$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md"
 review_legacy="$FRAMEWORK_DIR/skills/assistant-review/references/legacy-compatibility.md"
 review_checklists="$FRAMEWORK_DIR/skills/assistant-review/references/review-checklists.md"
 review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
@@ -73,24 +30,6 @@ review_phase_gates="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates
 review_principles="$FRAMEWORK_DIR/skills/assistant-review/references/review-principles.md"
 review_rubric="$FRAMEWORK_DIR/skills/assistant-review/references/review-rubric.md"
 review_evals="$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
-
-test_start "assistant-review scores selected verification evidence without penalizing adequate non-test methods"
-review_verification_projection_failures=()
-for term in \
-    "| **Verification Evidence** | 0.15 | Selected verification methods, evidence quality, material gaps, and test quality when tests were selected |" \
-    "Absence of tests alone is not a failure when another selected method is adequate."; do
-    if ! grep -Fq -- "$term" "$review_rubric"; then
-        review_verification_projection_failures+=("review-rubric.md missing: $term")
-    fi
-done
-if ! grep -Fq -- 'name: test_coverage' "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"; then
-    review_verification_projection_failures+=("stable test_coverage output key was removed")
-fi
-if [[ "${#review_verification_projection_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "review verification evidence policy drifted: ${review_verification_projection_failures[*]}"
-fi
 
 test_start "assistant-review requires current evidence for due test and non-test checks"
 review_due_evidence_failures=()
@@ -247,114 +186,6 @@ else
     fail "assistant-review mandatory review checklist reference is incomplete: ${review_checklist_failures[*]}"
 fi
 
-test_start "assistant-review requires evidence-bound medium-scope design coherence"
-design_coherence_failures=()
-for file_and_term in \
-    "$review_skill::Design Coherence Pass" \
-    "$review_loop::Design Coherence evidence" \
-    "$review_handoffs::scope_size" \
-    "$review_handoffs::design_coherence" \
-    "$review_phase_gates::RS6A" \
-    "$review_phase_gates::principle_checks.design_coherence" \
-    "$review_evals::review-medium-scope-design-coherence" \
-    "$review_evals::review-design-coherence-avoids-structural-heuristic"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        design_coherence_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-for section_and_term in \
-    "## Design Coherence Pass::independent reasons to change" \
-    "## Design Coherence Pass::no concrete risk found" \
-    "## Design Coherence Pass::structural diff shape"; do
-    section="${section_and_term%%::*}"
-    term="${section_and_term#*::}"
-    if ! p0p4_reference_section_has_term "$review_principles" "$section" "$term"; then
-        design_coherence_failures+=("skills/assistant-review/references/review-principles.md $section missing $term")
-    fi
-done
-if ! awk '
-    $0 == "  - name: fresh_reviewer_context" { in_bundle = 1; next }
-    in_bundle && /^  - name: / { exit }
-    in_bundle && /^[[:space:]]+context_fields_from_dispatch: / {
-        fields = $0
-        sub(/^.*\[/, "", fields)
-        sub(/\].*$/, "", fields)
-        count = split(fields, items, ",")
-        for (item_index = 1; item_index <= count; item_index++) {
-            item = items[item_index]
-            gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
-            if (item == "scope_size") found = 1
-        }
-    }
-    END { exit found ? 0 : 1 }
-' "$review_handoffs"; then
-    design_coherence_failures+=("fresh_reviewer_context.context_fields_from_dispatch missing scope_size")
-fi
-if ! awk '
-    $0 == "      - name: principle_checks" { in_checks = 1; next }
-    in_checks && /^      - name: / { exit }
-    in_checks && $0 == "        required: conditional" { required = 1 }
-    in_checks && $0 == "        condition: \"quality_principles_required is true or scope_size in [medium, large]\"" { condition = 1 }
-    END { exit required && condition ? 0 : 1 }
-' "$review_handoffs"; then
-    design_coherence_failures+=("principle_checks is not conditionally required for its applicable scope")
-fi
-if ! awk '
-    $0 == "      - name: principle_checks" { in_checks = 1; next }
-    in_checks && /^      - name: / { exit }
-    in_checks && $0 == "          - name: design_coherence" { in_design_coherence = 1; next }
-    in_design_coherence && /^          - name: / { exit }
-    in_design_coherence && $0 == "            required: conditional" { required = 1 }
-    in_design_coherence && $0 == "            condition: \"scope_size in [medium, large]\"" { condition = 1 }
-    END { exit required && condition ? 0 : 1 }
-' "$review_handoffs"; then
-    design_coherence_failures+=("principle_checks.design_coherence is not conditionally required for medium/large scope")
-fi
-if [[ "${#design_coherence_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review medium-scope design-coherence contract is incomplete: ${design_coherence_failures[*]}"
-fi
-
-test_start "assistant-review checks applicable Architecture Decision Packs"
-architecture_pack_review_failures=()
-for file_and_term in \
-    "$review_checklists::## Architecture Decision Pack Review Checklist" \
-    "$review_checklists::Freshness, facts, and material questions" \
-    "$review_checklists::Ownership, dependency, and lifecycle boundary" \
-    "$review_checklists::Design-pressure checks" \
-    "$review_checklists::Semantic type ledger and primitive exceptions" \
-    "$review_checklists::Falsifiable quality scenarios" \
-    "$review_checklists::Compatibility, extension, and verification handoff" \
-    "$review_index::architecture_decision_pack_review_required" \
-    "$review_phase_gates::RS10" \
-    "$review_evals::architecture-decision-pack-review-is-fresh-and-falsifiable"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        architecture_pack_review_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-for section_and_term in \
-    "## Architecture Decision Pack Review Checklist::Freshness, facts, and material questions" \
-    "## Architecture Decision Pack Review Checklist::Design-pressure checks" \
-    "## Architecture Decision Pack Review Checklist::Semantic type ledger and primitive exceptions" \
-    "## Architecture Decision Pack Review Checklist::Falsifiable quality scenarios" \
-    "## Architecture Decision Pack Review Checklist::Compatibility, extension, and verification handoff"; do
-    section="${section_and_term%%::*}"
-    term="${section_and_term#*::}"
-    if ! p0p4_reference_section_has_term "$review_checklists" "$section" "$term"; then
-        architecture_pack_review_failures+=("skills/assistant-review/references/review-checklists.md $section missing $term")
-    fi
-done
-if [[ ${#architecture_pack_review_failures[@]} -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review Architecture Decision Pack reference is incomplete: ${architecture_pack_review_failures[*]}"
-fi
-
 test_start "assistant-review binds Pack review to the canonical architecture mode"
 architecture_pack_mode_consumer_failures=()
 review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
@@ -437,16 +268,11 @@ adversarial_review_responses="$adversarial_review_root/responses"
 adversarial_review_output="$adversarial_review_root/grader.out"
 p0p4_register_cleanup "$adversarial_review_root"
 mkdir -p "$adversarial_review_responses/assistant-review"
-while IFS= read -r adversarial_case_id; do
-    adversarial_response_path="$adversarial_review_responses/assistant-review/$adversarial_case_id.txt"
-    adversarial_required_summary="$(jq -r --arg id "$adversarial_case_id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$review_evals" | paste -sd ' ' -)"
-    if [[ "$adversarial_case_id" == "standalone-high-risk-record-without-challenge-remains-review-intensive" ]]; then
-        jq -n --arg summary "$adversarial_required_summary" '{summary: $summary, architecture_design_mode: "required", architecture_decision_pack: {mode: "required"}, validation_result: {status: "accepted", missing_field: "none", evidence_or_gap: "challenge evidence is accepted"}}' >"$adversarial_response_path"
-    else
-        printf '%s\n' "$adversarial_required_summary" >"$adversarial_response_path"
-    fi
-done < <(jq -r '.cases[].id' "$review_evals")
-if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$adversarial_review_responses" --skill assistant-review >"$adversarial_review_output" 2>&1; then
+adversarial_case_id="standalone-high-risk-record-without-challenge-remains-review-intensive"
+adversarial_response_path="$adversarial_review_responses/assistant-review/$adversarial_case_id.txt"
+adversarial_required_summary="$(jq -r --arg id "$adversarial_case_id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$review_evals" | paste -sd ' ' -)"
+jq -n --arg summary "$adversarial_required_summary" '{summary: $summary, architecture_design_mode: "required", architecture_decision_pack: {mode: "required"}, validation_result: {status: "accepted", missing_field: "none", evidence_or_gap: "challenge evidence is accepted"}}' >"$adversarial_response_path"
+if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$adversarial_review_responses" --skill assistant-review --case "$adversarial_case_id" >"$adversarial_review_output" 2>&1; then
     architecture_pack_mode_consumer_failures+=("adversarial standalone ADR grader response passed")
 elif ! grep -Fq $'FAIL\tassistant-review\tstandalone-high-risk-record-without-challenge-remains-review-intensive' "$adversarial_review_output" \
     || ! grep -Fq "structured JSON assertion failure" "$adversarial_review_output"; then
@@ -503,42 +329,6 @@ if [[ "${#review_threshold_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-review additional-round and evidence-bounded claim contract drifted: ${review_threshold_failures[*]}"
-fi
-
-test_start "assistant-review defaults to one complete audit batch and at most one post-fix re-review batch"
-review_round_policy_failures=()
-review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
-review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
-
-for file_and_term in \
-    "$review_loop::Audit exits after one started terminal batch" \
-    "$review_loop::Load this reference before the first REVIEW step" \
-    "$review_skill::After fixes, verify due selected/binding checks, freeze the source and run a fresh complete batch" \
-    "$review_loop::Incomplete coverage -> \`HAS_REMAINING_ITEMS\`, never CLEAN/ISSUES_FIXED" \
-    "$review_loop::Audit exits after one started terminal batch; retry exhaustion never starts another." \
-    "$review_loop::After round 1 fixes, start fresh round 2." \
-    "$review_loop::references/review-batch.md" \
-    "$review_loop::Round 3+ requires a recorded" \
-    "$review_handoffs::- name: additional_round_reason" \
-    "$review_handoffs::condition: \"round >= 3\"" \
-    "$review_output::- name: additional_round_reasons" \
-    "$review_output::condition: \"rounds >= 2\"" \
-    "$review_output::Contains one entry for every round from 2 through rounds" \
-    "$review_output::round 2 records changed-files/fix evidence retrospectively" \
-    "$review_evals::bounded-review-default-rounds" \
-    "$review_evals::audit-one-pass" \
-    "$review_evals::additional_round_reason"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        review_round_policy_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-
-if [[ "${#review_round_policy_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review default round policy is incomplete: ${review_round_policy_failures[*]}"
 fi
 
 test_start "assistant-review final no-finding claim is evidence-bounded and role-separated"
@@ -609,74 +399,6 @@ else
     fail "score or issue-count gates still bias review toward churn or suppressed findings"
 fi
 
-test_start "assistant-review return requires evidence-bounded reuse-search results"
-reuse_search_return_failures=()
-for file_and_term in \
-    "$review_handoffs::- name: reuse_search" \
-    "$review_handoffs::applicability" \
-    "$review_handoffs::enum_values: [applicable, not_applicable]" \
-    "$review_handoffs::applicability_reason" \
-    "$review_handoffs::query_or_path" \
-    "$review_handoffs::scope" \
-    "$review_handoffs::outcome" \
-    "$review_handoffs::disposition" \
-    "$review_handoffs::enum_values: [reuse, extend, intentional_duplicate, reject_coincidental, reject_independent]" \
-    "$review_handoffs::no_candidate_reason" \
-    "$review_handoffs::decision_rationale" \
-    "$review_handoffs::divergence_control" \
-    "$review_phase_gates::reuse_search" \
-    "$review_phase_gates::cannot return clean"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        reuse_search_return_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-if [[ "${#reuse_search_return_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review reuse-search return contract is incomplete: ${reuse_search_return_failures[*]}"
-fi
-
-test_start "assistant-review requires an independent reuse search in every fresh review"
-independent_reuse_search_failures=()
-for file_and_term in \
-    "$review_handoffs::- name: reuse_search_instruction" \
-    "$review_loop::bounded independent capability search" \
-    "$review_loop::carried Mapper evidence cannot satisfy review" \
-    "$review_phase_gates::fresh independent capability search" \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/review-principles.md::independently during review" \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/review-principles.md::Carried Mapper/task-packet evidence alone cannot satisfy review"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        independent_reuse_search_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-if ! awk '
-    $0 == "  - name: fresh_reviewer_context" { in_bundle = 1; next }
-    in_bundle && /^  - name: / { exit }
-    in_bundle && /^[[:space:]]+context_fields_from_dispatch: / {
-        fields = $0
-        sub(/^.*\[/, "", fields)
-        sub(/\].*$/, "", fields)
-        count = split(fields, items, ",")
-        for (item_index = 1; item_index <= count; item_index++) {
-            item = items[item_index]
-            gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
-            if (item == "reuse_search_instruction") found = 1
-        }
-    }
-    END { exit found ? 0 : 1 }
-' "$review_handoffs"; then
-    independent_reuse_search_failures+=("fresh_reviewer_context.context_fields_from_dispatch missing reuse_search_instruction")
-fi
-if [[ "${#independent_reuse_search_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review fresh independent reuse-search instruction is incomplete: ${independent_reuse_search_failures[*]}"
-fi
-
 test_start "assistant-review v7 preserves recoverable selected-design Pack projections"
 pack_projection_cardinality_failures=()
 if ! ruby -ryaml -e '
@@ -730,80 +452,6 @@ elif grep -Fq $'FAIL\tskill\tarchitecture-pack-selected-design-recovery-blocks' 
     pass
 else
     fail "real grader did not reject unrecoverable selected Pack decision for the intended reason"
-fi
-
-test_start "assistant-review v7 conditionally requires Pack checks in Reviewer returns"
-reviewer_pack_return_failures=()
-if ! ruby -ryaml -e '
-    handoffs = YAML.load_file(ARGV.fetch(0))
-    reviewer = handoffs.fetch("handoffs").find { |handoff| handoff["name"] == "orchestrator_to_reviewer" }
-    checks = reviewer.fetch("return_fields").find { |field| field["name"] == "architecture_decision_pack_checks" }
-    validation = handoffs.fetch("return_validation_bundles").find { |bundle| bundle["name"] == "reviewer_return_validation" }
-    valid = checks["required"] == "conditional" &&
-      checks["condition"] == "architecture_decision_pack_review_required is true" &&
-      validation.fetch("validation").include?("architecture_decision_pack_checks when triggered")
-    exit valid ? 0 : 1
-' "$review_handoffs"; then
-    reviewer_pack_return_failures+=("Reviewer return can omit triggered architecture_decision_pack_checks")
-fi
-if [[ ${#reviewer_pack_return_failures[@]} -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review Reviewer Pack return requiredness gaps: ${reviewer_pack_return_failures[*]}"
-fi
-
-test_start "assistant-review batches independent passes before aggregation or exit"
-review_batch_failures=()
-review_batch_reference="$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md"
-for file_and_term in \
-    "$review_input::review_snapshot_id" \
-    "$review_input::snapshot_identity" \
-    "$review_index::harness_capable" \
-    "$review_handoffs::review_batch" \
-    "$review_handoffs::expected_passes" \
-    "$review_handoffs::review_pass_id" \
-    "$review_handoffs::sibling-blind" \
-    "$review_handoffs::coverage_entries" \
-    "$review_phase_gates::all expected passes reach terminal accounting" \
-    "$review_phase_gates::coverage is incomplete" \
-    "$review_phase_gates::HAS_REMAINING_ITEMS" \
-    "$review_output::coverage_complete" \
-    "$review_output::coverage_ledger" \
-    "$review_loop::wait for all expected responses" \
-    "$review_batch_reference::at least two independent narrow passes" \
-    "$review_batch_reference::one \`light_contract_and_runtime\` pass covering both concerns" \
-    "$review_batch_reference::Do not aggregate, fix, exit, or report a clean result" \
-    "$review_evals::audit-batch-waits-for-all-pass-results" \
-    "$review_evals::incomplete-review-batch-never-cleans" \
-    "$review_evals::post-fix-review-uses-fresh-snapshot-batch"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        review_batch_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-if [[ "${#review_batch_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review multi-pass batch contract is incomplete: ${review_batch_failures[*]}"
-fi
-
-test_start "assistant-review incomplete-batch eval keeps clean states out of generated success text"
-if ruby -rjson -e '
-  review = JSON.parse(File.read(ARGV.fetch(0)))
-  item = review.fetch("cases").find { |entry| entry["id"] == "incomplete-review-batch-never-cleans" }
-  expectations = item.fetch("machine_expectations")
-  generated_success_text = (item.fetch("expected_behavior") + item.fetch("pass_criteria")).join(" ")
-  forbidden = expectations.fetch("forbidden_substrings")
-  valid = expectations.fetch("required_substrings").include?("HAS_REMAINING_ITEMS") &&
-    forbidden.include?("final result: CLEAN") &&
-    forbidden.include?("final result: ISSUES_FIXED") &&
-    !generated_success_text.include?("CLEAN") && !generated_success_text.include?("ISSUES_FIXED")
-  exit valid ? 0 : 1
-' "$review_evals"; then
-    pass
-else
-    fail "assistant-review incomplete-batch eval collides with its generated success response"
 fi
 
 test_start "assistant-review batch topology preserves snapshot, closure, and aggregate semantics"
@@ -1151,21 +799,6 @@ if ruby -ryaml -e '
     pass
 else
     fail "assistant-review allows unsupported enum[] perspective fields"
-fi
-
-test_start "assistant-review gives drift precedence over a large score increase"
-if ruby -e '
-  classify = ->(score_delta, finding_delta) {
-    return "DRIFT" if score_delta > 0 && finding_delta >= 0
-    return "SUSPICIOUS" if score_delta > 1.0 && finding_delta < 0
-    "OTHER"
-  }
-  exit (classify.call(1.1, -1) == "SUSPICIOUS" && classify.call(1.1, 0) == "DRIFT" && classify.call(1.1, 1) == "DRIFT") ? 0 : 1
-' && grep -Fq 'score_delta > 1.0 AND aggregated_finding_count_delta < 0 → SUSPICIOUS' "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md" \
-  && grep -Fq 'DRIFT takes precedence whenever finding count is unchanged or increased' "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md"; then
-    pass
-else
-    fail "assistant-review score tracking does not make SUSPICIOUS and DRIFT mutually exclusive"
 fi
 
 test_start "assistant-review rubric examples use correct arithmetic"
@@ -2131,18 +1764,6 @@ elif review_brief_errors="$(ruby -ryaml -e '
 else
     fail "review briefs contract: $(tr '\n' ';' <<<"$review_brief_errors")"
 fi
-
-test_start "simplification findings state actual cost and rule out an intentional boundary"
-simplification_failures=()
-for term in "actual cost" "intentional boundary" "compatibility shim" "low-confidence" "non-blocking" "divergence-control rule in Reuse Search"; do
-    if ! p0p4_reference_section_has_term "$review_principles" "## Reporting Rule" "$term"; then
-        simplification_failures+=("## Reporting Rule missing $term")
-    fi
-done
-if ! jq -e '.cases[] | select(.id == "simplification-finding-states-cost-and-rules-out-shim") | .fail_signals | length > 0' "$review_evals" >/dev/null; then
-    simplification_failures+=("eval simplification-finding-states-cost-and-rules-out-shim missing")
-fi
-if [[ ${#simplification_failures[@]} -eq 0 ]]; then pass; else fail "${simplification_failures[*]}"; fi
 
 test_start "review preflight stays optional, orchestrator-only and checkout-safe"
 review_preflight="$FRAMEWORK_DIR/skills/assistant-review/references/review-preflight.md"

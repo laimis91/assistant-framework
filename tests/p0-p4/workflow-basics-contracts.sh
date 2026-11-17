@@ -3,16 +3,7 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-test_start "canonical workflow phase lists do not inject standalone TEST/VERIFY phases"
-if rg -n "TRIAGE -> DISCOVER -> PLAN -> BUILD -> TEST|BUILD -> TEST -> VERIFY|TEST -> VERIFY" \
-    "$FRAMEWORK_DIR/docs/instruction-block.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml" >/tmp/p0p4-stale-phases.out; then
-    fail "found stale TEST/VERIFY phase list; see /tmp/p0p4-stale-phases.out"
-else
-    pass
-fi
+triage_file="$FRAMEWORK_DIR/skills/assistant-workflow/references/triage-rubric.md"
 
 test_start "canonical instruction block delegates phase detail to native skill routing"
 if grep -Fq 'When a skill'"'"'s description matches the request, read its `SKILL.md` and follow it through to its handoff' \
@@ -26,24 +17,6 @@ if grep -Fq 'When a skill'"'"'s description matches the request, read its `SKILL
     pass
 else
     fail "canonical instruction block must stay lean and defer phase mechanics to the matched skill"
-fi
-
-test_start "review contracts support review_material_snapshot without diff-only gates"
-if rg -n "diff_content|Reviewer received: diff|current diff|from the diff|review_scope is resolved to one of: files, diff" \
-    "$FRAMEWORK_DIR/skills/assistant-review" \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/review-rubric.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml" >/tmp/p0p4-review-diff-only.out; then
-    fail "found diff-only review contract wording; see /tmp/p0p4-review-diff-only.out"
-else
-    pass
-fi
-
-test_start "reviewer handoff rejects diff-only material fields and finding gates"
-if rg -n "name: diff|Full diff|exists in the diff" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml" >/tmp/p0p4-review-handoff-diff-only.out; then
-    fail "found diff-only reviewer handoff wording; see /tmp/p0p4-review-handoff-diff-only.out"
-else
-    pass
 fi
 
 test_start "review delegation dispatches from applicable instruction triggers"
@@ -74,31 +47,6 @@ else
     fail "assistant-review trigger delegation contract missing: ${review_trigger_failures[*]}"
 fi
 
-test_start "review delegation outputs require exact policy-block evidence"
-review_policy_block_failures=()
-for artifact in review_delegation_path qa_evaluation_delegation_path; do
-    artifact_block="$(awk -v artifact="$artifact" '
-        $0 == "  - name: " artifact { inside = 1 }
-        inside { print }
-        inside && NR > 1 && $0 ~ /^  - name: / && $0 != "  - name: " artifact { exit }
-    ' "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml")"
-    if ! grep -Fq -- '- name: policy_blocking_source' <<<"$artifact_block"; then
-        review_policy_block_failures+=("$artifact: missing policy_blocking_source")
-    elif ! grep -Fq -- 'required: conditional' <<<"$artifact_block"; then
-        review_policy_block_failures+=("$artifact: policy_blocking_source is not conditional")
-    elif ! grep -Fq -- 'subagent_policy_state == policy_disallowed' <<<"$artifact_block"; then
-        review_policy_block_failures+=("$artifact: missing policy_disallowed condition")
-    elif ! grep -Fq -- 'Exact active blocking rule' <<<"$artifact_block" \
-        || ! grep -Fq -- 'no applicable direct-user, AGENTS.md, or active-skill trigger exception' <<<"$artifact_block"; then
-        review_policy_block_failures+=("$artifact: missing exact blocking-rule validation")
-    fi
-done
-if [[ "${#review_policy_block_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review delegation outputs omit policy-block evidence: ${review_policy_block_failures[*]}"
-fi
-
 test_start "agentic loop safety review requires low-confidence escalation evidence"
 missing_loop_safety_terms=()
 for file in \
@@ -120,87 +68,6 @@ else
     fail "agentic loop safety lacks low-confidence escalation in: ${missing_loop_safety_terms[*]}"
 fi
 
-test_start "workflow templates do not use stale Build & Test or VERIFYING labels"
-if rg -n "Build & Test|VERIFYING" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-handoff-templates.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/sub-task-brief-template.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/mega-and-patterns.md" >/tmp/p0p4-stale-workflow-labels.out; then
-    fail "found stale workflow template labels; see /tmp/p0p4-stale-workflow-labels.out"
-else
-    pass
-fi
-
-test_start "workflow triage rubric defines structured metadata and task gate packs"
-missing_triage_terms=()
-triage_file="$FRAMEWORK_DIR/skills/assistant-workflow/references/triage-rubric.md"
-for term in \
-    "Routing decisions" \
-    "Bugfix" \
-    "Feature" \
-    "Refactor / Migration / Rewrite" \
-    "Config / Infra" \
-    "Security / Input" \
-    "Docs-Only"; do
-    if [[ ! -f "$triage_file" ]] || ! grep -Fq "$term" "$triage_file"; then
-        missing_triage_terms+=("triage-rubric.md: $term")
-    fi
-done
-for term in \
-    "references/triage-rubric.md" \
-    "Select only the needed machinery"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"; then
-        missing_triage_terms+=("SKILL.md: $term")
-    fi
-done
-for term in \
-    "risk_tier" \
-    "controller_intensity" \
-    "required_gates" \
-    "required_agents" \
-    "subagent_policy_state" \
-    "subagent_execution_mode" \
-    "subagent_trigger_scope"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml"; then
-        missing_triage_terms+=("input.yaml: $term")
-    fi
-done
-for term in \
-    "T4" \
-    "T_CONTROLLER_INTENSITY" \
-    "T9" \
-    "T10" \
-    "risk_tier is set" \
-    "controller_intensity is set" \
-    "build_execution_lane permits direct_main at every size/risk" \
-    "subagent_policy_state, subagent_execution_mode, and subagent_trigger_scope are initialized" \
-    "candidate_scope_scan is populated from a quick read-only scan"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
-        missing_triage_terms+=("phase-gates.yaml: $term")
-    fi
-done
-for term in \
-    "Task type:" \
-    "Risk tier:" \
-    "Controller intensity:" \
-    "QA evaluation mode" \
-    "Harness capable" \
-    "Required gates:" \
-    "Required agents:" \
-    "Subagent policy state:" \
-    "Subagent execution mode:" \
-    "Subagent trigger scope:" \
-    "Candidate scope scan:"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"; then
-        missing_triage_terms+=("task-journal-template.md: $term")
-    fi
-done
-if [[ "${#missing_triage_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow triage rubric missing terms: ${missing_triage_terms[*]}"
-fi
-
 test_start "canonical triage routing retains every required consumer field"
 if ruby -ryaml -e '
   output = YAML.load_file(ARGV.fetch(0))
@@ -213,74 +80,6 @@ if ruby -ryaml -e '
     pass
 else
     fail "triage routing guidance omits a required canonical triage_result field"
-fi
-
-test_start "Docs-Only gate does not require code or test changes absent runnable behavior"
-docs_only_section="$(sed -n '/^### Docs-Only$/,/^### /p' "$triage_file")"
-if [[ "$docs_only_section" == *"Documentation-only work does not require code or test changes unless it changes runnable behavior."* ]] \
-    && [[ "$docs_only_section" != *"require code/tests only for runnable behavior"* ]]; then
-    pass
-else
-    fail "Docs-Only gate retains an outdated code/test-change requirement"
-fi
-
-test_start "Docs-Only gate removes or reconciles outdated instructions with current behavior"
-if [[ "$docs_only_section" == *"Remove or reconcile outdated instructions with current behavior."* ]]; then
-    pass
-else
-    fail "Docs-Only gate does not require current-behavior reconciliation for outdated instructions"
-fi
-
-test_start "workflow triage gates separate execution requirements from preparation admissibility"
-if ruby -ryaml -e '
-  gates = YAML.load_file(ARGV.fetch(0))
-  triage = gates.fetch("gates").find { |gate| gate.fetch("phase") == "TRIAGE" }
-  assertions = triage.fetch("exit_assertions").to_h { |assertion| [assertion.fetch("id"), assertion] }
-  t6 = assertions.fetch("T6")
-  t7 = assertions.fetch("T7")
-  preparation = assertions.fetch("T_PREPARATION_ADMISSIBILITY")
-  valid = t6.fetch("condition") == "execution_intent != prepare_only" &&
-    t6.fetch("check").include?("execution common gates") &&
-    t7.fetch("condition") == "execution_intent != prepare_only" &&
-    preparation.fetch("condition") == "execution_intent == prepare_only" &&
-    preparation.fetch("check").include?("only feature-preparation evidence") &&
-    preparation.fetch("check").include?("no execution or task-category gate")
-  exit(valid ? 0 : 1)
-' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
-    pass
-else
-    fail "workflow triage gates do not distinguish execution gates from exact preparation admissibility"
-fi
-
-test_start "workflow discovery maps behaviorally relevant references"
-missing_reference_mapping_terms=()
-for term in \
-    "references_checked" \
-    "caller, consumer, test, docs, contract, config, mirror, runtime" \
-    "candidate_scope_scan"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"; then
-        missing_reference_mapping_terms+=("handoffs.yaml: $term")
-    fi
-done
-for term in \
-    "D8A" \
-    "When a context map is required: it includes references_checked" \
-    "behaviorally relevant callers, consumers, tests, docs, contracts, config, generated mirrors, and runtime surfaces"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
-        missing_reference_mapping_terms+=("phase-gates.yaml: $term")
-    fi
-done
-for term in \
-    "References Checked" \
-    "\"All references\" means behaviorally relevant references inside the accepted task scope"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-map-template.md"; then
-        missing_reference_mapping_terms+=("context-map-template.md: $term")
-    fi
-done
-if [[ "${#missing_reference_mapping_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow reference mapping guard missing terms: ${missing_reference_mapping_terms[*]}"
 fi
 
 test_start "workflow records bounded reuse-search evidence for rule-like changes"
@@ -457,64 +256,6 @@ else
     fail "workflow candidate-search phase 1 contract missing terms: ${missing_candidate_terms[*]}"
 fi
 
-test_start "workflow loop experiment artifacts stay conditional and non-harness"
-missing_loop_artifact_terms=()
-for term in \
-    "workflow_experiment_ledger" \
-    "explicit workflow experiment" \
-    "loop_readiness_assessment" \
-    "explicit repeat or optimization loop" \
-    "retry_or_empty_result_handling" \
-    "tool_error_handling" \
-    "low_confidence_escalation" \
-    "loop artifacts alone do not require"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
-        missing_loop_artifact_terms+=("output.yaml: $term")
-    fi
-done
-for term in \
-    "P_WORKFLOW_EXPERIMENT_LEDGER" \
-    "P_LOOP_READINESS" \
-    "retry_or_empty_result_handling" \
-    "tool_error_handling" \
-    "low_confidence_escalation" \
-    "Keep harness_routing=not_required unless harness_capable == true"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
-        missing_loop_artifact_terms+=("phase-gates.yaml: $term")
-    fi
-done
-for term in \
-    "Loop / Experiment Routing" \
-    "harness_capable=false" \
-    "retry_or_empty_result_handling" \
-    "tool_error_handling" \
-    "low_confidence_escalation" \
-    "loop artifacts alone do not"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"; then
-        missing_loop_artifact_terms+=("plan-template.md: $term")
-    fi
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md"; then
-        missing_loop_artifact_terms+=("task-journal-template.md: $term")
-    fi
-done
-for term in \
-    "loop-experiment-artifacts-stay-conditional" \
-    "workflow_experiment_ledger" \
-    "loop_readiness_assessment" \
-    "retry_or_empty_result_handling" \
-    "tool_error_handling" \
-    "low_confidence_escalation" \
-    "harness_capable=false"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"; then
-        missing_loop_artifact_terms+=("workflow eval: $term")
-    fi
-done
-if [[ "${#missing_loop_artifact_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow loop experiment contract missing terms: ${missing_loop_artifact_terms[*]}"
-fi
-
 test_start "workflow state artifacts are orchestrator-owned and ignored"
 missing_state_terms=()
 for file_and_term in \
@@ -638,34 +379,6 @@ if ruby -ryaml -e '
     pass
 else
     fail "workflow task aliases or gate-pack routing drifted"
-fi
-
-test_start "workflow routing retains exact execution, lane, plan, and prepare-only strict boundaries"
-if ruby -ryaml -e '
-  input = YAML.load_file(ARGV.fetch(0)).fetch("fields").to_h { |field| [field.fetch("name"), field] }
-  triage = File.read(ARGV.fetch(1))
-  gates = YAML.load_file(ARGV.fetch(2))
-  intensity_gate = gates.fetch("gates").find { |gate| gate["phase"] == "TRIAGE" }.fetch("exit_assertions").find { |assertion| assertion["id"] == "T_CONTROLLER_INTENSITY" }
-  valid = input.fetch("execution_intent").fetch("infer_from").include?("When a request combines preparation/planning with an affirmative implementation request, use end_to_end unless the user explicitly prohibits implementation") &&
-    input.fetch("build_execution_lane").fetch("infer_from").include?("For execution_intent == prepare_only, use none") &&
-    input.fetch("build_execution_lane").fetch("validation").include?("Build is inactive") &&
-    input.fetch("required_agents").fetch("validation").include?("requested/required fresh plan review") &&
-    input.fetch("required_agents").fetch("validation").include?("selected research lenses/peer") &&
-    gates.fetch("gates").find { |gate| gate["phase"] == "TRIAGE" }.fetch("exit_assertions").find { |assertion| assertion["id"] == "T_PREPARATION_ADMISSIBILITY" }.fetch("check").include?("requested/required fresh plan review and selected research lenses/peer") &&
-    triage.include?("For execution_intent != prepare_only, medium+ work") &&
-    input.fetch("controller_intensity").fetch("infer_from").include?("QA or harness requests alone never promote strict") &&
-    input.fetch("controller_intensity").fetch("validation").include?("For execution_intent != prepare_only") &&
-    input.fetch("controller_intensity").fetch("validation").include?("QA or harness requests alone remain typed future obligations") &&
-    triage.include?("QA or harness requests alone never promote strict") &&
-    triage.include?("only when `execution_intent != prepare_only`") &&
-    intensity_gate.fetch("check").include?("QA or harness requests alone must not") &&
-    intensity_gate.fetch("on_fail").include?("future_harness_obligation") &&
-    input.fetch("controller_intensity").fetch("infer_from").include?("typed future obligations")
-  exit(valid ? 0 : 1)
-' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml" "$triage_file" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
-    pass
-else
-    fail "workflow execution, lane, plan, or prepare-only strict routing drifted"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

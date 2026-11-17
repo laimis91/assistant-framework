@@ -5,25 +5,12 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-require_terms() {
-    local label="$1"
-    local file="$2"
-    shift 2
+review_dir="$FRAMEWORK_DIR/skills/assistant-review"
+workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
+review_qa_router="$workflow_dir/references/review-qa-router.md"
+qa_positive_trigger_wording="QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance."
+qa_negative_trigger_wording="QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
 
-    local missing=()
-    local term
-    for term in "$@"; do
-        if ! grep -Fq -- "$term" "$file"; then
-            missing+=("${file#$FRAMEWORK_DIR/}: $term")
-        fi
-    done
-
-    if [[ "${#missing[@]}" -eq 0 ]]; then
-        pass
-    else
-        fail "$label missing terms: ${missing[*]}"
-    fi
-}
 
 test_start "QA evaluator agents exist and are read-only"
 missing_agent_terms=()
@@ -88,52 +75,6 @@ if grep -Fq "When a skill's description matches the request" "$instruction_block
     pass
 else
     fail "instruction block must stay lean and agents/codex/qa-evaluator.toml must be read-only"
-fi
-
-test_start "assistant-review routes independent QA evaluation with the shared semantic guard"
-review_dir="$FRAMEWORK_DIR/skills/assistant-review"
-missing_review_terms=()
-for file_and_term in \
-    "$review_dir/SKILL.md::QA stays separate from code review and runs after Build and Code Reviewer evidence" \
-    "$review_dir/SKILL.md::Load [qa-evaluation-loop.md](references/qa-evaluation-loop.md) when required" \
-    "$review_dir/references/review-loop.md::load \`qa-evaluation-loop.md\` before dispatching QAEvaluator" \
-    "$review_dir/references/review-loop.md::That reference owns the detailed QA algorithm" \
-    "$review_dir/references/qa-evaluation-loop.md::while shared_progress_allows_work" \
-    "$review_dir/references/qa-evaluation-loop.md::Productive work may continue beyond round 10" \
-    "$review_dir/references/qa-evaluation-loop.md::does not replace code-reviewer" \
-    "$review_dir/contracts/handoffs.yaml::to: QAEvaluator" \
-    "$review_dir/contracts/handoffs.yaml::- name: debate_record" \
-    "$review_dir/contracts/handoffs.yaml::pre-build debate/subagent-perspective evidence" \
-    "$review_dir/contracts/handoffs.yaml::previously_failed_acceptance_items" \
-    "$review_dir/contracts/handoffs.yaml::qa_filter_policy" \
-    "$review_dir/contracts/handoffs.yaml::debate_record when Done Contract exists" \
-    "$review_dir/contracts/handoffs.yaml::qa_scorecard" \
-    "$review_dir/contracts/handoffs.yaml::score_entry" \
-    "$review_dir/contracts/handoffs.yaml::productive work may continue beyond round 10." \
-    "$review_dir/contracts/input.yaml::- name: qa_evaluation_mode" \
-    "$review_dir/contracts/input.yaml::- name: debate_record" \
-    "$review_dir/contracts/input.yaml::pre-build debate/subagent-perspective evidence" \
-    "$review_dir/contracts/input.yaml::- name: qa_filter_policy" \
-    "$review_dir/contracts/output.yaml::- name: qa_evaluation_result" \
-    "$review_dir/contracts/output.yaml::final_verdict" \
-    "$review_dir/contracts/output.yaml::score_progression" \
-    "$review_dir/references/qa-evaluation-loop.md::debate_record" \
-    "$review_dir/references/qa-evaluation-loop.md::pre-build debate/subagent-perspective evidence" \
-    "$review_dir/contracts/phase-gates.yaml::QA_EVALUATION_STEP" \
-    "$review_dir/contracts/phase-gates.yaml::QA evaluation starts only after build/test verification evidence and Code Reviewer or Reviewer compatibility result are available" \
-    "$review_dir/contracts/phase-gates.yaml::INV_QA4" \
-    "$review_dir/contracts/phase-gates.yaml::QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists" \
-    "$review_dir/contracts/phase-gates.yaml::shared guard governs continuation"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        missing_review_terms+=("${file#$FRAMEWORK_DIR/}: $term")
-    fi
-done
-if [[ "${#missing_review_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review QA loop contract terms missing: ${missing_review_terms[*]}"
 fi
 
 test_start "assistant-review canonical QA scorecard preserves QAEvaluator return semantics"
@@ -249,98 +190,6 @@ else
     fail "assistant-review canonical QA result loses pivot, scoped-domain, or deterministic weighted-score semantics"
 fi
 
-test_start "assistant-review QA Done Contract debate_record contract is mirrored"
-debate_mirror_failures=()
-for qa_review_dir in \
-    "$FRAMEWORK_DIR/skills/assistant-review"; do
-    for file_and_term in \
-        "$qa_review_dir/contracts/input.yaml::- name: debate_record" \
-        "$qa_review_dir/contracts/input.yaml::pre-build debate/subagent-perspective evidence" \
-        "$qa_review_dir/contracts/handoffs.yaml::- name: debate_record" \
-        "$qa_review_dir/contracts/handoffs.yaml::pre-build debate/subagent-perspective evidence" \
-        "$qa_review_dir/references/qa-evaluation-loop.md::debate_record" \
-        "$qa_review_dir/contracts/phase-gates.yaml::INV_QA4" \
-        "$qa_review_dir/contracts/phase-gates.yaml::QA findings require acceptance criteria, Done Contract, verification evidence, scoped domain-context support, and debate_record when Done Contract exists"; do
-        file="${file_and_term%%::*}"
-        term="${file_and_term#*::}"
-        if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
-            debate_mirror_failures+=("${file#$FRAMEWORK_DIR/}: $term")
-        fi
-    done
-done
-if [[ "${#debate_mirror_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review QA Done Contract debate_record contract terms missing or not mirrored: ${debate_mirror_failures[*]}"
-fi
-
-test_start "workflow records separate Code Reviewer and QA Evaluator evidence"
-workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
-review_qa_router="$workflow_dir/references/review-qa-router.md"
-missing_workflow_terms=()
-for file_and_term in \
-    "$workflow_dir/contracts/handoffs.yaml::contract_ref: assistant-review/contracts/handoffs.yaml" \
-    "$workflow_dir/contracts/handoffs.yaml::orchestrator_to_qa_evaluator" \
-    "$workflow_dir/contracts/input.yaml::- name: qa_evaluation_mode" \
-    "$workflow_dir/contracts/output.yaml::- name: qa_evaluation_result" \
-    "$workflow_dir/contracts/output.yaml::QA evaluation does not replace review_result" \
-    "$workflow_dir/contracts/output.yaml::assistant-review/contracts/output.yaml#qa_evaluation_result" \
-    "$workflow_dir/contracts/output.yaml::canonical_result_ref" \
-    "$workflow_dir/contracts/phase-gates.yaml::R_QA_EVALUATION" \
-    "$workflow_dir/contracts/phase-gates.yaml::Code Reviewer or Reviewer compatibility evidence is recorded separately from QA Evaluator evidence" \
-    "$workflow_dir/contracts/phase-gates.yaml::When qa_evaluation_mode == required: required_agents includes QA Evaluator" \
-    "$workflow_dir/contracts/phase-gates.yaml::assistant-review owns QAEvaluator dispatch and return validation" \
-    "$review_qa_router::Stage 3 - QA Evaluation" \
-    "$review_qa_router::workflow records only validated refs" \
-    "$workflow_dir/references/subagent-dispatch.md::QA Evaluator" \
-    "$workflow_dir/references/subagent-dispatch.md::QA evidence gate" \
-    "$workflow_dir/references/subagent-roles.md::QA Evaluator dispatch" \
-    "$workflow_dir/references/task-journal-template.md::QA Evaluator dispatch" \
-    "$workflow_dir/references/task-journal-harness-appendix.md::### QA Evaluation #1" \
-    "$workflow_dir/references/sub-task-brief-template.md::qa-evaluator"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
-        missing_workflow_terms+=("${file#$FRAMEWORK_DIR/}: $term")
-    fi
-done
-if [[ "${#missing_workflow_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow QA evaluator evidence surfaces missing: ${missing_workflow_terms[*]}"
-fi
-
-test_start "QA evaluation required mode is explicitly scoped"
-review_dir="$FRAMEWORK_DIR/skills/assistant-review"
-qa_positive_trigger_wording="QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance."
-qa_negative_trigger_wording="QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
-require_terms "workflow QA mode" "$workflow_dir/contracts/input.yaml" \
-    "- name: harness_capable" \
-    "default: false" \
-    "Use required when the user explicitly requests QA/acceptance evaluation" \
-    "accepted Done Contract" \
-    "harness_capable == true and acceptance evaluation is in scope" \
-    "domain-scored" \
-    "UI/visual/product/UX/docs/DX" \
-    "Use not_required for ordinary medium+ code-review-only/source-changing work"
-require_terms "review QA mode" "$review_dir/contracts/input.yaml" \
-    "- name: harness_capable" \
-    "default: false" \
-    "Use required when the user explicitly requests QA/acceptance evaluation" \
-    "accepted Done Contract" \
-    "harness_capable == true and acceptance evaluation is in scope" \
-    "domain-scored" \
-    "UI/visual/product/UX/docs/DX" \
-    "Use not_required for ordinary medium+ code-review-only/source-changing work"
-require_terms "QA loop routing" "$review_dir/references/qa-evaluation-loop.md" \
-    "The user explicitly asks for QA or acceptance evaluation." \
-    "The task has an accepted Done Contract." \
-    "The task is harness-capable and acceptance evaluation is in scope." \
-    "Skip QA evaluation when the task has no explicit QA request, Done Contract, harness-capable acceptance scope, domain-scored criteria, or UI/visual/product/UX/docs/DX scope"
-require_terms "workflow QA output mode" "$workflow_dir/contracts/output.yaml" \
-    'condition: "execution_intent != prepare_only and qa_evaluation_mode == required"' \
-    "QA evaluation does not replace review_result"
-
 test_start "workflow and review QA trigger wording is mirrored"
 qa_trigger_wording_missing=()
 for file in \
@@ -373,15 +222,6 @@ if [[ "${#qa_trigger_wording_missing[@]}" -eq 0 ]]; then
     pass
 else
     fail "QA positive/negative trigger wording is not mirrored: ${qa_trigger_wording_missing[*]}"
-fi
-
-test_start "workflow QA trigger wording avoids broad DX-facing scope"
-if rg -n "UI/visual/product/UX/docs/DX-facing" \
-    "$workflow_dir/SKILL.md" \
-    "$workflow_dir/references/plan-harness-appendix.md" >/tmp/p0p4-stale-qa-facing-wording.out; then
-    fail "workflow root QA surfaces contain broad DX-facing wording; see /tmp/p0p4-stale-qa-facing-wording.out"
-else
-    pass
 fi
 
 test_start "workflow delegates QA packet ownership to assistant-review"

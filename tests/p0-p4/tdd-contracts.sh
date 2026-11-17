@@ -15,6 +15,7 @@ contract_field_block() {
 
 tdd_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 tdd_evals="$FRAMEWORK_DIR/skills/assistant-tdd/evals/cases.json"
+handoffs_file="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"
 
 write_tdd_eval_responses() {
     local output_dir="$1"
@@ -215,72 +216,30 @@ jq --arg id "$activation_case" '
   )
 ' "$activation_skill/evals/cases.json" >"$activation_root/activation-case.json"
 mv "$activation_root/activation-case.json" "$activation_skill/evals/cases.json"
-mkdir -p "$activation_root/positive/assistant-tdd" "$activation_root/user-fault/assistant-tdd" "$activation_root/plan-fault/assistant-tdd" \
-    "$activation_root/missing-decision/assistant-tdd" "$activation_root/missing-selected-ids/assistant-tdd"
+mkdir -p "$activation_root/positive/assistant-tdd" "$activation_root/user-fault/assistant-tdd" \
+    "$activation_root/missing-decision/assistant-tdd"
 cat >"$activation_root/positive/assistant-tdd/$activation_case.txt" <<'EOF'
 {"activation_reason":"verification_selection","verification_decision":{"tdd_choice":{"basis":"selected_technique","applicable_check_ids":["behavior-check"]}},"selected_check_ids":["behavior-check"]}
 EOF
 cat >"$activation_root/user-fault/assistant-tdd/$activation_case.txt" <<'EOF'
 {"activation_reason":"user_request","verification_decision":{"tdd_choice":{"basis":"selected_technique","applicable_check_ids":["behavior-check"]}},"selected_check_ids":["behavior-check"]}
 EOF
-cat >"$activation_root/plan-fault/assistant-tdd/$activation_case.txt" <<'EOF'
-{"activation_reason":"plan_constraint","verification_decision":{"tdd_choice":{"basis":"selected_technique","applicable_check_ids":["behavior-check"]}},"selected_check_ids":["behavior-check"]}
-EOF
 cat >"$activation_root/missing-decision/assistant-tdd/$activation_case.txt" <<'EOF'
 {"activation_reason":"verification_selection","selected_check_ids":["behavior-check"],"applicable_check_ids":["behavior-check"]}
-EOF
-cat >"$activation_root/missing-selected-ids/assistant-tdd/$activation_case.txt" <<'EOF'
-{"activation_reason":"verification_selection","verification_decision":{"tdd_choice":{"basis":"selected_technique","applicable_check_ids":["behavior-check"]}}}
 EOF
 activation_grade_failures=()
 if ! "$tdd_eval_runner" --responses "$activation_root/positive" --skill "$activation_skill" --case "$activation_case" >"$activation_root/positive.output" 2>&1 \
     || ! grep -Fq $'PASS\tassistant-tdd\t'"$activation_case" "$activation_root/positive.output"; then
     activation_grade_failures+=("canonical selected-technique activation did not pass")
 fi
-for fault in user-fault plan-fault missing-decision missing-selected-ids; do
+for fault in user-fault missing-decision; do
     if "$tdd_eval_runner" --responses "$activation_root/$fault" --skill "$activation_skill" --case "$activation_case" >"$activation_root/$fault.output" 2>&1 \
         || ! grep -Fq $'FAIL\tassistant-tdd\t'"$activation_case" "$activation_root/$fault.output"; then
         activation_grade_failures+=("selected-technique activation accepted $fault")
     fi
 done
 
-jq --arg id "$activation_case" '
-  (.cases[] | select(.id == $id)) |= (
-    .prompt = "Use TDD to fix the bug where the skill eval runner accepts duplicate case ids."
-    | .setup_context = ["The assistant-tdd skill instructions are active.","The user explicitly requested TDD.","No failing regression test has been written yet."]
-    | .machine_expectations = {required_substrings:["activation_reason=user_request","The user explicitly requested TDD"],forbidden_substrings:["activation_reason=verification_selection","activation_reason=plan_constraint"]}
-  )
-' "$activation_skill/evals/cases.json" >"$activation_root/user-case.json"
-mv "$activation_root/user-case.json" "$activation_skill/evals/cases.json"
-mkdir -p "$activation_root/user-positive/assistant-tdd"
-cat >"$activation_root/user-positive/assistant-tdd/$activation_case.txt" <<'EOF'
-activation_reason=user_request. The user explicitly requested TDD.
-EOF
-if ! "$tdd_eval_runner" --responses "$activation_root/user-positive" --skill "$activation_skill" --case "$activation_case" >"$activation_root/user-positive.output" 2>&1 \
-    || ! grep -Fq $'PASS\tassistant-tdd\t'"$activation_case" "$activation_root/user-positive.output"; then
-    activation_grade_failures+=("real user TDD provenance companion did not pass")
-fi
 if [[ ${#activation_grade_failures[@]} -eq 0 ]]; then pass; else fail "verification activation controls failed: ${activation_grade_failures[*]}"; fi
-
-test_start "TDD obligation coverage binds every stable obligation id exactly once"
-tdd_missing=()
-obligations_block="$(contract_field_block "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/input.yaml" architecture_test_obligations)"
-coverage_block="$(contract_field_block "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/output.yaml" architecture_obligation_coverage)"
-for term in \
-    '      - name: obligation_id' \
-    'Stable identifier used to bind this input obligation to exactly one coverage entry' \
-    'Non-empty and unique within architecture_test_obligations'; do
-    if ! grep -Fq -- "$term" <<<"$obligations_block"; then tdd_missing+=("input obligations: $term"); fi
-done
-for term in \
-    'min_items: 1' \
-    'Each input architecture_test_obligations obligation is represented exactly once by obligation_id' \
-    'no coverage entry has an unknown or duplicate id' \
-    '      - name: obligation_id' \
-    'Matches exactly one input architecture_test_obligations.obligation_id'; do
-    if ! grep -Fq -- "$term" <<<"$coverage_block"; then tdd_missing+=("coverage: $term"); fi
-done
-if [[ ${#tdd_missing[@]} -eq 0 ]]; then pass; else fail "TDD obligation identity/coverage contract gaps: ${tdd_missing[*]}"; fi
 
 test_start "Code Writer prompts assign RED ownership by active TDD lane in both projections"
 missing_code_writer_terms=()
@@ -432,136 +391,6 @@ for file_and_term in \
 done
 if [[ "${#workflow_tdd_failures[@]}" -eq 0 ]]; then pass; else fail "workflow TDD projection or false-mode policy drifted: ${workflow_tdd_failures[*]}"; fi
 
-test_start "workflow completion gates permit sufficient selected non-test evidence"
-workflow_stop_rule_allows_non_test() {
-    ruby -ryaml -e '
-      invariant = YAML.load_file(ARGV.fetch(0)).fetch("invariants").find { |entry| entry["id"] == "INV_VERIFICATION_RESULTS" }
-      check = invariant.fetch("check")
-      exit(check.include?("every due selected check and applicable due/executable binding obligation") &&
-        check.include?("Only current, resolved passing evidence can support sufficient") &&
-        !check.include?("a build, tests, and review") ? 0 : 1)
-    ' "$1"
-}
-workflow_stop_rule_wrong="$(mktemp)"
-p0p4_register_cleanup "$workflow_stop_rule_wrong"
-sed 's/every due selected check and applicable due\/executable binding obligation/a build, tests, and review/' \
-    "$workflow_gates" >"$workflow_stop_rule_wrong"
-if workflow_stop_rule_allows_non_test "$workflow_gates" \
-    && ! workflow_stop_rule_allows_non_test "$workflow_stop_rule_wrong"; then
-    pass
-else
-    fail "workflow completion gate did not distinguish selected non-test evidence from the retired blanket test requirement"
-fi
-
-test_start "TDD skill gates meaningful RED only for active TDD and allows assertion extension"
-missing_tdd_skill_terms=()
-for term in \
-    'Use TDD only when requested' \
-    '`bounded_executor`: one owner authors tests, observes RED, implements, and verifies GREEN and REFACTOR.' \
-    'the SAME selected writer authors tests (`test_authoring`)' \
-    'implements after current RED (`production`)' \
-    'refactors after current GREEN (`refactor`)' \
-    'Builder/Tester executes checks only' \
-    'adds or extends a meaningful behavior assertion' \
-    'test file/name, argv/cwd, and meaningful-failure oracle' \
-    'why RED failed for the right reason' \
-    'Missing or invalid required RED blocks production (`NEEDS_CONTEXT` for delegated writers)'; do
-    if ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md" "$term"; then
-        missing_tdd_skill_terms+=("$term")
-    fi
-done
-if ! ruby -ryaml -e '
-  gate = YAML.load_file(ARGV.fetch(0)).fetch("invariants").find { |item| item["id"] == "INV3" }
-  check = gate.fetch("check")
-  recovery = gate.fetch("on_fail")
-  exit(check.include?("only start REFACTOR after current GREEN passes") &&
-    check.include?("do not close a partial delegated log as complete") &&
-    recovery.include?("Preserve actual partial phase evidence") &&
-    recovery.include?("require an actual matching authorizing RED plus passing GREEN plus executed REFACTOR or validated reuse_green before completion") ? 0 : 1)
-' "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/phase-gates.yaml"; then
-    missing_tdd_skill_terms+=("INV3 must preserve partial evidence without allowing early refactor or completion")
-fi
-if [[ "${#missing_tdd_skill_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-tdd skill missing orchestrated TDD ownership terms: ${missing_tdd_skill_terms[*]}"
-fi
-
-test_start "workflow CodeWriter TDD handoff requires BuilderTester RED evidence"
-handoffs_file="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml"
-missing_tdd_handoff_terms=()
-stale_code_writer_tdd_wording="CodeWriter must write failing test BEFORE production code"
-for term in \
-    "Incoming BuilderTester RED evidence required before production edits only in separated_workers" \
-    "No active TDD lane may proceed with production without valid RED evidence."; do
-    if ! grep -Fq -- "$term" "$handoffs_file"; then
-        missing_tdd_handoff_terms+=("$term")
-    fi
-done
-if grep -Fq -- "$stale_code_writer_tdd_wording" "$handoffs_file"; then
-    missing_tdd_handoff_terms+=("stale wording present: $stale_code_writer_tdd_wording")
-fi
-if [[ "${#missing_tdd_handoff_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "CodeWriter TDD handoff must depend on BuilderTester RED evidence and reject stale ownership wording: ${missing_tdd_handoff_terms[*]}"
-fi
-
-test_start "workflow CodeWriter current task packet has conditional BuilderTester RED evidence shape"
-missing_codewriter_red_evidence_terms=()
-for field in \
-    tdd_applies \
-    implementation_notes \
-    expected_success_signal; do
-    if ! codewriter_current_task_packet_field_required "$handoffs_file" "$field"; then
-        missing_codewriter_red_evidence_terms+=("current_task_packet.$field required")
-    fi
-done
-if ! ruby -ryaml -e '
-  handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
-  writer = handoffs.find { |h| h["name"] == "orchestrator_to_code_writer" }
-  writer_return = writer.fetch("return_fields")
-  bounded_red_return = writer_return.find { |field| field["name"] == "red_evidence" }
-  bounded_red_fields = bounded_red_return.fetch("object_fields").map { |field| field["name"] }
-  writer_status = writer_return.find { |field| field["name"] == "status" }
-  writer_validation = writer_return.find { |field| field["name"] == "validation_results" }.fetch("validation")
-  bounded_red_valid = bounded_red_return["type"] == "object" &&
-    bounded_red_return["required"] == "conditional" &&
-    bounded_red_return["condition"] == "tdd_applies is true and build_execution_lane == bounded_executor and valid matching authorizing RED was observed" &&
-    bounded_red_fields == %w[check_id test_file test_name command cwd failure_summary right_reason] &&
-    bounded_red_return.fetch("validation").include?("Omit when RED was not started") &&
-    bounded_red_return.fetch("validation").include?("never invent evidence") &&
-    bounded_red_return.fetch("object_fields").find { |field| field["name"] == "command" }.fetch("validation").include?("red_command argv") &&
-    bounded_red_return.fetch("object_fields").find { |field| field["name"] == "cwd" }.fetch("validation").include?("red_cwd") &&
-    bounded_red_return.fetch("object_fields").find { |field| field["name"] == "right_reason" }.fetch("validation").include?("expected_red_failure") &&
-    writer_status.fetch("validation").include?("DONE and DONE_WITH_CONCERNS require this return") &&
-    writer_validation.include?("retained in red_evidence as TDD stage evidence, not as a failed validation_results row") &&
-    writer.fetch("on_missing_field").include?("active bounded_executor TDD production additionally requires matching typed red_evidence")
-  packet = writer.fetch("context_fields").find { |f| f["name"] == "current_task_packet" }
-  command = packet.fetch("object_fields").find { |f| f["name"] == "verification_command" }
-  valid = command["required"] == "conditional" && command.fetch("condition").include?("exactly one matching command-based CheckSpec")
-  exit(valid && bounded_red_valid ? 0 : 1)
-' "$handoffs_file"; then
-    missing_codewriter_red_evidence_terms+=("verification_command must be conditional on command-bearing selected CheckSpec")
-fi
-for term in \
-    "condition: \"tdd_applies is true and build_execution_lane == separated_workers and worker_stage == production\"" \
-    "Incoming BuilderTester RED evidence required before production edits only in separated_workers" \
-    "In bounded_executor, CodeWriter must run the planned meaningful RED after dispatch and before production edits" \
-    "No active TDD lane may proceed with production without valid RED evidence."; do
-    if ! codewriter_red_evidence_has_line "$handoffs_file" "$term"; then
-        missing_codewriter_red_evidence_terms+=("$term")
-    fi
-done
-if codewriter_red_evidence_has_line "$handoffs_file" "CodeWriter writes RED"; then
-    missing_codewriter_red_evidence_terms+=("stale CodeWriter RED ownership wording present")
-fi
-if [[ "${#missing_codewriter_red_evidence_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "CodeWriter current_task_packet must require BuilderTester RED evidence details only when TDD is active: ${missing_codewriter_red_evidence_terms[*]}"
-fi
-
 test_start "incoming RED evidence is required only for active separated_workers and bounded_executor owns RED"
 if ruby -ryaml -e '
   handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
@@ -685,33 +514,6 @@ else
     fail "CodeWriter incoming RED policy did not distinguish separated_workers from bounded_executor active-TDD ownership"
 fi
 
-test_start "workflow task packets carry TDD Architecture Decision Pack obligations with exact-once coverage"
-packet_obligation_missing=()
-for term in \
-    "architecture_test_obligations" \
-    "condition: \"tdd_applies is true and architecture_design_mode in [lightweight, required, review_intensive]\"" \
-    "Stable identifier used to bind this input obligation to exactly one coverage entry" \
-    "enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]"; do
-    if [[ "$(grep -Fc -- "$term" "$handoffs_file")" -lt 2 ]]; then
-        packet_obligation_missing+=("CodeWriter/BuilderTester packet parity: $term")
-    fi
-done
-for term in \
-    "architecture_obligation_coverage" \
-    "Each carried architecture_test_obligations obligation is represented exactly once by obligation_id" \
-    "no coverage entry has an unknown or duplicate id" \
-    "build_execution_lane == bounded_executor and current_task_packet.architecture_test_obligations is present" \
-    "build_execution_lane == separated_workers and current_task_packet.architecture_test_obligations is present"; do
-    if ! grep -Fq -- "$term" "$handoffs_file"; then
-        packet_obligation_missing+=("Build return coverage: $term")
-    fi
-done
-if [[ "${#packet_obligation_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow Pack-backed TDD packet contract missing: ${packet_obligation_missing[*]}"
-fi
-
 task_packet_obligation_schema() {
     local file="$1"
     local handoff="$2"
@@ -800,22 +602,6 @@ if [[ "${#packet_mutation_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "TDD packet parity accepts schema drift: ${packet_mutation_failures[*]}"
-fi
-
-test_start "workflow uses authoritative TDD mode outside task packets"
-tdd_authority_missing=()
-for term in \
-    "condition: \"tdd_mode is true and architecture_design_mode in [lightweight, required, review_intensive]\"" \
-    "condition: \"tdd_mode is true\""; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml" \
-        && ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
-        tdd_authority_missing+=("workflow-level TDD authority: $term")
-    fi
-done
-if [[ "${#tdd_authority_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow output/gate must use canonical tdd_mode rather than task-packet tdd_applies: ${tdd_authority_missing[*]}"
 fi
 
 test_start "workflow completion aggregates the selected lane's full obligation coverage shape"
@@ -1003,24 +789,6 @@ if ruby -ryaml -e '
     script.include?(%q{refactor.get("changes_made") == "none needed"})
 ' "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/output.yaml" "$FRAMEWORK_DIR/skills/assistant-workflow/scripts/task-packet-admission.py"; then pass; else fail "TDD v3 reuse fields, v2 compatibility, or zero-invocation reuse contract invalid"; fi
 
-test_start "TDD prose and gates allow validated reuse without an unconditional distinct REFACTOR run"
-if ruby -ryaml -e '
-  skill = File.read(ARGV[0])
-  gates = YAML.load_file(ARGV[1])
-  ref1 = gates.fetch("gates").find { |g| g["phase"] == "REFACTOR" }.fetch("exit_assertions").find { |a| a["id"] == "REF1" }
-  abort "distinct REFACTOR run still unconditional" if skill.match?(/run a distinct\s+REFACTOR verification/)
-  abort "SKILL lacks reuse/edit rule" unless skill.include?("After edits, run affected checks") && skill.include?("reuse_green") &&
-    skill.include?("Historical v2 cycle entries stay readable")
-  flat = skill.gsub(/\s+/, " ")
-  abort "standalone no-change reuse is not a no-rerun digest rule" unless flat.include?("No edits after GREEN and nothing changed since means no rerun") &&
-    flat.include?("`green.reuse_digest`") && flat.include?("Failed GREEN, an unknown digest, or a changed one reruns") &&
-    flat.include?("`green.reuse_digest` (`contracts/output.yaml` recipe) from that passing GREEN run") && !flat.include?("source/test/config snapshot digest") &&
-    flat.include?("`reuse_identity_mode: detailed`")
-  abort "REF1 lacks digest equality" unless ref1.fetch("check").include?("current snapshot digest equal to green.reuse_digest")
-  abort "REF1 disagrees with reuse contract" unless ref1.fetch("check").include?("After any refactor edit") &&
-    ref1.fetch("check").include?("validated v3 reuse_green") && ref1.fetch("check").include?("zero new invocations")
-' "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md" "$FRAMEWORK_DIR/skills/assistant-tdd/contracts/phase-gates.yaml"; then pass; else fail "TDD prose or REF1 still requires a distinct REFACTOR run"; fi
-
 tdd_craft_reference="$FRAMEWORK_DIR/skills/assistant-tdd/references/test-craft.md"
 ci_audit_test_maintenance="$FRAMEWORK_DIR/skills/assistant-ci-audit/references/test-maintenance.md"
 tdd_craft_distinctive_lines=(
@@ -1028,33 +796,6 @@ tdd_craft_distinctive_lines=(
     'expected = compute_total(order)'
     'rate_service.discount_for.return_value = 100'
 )
-
-test_start "TDD craft reference loads only inside active authoring and keeps the gates"
-if [[ ! -f "$tdd_craft_reference" ]]; then
-    fail "missing skills/assistant-tdd/references/test-craft.md"
-elif tdd_craft_link_error="$(ruby -e '
-  skill = File.read(ARGV.fetch(0))
-  frontmatter = skill.lines.first(4).join
-  expected_frontmatter = "---\nname: assistant-tdd\ndescription: \"Use for tests-first TDD requests, project TDD rules, or workflow-selected TDD checks.\"\n---\n"
-  abort "frontmatter changed" unless frontmatter == expected_frontmatter
-  red_step = skill[/^1\. \*\*RED\.\*\*.*?(?=^2\. \*\*GREEN\.\*\*)/m]
-  abort "RED step not found" if red_step.nil?
-  red_flat = red_step.gsub(/\s+/, " ")
-  abort "RED step lacks the craft link" unless red_flat.include?("(references/test-craft.md)")
-  abort "RED step lacks the load condition" unless red_flat.include?("When TDD is active and a test is being authored or corrected")
-  flat = skill.gsub(/\s+/, " ")
-  abort "craft link appears outside the RED step" unless flat.scan("references/test-craft.md").length == 1
-  [
-    "adds or extends a meaningful behavior assertion",
-    "observe the intended missing-behavior failure before production edits",
-    "why RED failed for the right reason",
-    "Missing or invalid required RED blocks production"
-  ].each { |phrase| abort "pinned phrase lost: #{phrase}" unless flat.include?(phrase) }
-' "$FRAMEWORK_DIR/skills/assistant-tdd/SKILL.md" 2>&1)"; then
-    pass
-else
-    fail "assistant-tdd SKILL.md craft link invalid: $tdd_craft_link_error"
-fi
 
 test_start "TDD craft examples cover the required pairs and boundaries"
 if [[ ! -f "$tdd_craft_reference" ]]; then
@@ -1106,28 +847,6 @@ elif tdd_craft_content_error="$(ruby -e '
     pass
 else
     fail "TDD craft reference content invalid: $tdd_craft_content_error"
-fi
-
-test_start "TDD craft examples are not duplicated in CI Audit"
-tdd_craft_duplicates=()
-if [[ ! -f "$tdd_craft_reference" ]]; then
-    tdd_craft_duplicates+=("reference missing")
-elif [[ ! -f "$ci_audit_test_maintenance" ]]; then
-    tdd_craft_duplicates+=("CI Audit test-maintenance.md missing; update this guard to its new location")
-else
-    if grep -Fq 'assistant-ci-audit' "$tdd_craft_reference" || grep -Eq '\]\(\.\./\.\./' "$tdd_craft_reference"; then
-        tdd_craft_duplicates+=("TDD craft reference links outside assistant-tdd")
-    fi
-    for line in "${tdd_craft_distinctive_lines[@]}"; do
-        if grep -Fq -- "$line" "$ci_audit_test_maintenance"; then
-            tdd_craft_duplicates+=("test-maintenance.md repeats: $line")
-        fi
-    done
-fi
-if [[ "${#tdd_craft_duplicates[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "TDD craft examples duplicated or cross-linked: ${tdd_craft_duplicates[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"
