@@ -25,12 +25,6 @@ tools/skills/sync-operating-guidance.sh --apply   # After editing tools/progress
 python3 tools/skills/check-skill-containment.py   # Skill folders stay self-contained
 ```
 
-### Cognitive Complexity Tool
-
-```bash
-dotnet build tools/cognitive-complexity/CognitiveComplexity.csproj --tl:on -v:minimal
-```
-
 ### Installation
 
 ```bash
@@ -47,12 +41,10 @@ assistant-research is a Process skill; research contracts and evidence methods r
 
 1. **Skills** (`skills/`) — Markdown-based prompt modules. Each skill has a `SKILL.md` entry point with required YAML frontmatter (`name` and `description`) and optional repository `requires` for validated hard dependencies. Sub-files load on demand (progressive loading). Skills are agent-agnostic.
 
-2. **Tools** (`tools/`) — Compiled and script utilities used for repository validation and installation.
-   - `cognitive-complexity/` — Roslyn-based method complexity scorer used by the review stage.
-   - `progress/` — Shared operating guidance and the `stagnation.py` progress-guard helper.
+2. **Tools** (`tools/`) — Script utilities used for repository validation and installation. Skills do not need them at run time, apart from the optional pattern library and the installer-only cleanup helper.
+   - `progress/` — Canonical shared operating guidance and wire boundary; each skill carries a synced copy.
    - `skills/` — Skill validator and contract-guide/workflow-reference sync scripts.
    - `evals/` — Skill and framework instruction eval runners.
-   - `change-impact/` — Change-impact protocol and validator.
    - `patterns/` — Pattern library script.
 
 ### Skill anatomy

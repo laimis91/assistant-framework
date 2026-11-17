@@ -1,7 +1,7 @@
 # Canonical v10 applies to structured batches, handoffs, persisted results and
 # workflow/QA consumers; SKILL.md governs human-summary omissions.
 
-schema_version: "10.0"
+schema_version: "11.0"
 contract: index
 skill: assistant-review
 

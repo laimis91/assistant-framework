@@ -57,7 +57,10 @@ Structured batches load [review-loop.md](references/review-loop.md) before the f
 - Review relevant spec, regression, testing, maintainability, bugfix,
   semantic/behavioral contract, loop-safety and security concerns. Apply matching
   [checklists](references/review-checklists.md) and [principles](references/review-principles.md);
-  exclude unrelated sections. Medium+ retains its Design Coherence Pass.
+  exclude unrelated sections. Medium+ retains its Design Coherence Pass. For a
+  changed function with nested branches or loops, use the advisory
+  [cognitive-complexity estimate](references/cognitive-complexity.md); it never
+  blocks by itself.
 - Review carried Architecture Decision Packs, including invalid ones, using the
   matching checklist. Preserve freshness, types/lifecycle/compatibility/quality
   evidence and `review_intensive` independent challenge.
@@ -69,7 +72,9 @@ Structured batches load [review-loop.md](references/review-loop.md) before the f
   fresh complete batch. No-build admission requires no required/completed fix or
   due selected/executable binding check.
 
-Change-impact projection cannot replace snapshot/coverage closure. At entry, load
+Change-impact projection cannot replace snapshot/coverage closure. Review 11.0
+replaced the change-impact checker receipt with a checklist result; 10.0 packets
+stay current-readable ([change-impact.md](references/change-impact.md)). At entry, load
 `legacy_history` and [legacy-compatibility.md](references/legacy-compatibility.md)
 only for persisted pre-10.0 packets or v9 records;
 historical evidence cannot certify a current clean batch.

@@ -3,7 +3,7 @@
 # report slots. Fix authorization, reproduction, verification, and active TDD
 # prerequisites apply regardless of presentation.
 
-schema_version: "3.0"
+schema_version: "4.0"
 contract: output
 skill: assistant-debugging
 
@@ -12,7 +12,7 @@ artifacts:
     type: object
     required: conditional
     condition: "a diagnosis or proposed repair has a behavior-bearing, cosmetic, or locality/shared/unresolved impact decision"
-    validation: "Records impact_scope and applicability_reason. not_applicable is cosmetic; local requires causal_evidence_ref; shared/unresolved or explicit expansion requires expanded_artifact_carried=true. Compact local output retains causal evidence without an expanded artifact or checker refs."
+    validation: "Records impact_scope and applicability_reason. not_applicable is cosmetic; local requires causal_evidence_ref; shared/unresolved or explicit expansion requires expanded_artifact_carried=true. Compact local output retains causal evidence without an expanded artifact or checklist refs."
     on_fail: "Record the applicable impact scope and causal evidence before claiming a local diagnosis or repair result."
     object_fields:
       - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
@@ -24,13 +24,13 @@ artifacts:
     type: object
     required: conditional
     condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
-    validation: "Records unchanged artifact_identity, phase, impact_scope, capture/expected/assessment refs, and checker result for expanded impact. Local diagnosis records causal evidence with ordinary regression verification and a local self-check plus fresh independent review, without checker refs. Before a source fix, shared or unresolved diagnosis has valid pre-build evidence; after a fix, completion requires actual verification and assistant-review's canonical review projection. Audit-only diagnosis may report gaps without claiming a future repair or clean review."
-    on_fail: "Preserve the incomplete diagnosis and report the blocked/unverified gate; do not narrow consumers to the reported symptom or substitute manual validation."
+    validation: "Records unchanged artifact_identity, phase, impact_scope, capture/expected/assessment refs, and checklist result for expanded impact. Local diagnosis records causal evidence with ordinary regression verification and a local self-check plus fresh independent review, without checklist refs. Before a source fix, shared or unresolved diagnosis has valid pre-build evidence; after a fix, completion requires a passing completion checklist result (checklist_result_ref) checked against the diff by the fresh independent reviewer, actual verification, and assistant-review's canonical review projection. Audit-only diagnosis may report gaps without claiming a future repair or clean review."
+    on_fail: "Preserve the incomplete diagnosis and report the blocked/unverified gate; do not narrow consumers to the reported symptom or replace the expanded-work checklist with a status alone."
     object_fields:
       - {name: artifact_identity, type: string, required: true}
       - {name: phase, type: enum, required: true, enum_values: [discovery, pre_build, completion]}
       - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
-      - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: checklist_result_ref, type: string, required: conditional, condition: "status == valid", description: "Recorded change-impact checklist result: each expanded-work checklist item with pass, fail or not_applicable and its evidence ref (assistant-review references/change-impact.md)", on_missing: fail}
       - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
       - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}

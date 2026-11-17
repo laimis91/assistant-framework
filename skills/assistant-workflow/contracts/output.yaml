@@ -7,7 +7,7 @@
 # Defines required artifacts for consumed canonical workflow results.
 # Canonical completion verifies required artifacts before the completion marker.
 
-schema_version: "16.0"
+schema_version: "17.0"
 contract: output
 skill: assistant-workflow
 
@@ -58,7 +58,7 @@ artifacts:
     required: conditional
     condition: "a behavior, cosmetic, or locality/shared/unresolved impact decision affects verification"
     description: "Applicability."
-    validation: "not_applicable=cosmetic; local causal_evidence_ref/no checker; otherwise expanded_artifact_carried=true."
+    validation: "not_applicable=cosmetic; local causal_evidence_ref/no checklist; otherwise expanded_artifact_carried=true."
     on_fail: "scope/reason; local causal; shared/unresolved/expanded change_impact_evidence or blocked."
     object_fields:
       - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
@@ -72,12 +72,12 @@ artifacts:
     condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
     description: "Expanded evidence."
     validation: "Keep artifact_identity across phases. Gaps/blocks cannot claim verification/review. pre_build needs valid assessment, no material unknown. completion needs verification and assistant-review projection binding original scope_manifest, coverage_ledger, current snapshot; terminal checks remain."
-    on_fail: "Run checker or report blocked; no manual pass."
+    on_fail: "Record the expanded-work checklist result from assistant-review references/change-impact.md with evidence for each item, or report blocked; a status alone never passes."
     object_fields:
       - {name: artifact_identity, type: string, required: true}
       - {name: phase, type: enum, required: true, enum_values: [discovery, pre_build, completion]}
       - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
-      - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: checklist_result_ref, type: string, required: conditional, condition: "status == valid", description: "Recorded change-impact checklist result: each expanded-work checklist item with pass, fail or not_applicable and its evidence ref (assistant-review references/change-impact.md)", on_missing: fail}
       - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
       - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
@@ -488,7 +488,7 @@ artifacts:
       - name: findings
         type: object[]
         required: true
-        description: "Compact review findings; each row carries a stable id such as light-1 that the lead keeps. Rows apply when fresh_review_result is recorded by a Workflow 16.0 producer; a historical Workflow 15 string[] findings list stays readable as-is and is never certified current."
+        description: "Compact review findings; each row carries a stable id such as light-1 that the lead keeps. Rows apply when fresh_review_result is recorded by a Workflow 16.0 or later producer; a historical Workflow 15 string[] findings list stays readable as-is and is never certified current."
         validation: "Empty for a first-review PASS; on a re-review each listed finding has a closure_results row with status verified_closed. aggregate_finding_id values are unique and non-empty. A fresh re-review receives the fixed findings as {aggregate_finding_id, description} rows using these ids, and its record carries those resolved first-review rows."
         object_fields:
           - {name: aggregate_finding_id, type: string, required: true, description: "Stable compact finding id such as light-1."}
@@ -500,7 +500,7 @@ artifacts:
       - name: reviewer_identity
         type: object
         required: conditional
-        condition: "fresh_review_result is recorded by a Workflow 16.0 producer"
+        condition: "fresh_review_result is recorded by a Workflow 16.0 or later producer"
         description: "Fresh reviewer identity of the compact light review."
         validation: "A fresh re-review after a fix has an actor_id absent from prior_reviewer_actor_ids."
         on_missing: fail
@@ -1038,7 +1038,7 @@ artifacts:
           - name: qa_evaluator_dispatch
             type: string
             required: conditional
-            condition: "record is produced under workflow v16; a historical v15 record may omit it"
+            condition: "record is produced under workflow v16 or later; a historical v15 record may omit it"
             description: "Newly created QAEvaluator subagent/tool/run id"
           - name: qa_evaluator_result
             type: string
@@ -1653,7 +1653,7 @@ artifacts:
     type: object
     required: conditional
     condition: "repeated or persisted semantic work has a progress consumer"
-    description: "Canonical ProgressState v1 in the existing task/journal context; see references/operating-guidance.md and ProgressState.parse in stagnation.py."
+    description: "Canonical ProgressState v1 in the existing task/journal context; see references/operating-guidance.md and ProgressState.parse in scripts/stagnation.py."
     validation: "Independent outcome/guard, policy source, assessed history, evidence and current action admission are retained; derive counts, reject replay, preserve completed-cycle-before-blocker ordering; optional fixed coordinator members share one admission and complete terminal-cycle barrier under the common helper; no phase-local allowance."
     # Only the scalar display/evaluator projection is declared here. The helper
     # remains authoritative for the full runtime state and transition semantics.

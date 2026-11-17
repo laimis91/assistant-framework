@@ -51,8 +51,8 @@ if ruby_output="$(ruby -ryaml -e '
     failures << "TDD enum changed" unless enum_text(tdd_field.fetch("enum_values")) == %w[yes partial blocked no]
     fields.each { |label, field| failures << "#{label} requiredness changed" unless field["required"] == true }
 
-    failures << "Debugging output schema_version changed" unless debugging["schema_version"] == "3.0"
-    failures << "Workflow output schema_version changed" unless workflow["schema_version"] == "16.0"
+    failures << "Debugging output schema_version changed" unless debugging["schema_version"] == "4.0"
+    failures << "Workflow output schema_version changed" unless workflow["schema_version"] == "17.0"
     failures << "TDD input schema_version changed" unless tdd["schema_version"] == "3.0"
 
     expected_validation = "Must include reproduction_status, root_cause_or_mitigation, confidence, and original_failure_path; do not start RED for unknown-cause bugfixes without this evidence or a documented blocker"

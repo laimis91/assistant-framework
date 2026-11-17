@@ -378,7 +378,7 @@ if ! ruby -ryaml -e '
     reviewer_challenge = reviewer_checks.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
     output_pack = output.fetch("artifacts").find { |artifact| artifact["name"] == "architecture_decision_pack_review" }
     output_challenge = output_pack.fetch("object_fields").find { |field| field["name"] == "independent_challenge_evidence" }
-    valid = input["schema_version"] == "10.0" && handoffs["schema_version"] == "10.0" && output["schema_version"] == "10.0" && index["schema_version"] == "10.0" &&
+    valid = input["schema_version"] == "11.0" && handoffs["schema_version"] == "11.0" && output["schema_version"] == "11.0" && index["schema_version"] == "11.0" &&
       canonical_mode["required"] == "conditional" && canonical_mode["condition"] == "architecture_decision_pack_review_required is true" &&
       canonical_mode["enum_values"] == %w[lightweight required review_intensive] &&
       canonical_mode["on_missing"] == "infer" &&
@@ -691,7 +691,7 @@ if ! ruby -ryaml -e '
     pressure = fields.fetch("design_pressure_checks")
     required_concerns = %w[control_and_early_exit ownership_and_disposal resource_envelope extension_registration representative_path]
     ref = fields.fetch("ref")
-    valid = contracts.all? { |contract| contract.fetch("schema_version") == "10.0" } &&
+    valid = contracts.all? { |contract| contract.fetch("schema_version") == "11.0" } &&
       boundaries["required"] == true && boundaries["min_items"] == 1 &&
       pressure["required"] == true && pressure["min_items"] == 5 && pressure["max_items"] == 5 &&
       ref["required"] == true && ref.fetch("validation").include?("selected design") && ref.fetch("validation").include?("rationale") && ref.fetch("validation").include?("viable alternatives") &&
@@ -1436,7 +1436,7 @@ if ruby -ryaml -e '
   response_terminal = ->(events) { events.count { |event| event["disposition"] == "active_terminal" } == 1 }
   synthetic_failure = ->(events, kind, evidence) { events.none? { |event| event["disposition"] == "active_terminal" } && %w[timeout transport schema_invalid source_mutation].include?(kind) && !evidence.empty? }
   truth = returns.fetch("status").fetch("validation")
-  valid = [input, output, handoffs, gates].all? { |schema| schema.fetch("schema_version") == "10.0" } &&
+  valid = [input, output, handoffs, gates].all? { |schema| schema.fetch("schema_version") == "11.0" } &&
     identity == final_identity && final_identity.find { |field| field["name"] == "basis" }.fetch("type") == "enum" &&
     final.fetch("final_review_snapshot_id").fetch("validation").downcase.include?("exactly equals current review_snapshot_id") &&
     manifest.fetch("scope_item_id").fetch("validation").downcase.include?("unique") && manifest.fetch("applicable_concerns").fetch("validation").downcase.include?("unique") &&
@@ -1641,7 +1641,7 @@ if ruby -ryaml -e '
     "coordinated_invalid_terminal" => ->(trial) { trial["review_batch"]["pass_attempt_ledger"][0]["attempts"][0]["terminal_state"] = "blocked"; trial["reviewer_returns"][0]["status"] = "BLOCKED"; trial["reviewer_returns"][0]["pass_completion_state"] = "blocked"; trial["reviewer_returns"][0]["verdict"] = "not_assessed"; trial["reviewer_returns"][0]["coverage_entries"] = []; trial["reviewer_returns"][0]["open_questions"] = ["blocked"] }
   }
   mutation_valid = mutations.all? { |_name, mutate| trial = duplicate.call(packet); mutate.call(trial); !packet_valid.call(trial) }
-  valid = input.fetch("schema_version") == "10.0" && handoffs.fetch("schema_version") == "10.0" && output.fetch("schema_version") == "10.0" && packet_valid.call(packet) && truth_valid && mutation_valid
+  valid = input.fetch("schema_version") == "11.0" && handoffs.fetch("schema_version") == "11.0" && output.fetch("schema_version") == "11.0" && packet_valid.call(packet) && truth_valid && mutation_valid
   exit valid ? 0 : 1
 ' "$review_input" "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"; then
     pass
@@ -1900,7 +1900,7 @@ if ruby -ryaml -rjson -e '
     actual = template.fetch("required_coverage_tuples").map { |tuple| [tuple["review_pass_id"], tuple["scope_item_id"], tuple["applicable_concern"], tuple["review_perspective"], tuple["coverage_obligation"]] }
     actual.uniq.length == actual.length && actual.sort == expected.sort
   end
-  valid = [input, output, handoffs, index].all? { |schema| schema.fetch("schema_version") == "10.0" } &&
+  valid = [input, output, handoffs, index].all? { |schema| schema.fetch("schema_version") == "11.0" } &&
     entry_names.include?("previously_fixed") && %w[persisted_v6_packet_migration persisted_v7_0_packet_invalidation persisted_v7_1_packet_invalidation persisted_v7_2_packet_invalidation].push(immediate_prior_name).all? { |name| legacy_names.include?(name) && !entry_names.include?(name) } &&
     previous.key?("aggregate_finding_id") && previous.fetch("source_finding_ids").fetch("condition").include?("producer schema 7.1") && previous.fetch("source_provenance").fetch("condition").include?("producer schema 7.1") && !previous.key?("finding_id") &&
     migration_identity == canonical_identity && invalidation_identity == canonical_identity && immediate_prior_invalidation_identity == canonical_identity &&
@@ -2041,7 +2041,7 @@ if ! ruby -ryaml -e '
     score_boundary_failures+=("output.yaml rubric_summary lost score_progression")
 fi
 for contract in index input output handoffs phase-gates; do
-    if ! grep -Fxq 'schema_version: "10.0"' "$FRAMEWORK_DIR/skills/assistant-review/contracts/$contract.yaml"; then
+    if ! grep -Fxq 'schema_version: "11.0"' "$FRAMEWORK_DIR/skills/assistant-review/contracts/$contract.yaml"; then
         score_boundary_failures+=("contracts/$contract.yaml no longer declares schema 10.0")
     fi
 done

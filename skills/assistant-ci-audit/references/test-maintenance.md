@@ -60,9 +60,10 @@ remaining proof cannot be named, record the protection as an unresolved gap and
 the test is not removed.
 
 Failed discovery is not a valid empty result. Worked case, audit F3 as at d11756d:
-`tools/cognitive-complexity/run-complexity.sh --changed --base nonexistent`
-suppresses the failed `git diff` (`2>/dev/null || true`, `:101-103`), finds no
-uncommitted `.cs` files and exits 0 with "No .cs files to analyze." (`:108-111`);
+the framework's former C# complexity script, run as
+`run-complexity.sh --changed --base nonexistent`, suppresses the failed
+`git diff` (`2>/dev/null || true`, `:101-103`), finds no uncommitted `.cs`
+files and exits 0 with "No .cs files to analyze." (`:108-111`);
 without `--base` and with neither `main` nor `master`, it silently falls back to
 `HEAD~1` (`:89-90`). An invalid requested comparison, such as a nonexistent base or
 a run outside a repository, must surface as a failure. A valid base with no `.cs`

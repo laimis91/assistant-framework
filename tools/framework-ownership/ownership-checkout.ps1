@@ -57,7 +57,7 @@ $script:OwnershipToolExactExcludes = @(
     'framework-ownership/ownership-checkout.py',
     'framework-ownership/ownership-checkout.ps1'
 )
-$script:OwnershipCodexCommonTools = @('change-impact', 'progress')
+$script:OwnershipCodexCommonTools = @('progress')
 $script:OwnershipCurrentBlockStart = '<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_START -->'
 $script:OwnershipCurrentBlockEnd = '<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_END -->'
 $script:OwnershipCurrentInstructionFiles = @{ claude = 'CLAUDE.md'; codex = 'AGENTS.md' }

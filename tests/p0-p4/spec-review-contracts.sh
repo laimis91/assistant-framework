@@ -266,7 +266,7 @@ if compact_review_error="$(ruby -ryaml -rjson -e '
   review_shape = review_rows.fetch("object_fields").map { |f| [f["name"], f["type"], f["enum_values"]] }
   # Contract shape: names, enums, conditions and on_missing.
   ident = fields["reviewer_identity"] or abort "reviewer_identity missing"
-  abort "reviewer_identity not binary for Workflow 16" unless ident["required"] == "conditional" && ident["condition"] == "fresh_review_result is recorded by a Workflow 16.0 producer" && ident["on_missing"] == "fail"
+  abort "reviewer_identity not binary for Workflow 16" unless ident["required"] == "conditional" && ident["condition"] == "fresh_review_result is recorded by a Workflow 16.0 or later producer" && ident["on_missing"] == "fail"
   abort "uncheckable author clause retained" if ident.fetch("validation").include?("authors") || fields.fetch("prior_reviewer_actor_ids").fetch("validation").include?("authors")
   idf = ident.fetch("object_fields").to_h { |f| [f["name"], f] }
   abort "reviewer_identity fields drifted" unless idf.keys == %w[actor_id native_invocation_id runtime fork_turns] && idf["fork_turns"]["enum_values"] == ["none"] && idf["fork_turns"]["condition"] == "runtime == codex" && idf["runtime"]["on_missing"] == "fail"
@@ -276,7 +276,7 @@ if compact_review_error="$(ruby -ryaml -rjson -e '
   abort "compact findings do not carry stable ids: #{findings["type"]} #{finding_keys}" unless findings["type"] == "object[]" && finding_keys == %w[aggregate_finding_id file_line description] && findings.fetch("object_fields").all? { |f| f["type"] == "string" && f["required"] == true }
   abort "findings do not hand off {aggregate_finding_id, description} rows" unless findings.fetch("validation").include?("{aggregate_finding_id, description} rows using these ids")
   abort "findings emptiness rule drifted" unless findings.fetch("validation").start_with?("Empty for a first-review PASS; on a re-review each listed finding has a closure_results row with status verified_closed.") && !findings.fetch("validation").include?("explicitly resolved findings")
-  abort "finding rows not gated on Workflow 16.0 with readable v15 strings" unless findings.fetch("description").include?("recorded by a Workflow 16.0 producer") && findings.fetch("description").include?("historical Workflow 15 string[] findings list stays readable as-is and is never certified current")
+  abort "finding rows not gated on Workflow 16.0 with readable v15 strings" unless findings.fetch("description").include?("recorded by a Workflow 16.0 or later producer") && findings.fetch("description").include?("historical Workflow 15 string[] findings list stays readable as-is and is never certified current")
   prior = fields["prior_reviewer_actor_ids"]
   abort "prior_reviewer_actor_ids shape drifted" unless prior && prior["type"] == "string[]" && prior["on_missing"] == "fail" && prior["condition"] == "The compact result is a fresh re-review after a fix"
   closure = fields["closure_results"] or abort "closure_results missing"

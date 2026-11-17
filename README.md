@@ -204,13 +204,14 @@ add a permanent architect agent or force architecture ceremony onto local work.
 ### Shared-change impact
 
 Behavior-bearing work records a compact local/shared/unresolved assessment before
-choosing verification scope. Triggered shared-impact work uses one installed
-Node 22 common checker and carries the same artifact identity through workflow,
-debugging, and review. Discovery may report gaps; completion also needs actual
-current verification and the existing assistant-review manifest/coverage result.
-The checker validates closure against supplied bounded evidence, not a universal
-runtime dependency graph. Shared fanout alone does not add Architecture Decision
-Pack, strict-lane, or QA requirements.
+choosing verification scope. Triggered shared-impact work records
+assistant-review's expanded-work checklist (no script or runtime) and carries the
+same artifact identity through workflow, debugging, and review. Discovery may
+report gaps; completion also needs actual current verification and the existing
+assistant-review manifest/coverage result, and the fresh independent reviewer
+checks the checklist result against the diff. The checklist covers supplied
+bounded evidence, not a universal runtime dependency graph. Shared fanout alone
+does not add Architecture Decision Pack, strict-lane, or QA requirements.
 
 For multi-slice work, Assistant Workflow uses descriptive outcome-oriented
 packet identifiers rather than ordinal-only labels, explicit dependencies, and
@@ -353,10 +354,6 @@ Selects proportional verification scope, methods, and TDD applicability, then as
 Triggers on: verify a change, choose tests, test strategy, assess evidence, are these checks enough
 
 ## Tools
-
-### Cognitive Complexity
-
-Roslyn-based analyzer that scores method complexity. Used by the workflow skill's quality review stage. See `tools/cognitive-complexity/`.
 
 ### Skill Validator
 
@@ -633,7 +630,6 @@ tools/
     run-skill-evals.sh             <- Provider-neutral per-skill eval fixture helper
     run-framework-instruction-evals.sh <- Provider-neutral framework instruction eval helper
     run-codex-framework-evals.sh   <- Opt-in paired Codex behavioral adapter
-  cognitive-complexity/             <- Roslyn-based complexity analyzer
   framework-ownership/
     retired-items.json             <- Inventory of retired framework items
     content-proof.json             <- Generated content fingerprints for the inventory

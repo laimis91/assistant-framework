@@ -6,34 +6,74 @@ fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 source "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"
 
-validator="$FRAMEWORK_DIR/tools/change-impact/validate-change-impact.cjs"
-protocol="$FRAMEWORK_DIR/tools/change-impact/protocol.v1.json"
-example="$FRAMEWORK_DIR/tools/change-impact/example.completion.v1.json"
-adapter="$FRAMEWORK_DIR/tests/change-impact/independent-fixture-adapter.test.cjs"
-unit_suite="$FRAMEWORK_DIR/tests/change-impact/change-impact.test.cjs"
 skill_validator="$FRAMEWORK_DIR/tools/skills/validate-skills.sh"
 
-test_start "change-impact common protocol resources are present"
-if [[ -f "$validator" && -f "$protocol" && -f "$example" && -f "$adapter" && -f "$unit_suite" ]]; then
+test_start "expanded-work checklist lives once in assistant-review and needs no script or runtime"
+if ruby - "$FRAMEWORK_DIR" <<'RUBY'
+framework = ARGV.fetch(0)
+review = File.read(File.join(framework, "skills/assistant-review/references/change-impact.md"))
+section = review[/^## Expanded-work checklist\n(.*?)(?=^## )/m, 1] or abort "review reference lacks the expanded-work checklist section"
+items = section.scan(/^(\d+)\. \*\*([^*]+)\*\*/)
+abort "checklist items drifted: #{items.inspect}" unless items.map(&:first) == %w[1 2 3 4 5 6 7 8]
+["Universe recorded.", "Consumer classes covered.", "One disposition per requirement.", "Independent expected context.", "No material unknown.", "Same artifact identity.", "Verification bound", "Review bound"].each_with_index do |name, index|
+  abort "checklist item #{index + 1} is not #{name}" unless items[index][1].start_with?(name)
+end
+%w[pass fail not_applicable checklist_result_ref].each { |term| abort "checklist omits #{term}" unless section.include?(term) }
+abort "checklist does not block on fail" unless section.include?("Any `fail` blocks the phase")
+abort "reviewer does not check the result against the diff" unless review.include?("fresh independent reviewer checks the checklist result against the diff")
+abort "review reference lacks older-packet reading" unless review.include?("## Older packets") && review.include?("validator_result_ref")
+%w[assistant-workflow assistant-debugging].each do |skill|
+  text = File.read(File.join(framework, "skills", skill, "references/change-impact.md"))
+  abort "#{skill} reference does not link the shared checklist" unless text.include?("](../../assistant-review/references/change-impact.md#expanded-work-checklist)")
+  abort "#{skill} reference lacks the older-packet note" unless text.include?("`validator_result_ref`") && text.include?("`checklist_result_ref`")
+end
+%w[assistant-workflow assistant-debugging assistant-review].each do |skill|
+  text = File.read(File.join(framework, "skills", skill, "references/change-impact.md"))
+  abort "#{skill} reference still names a script or runtime" if text =~ /validate-change-impact|tools\/change-impact|\bNode\b|--receipt/
+  abort "#{skill} reference does not say no script or runtime is needed" unless text.include?("no script or runtime is needed")
+end
+RUBY
+then
     pass
 else
-    fail "missing a common validator, protocol/example, or independent fixture adapter resource"
+    fail "expanded-work checklist, its links, or the no-runtime statement drifted"
 fi
 
-test_start "change-impact validation has an explicit Node runtime gate"
-if ! command -v node >/dev/null 2>&1; then
-    fail "Node runtime is unavailable; triggered change-impact validation is blocked and must not become a manual pass"
-elif ! node --version >/dev/null 2>&1; then
-    fail "Node runtime could not execute; triggered change-impact validation is blocked and must not install a dependency automatically"
-else
+test_start "change-impact contracts carry checklist_result_ref with a fail action and no checker receipt"
+if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
+framework = ARGV.fetch(0)
+names = []
+walk = lambda do |value, path|
+  case value
+  when Hash
+    names << [path, value] if value["name"].is_a?(String)
+    value.each { |key, child| walk.call(child, "#{path}/#{key}") }
+  when Array
+    value.each_with_index { |child, index| walk.call(child, "#{path}[#{index}]") }
+  end
+end
+found = 0
+%w[assistant-workflow assistant-debugging assistant-review].each do |skill|
+  Dir[File.join(framework, "skills", skill, "contracts/*.yaml")].sort.each do |path|
+    names.clear
+    walk.call(YAML.load_file(path), File.basename(path))
+    names.each do |where, field|
+      abort "#{skill} #{where} still declares validator_result_ref" if field["name"] == "validator_result_ref"
+      next unless field["name"] == "checklist_result_ref"
+      found += 1
+      abort "#{skill} #{where} checklist_result_ref has no fail action" unless field["on_missing"] == "fail"
+      abort "#{skill} #{where} checklist_result_ref does not describe the recorded checklist" unless field["description"].to_s.include?("checklist")
+    end
+    text = File.read(path)
+    abort "#{path} still names the Node checker" if text =~ /validate-change-impact|tools\/change-impact|Node 22|--receipt/
+  end
+end
+abort "too few checklist_result_ref carriers: #{found}" if found < 9
+RUBY
+then
     pass
-fi
-
-test_start "change-impact validator and independent source-backed adapter pass meaningful positives and negatives"
-if node --test "$unit_suite" "$adapter" >/tmp/p0p4-change-impact-node.out 2>/tmp/p0p4-change-impact-node.err; then
-    pass
 else
-    fail "change-impact Node tests failed; see /tmp/p0p4-change-impact-node.err"
+    fail "change-impact contracts still carry checker receipts or lack checklist_result_ref fail actions"
 fi
 
 test_start "change-impact source contracts validate without relying on scenario prompt text"
@@ -43,68 +83,7 @@ else
     fail "affected skill contracts failed validation; see /tmp/p0p4-change-impact-skills.err"
 fi
 
-test_start "change-impact uses canonical pre_build through protocol, runtime, and phase carriers"
-if ruby -ryaml -rjson - "$FRAMEWORK_DIR" <<'RUBY'
-framework = ARGV.fetch(0)
-field = ->(fields, name) { Array(fields).find { |item| item["name"] == name } }
-protocol = JSON.parse(File.read(File.join(framework, "tools/change-impact/protocol.v1.json")))
-abort "protocol phase enum is not canonical" unless protocol.fetch("phases").keys == %w[discovery pre_build completion]
-abort "protocol retains legacy phase spelling" if protocol.fetch("phases").key?("pre-build")
-
-%w[assistant-workflow assistant-debugging assistant-review].each do |skill|
-  input = YAML.load_file(File.join(framework, "skills", skill, "contracts/input.yaml"))
-  context = field.call(input.fetch("fields"), "change_impact_context")
-  phase = field.call(context.fetch("object_fields"), "phase")
-  abort "#{skill} input phase enum drifted" unless phase.fetch("enum_values") == %w[discovery pre_build completion]
-end
-
-%w[assistant-workflow assistant-debugging].each do |skill|
-  output = YAML.load_file(File.join(framework, "skills", skill, "contracts/output.yaml"))
-  evidence = field.call(output.fetch("artifacts"), "change_impact_evidence")
-  phase = field.call(evidence.fetch("object_fields"), "phase")
-  abort "#{skill} output phase enum drifted" unless phase.fetch("enum_values") == %w[discovery pre_build completion]
-end
-
-handoff_specs = [
-  ["assistant-workflow", "orchestrator_to_architect", %w[discovery pre_build completion]],
-  ["assistant-workflow", "orchestrator_to_code_writer", %w[pre_build]],
-  ["assistant-workflow", "orchestrator_to_builder_tester", %w[pre_build]],
-  ["assistant-debugging", "debugging_fix", %w[pre_build]],
-  ["assistant-review", "orchestrator_to_reviewer", %w[discovery pre_build completion]]
-]
-handoff_specs.each do |skill, handoff_name, expected_phases|
-  contract = YAML.load_file(File.join(framework, "skills", skill, "contracts/handoffs.yaml"))
-  handoff = contract.fetch("handoffs").find { |item| item["name"] == handoff_name }
-  evidence = field.call(handoff.fetch("context_fields"), "change_impact_evidence")
-  phase = field.call(evidence.fetch("object_fields"), "phase")
-  abort "#{skill}/#{handoff_name} handoff phase enum drifted" unless phase.fetch("enum_values") == expected_phases
-end
-
-readme = File.read(File.join(framework, "tools/change-impact/README.md"))
-abort "README command retains legacy phase spelling" if readme.include?("--phase pre-build")
-abort "README command omits canonical phase" unless readme.include?("--phase pre_build")
-validator = File.read(File.join(framework, "tools/change-impact/validate-change-impact.cjs"))
-abort "runtime phase enum drifted" unless validator.include?('new Set(["discovery", "pre_build", "completion"])')
-abort "runtime result schema or receipt reuse drifted" unless validator.include?("change-impact-validation-result/v1") && validator.include?("change-impact-validation-receipt/v1") && validator.include?("RECEIPT_SCHEMA_INVALID") && validator.include?("RECEIPT_MISMATCH")
-abort "behavior pre-build still permits no planned verification" unless validator.include?("BEHAVIOR_PREBUILD_VERIFICATION_MISSING")
-protocol_rules = protocol.fetch("identity_rules")
-abort "protocol omits receipt reuse semantics" unless protocol_rules.any? { |rule| rule.include?("--receipt") && rule.include?("canonical parsed JSON") }
-[
-  ["skills/assistant-workflow/references/change-impact.md", "--receipt validator_result_ref"],
-  ["skills/assistant-debugging/references/change-impact.md", "reuse reruns the checker with"],
-  ["skills/assistant-review/references/change-impact.md", "reuse reruns the checker with `--receipt`"]
-].each do |path, expectation|
-  content = File.read(File.join(framework, path))
-  abort "#{path} omits receipt-bound reuse" unless content.include?(expectation) && content.include?("--receipt") && content.include?("parsed inputs")
-end
-RUBY
-then
-    pass
-else
-    fail "change-impact canonical pre_build protocol, CLI, or contract carrier drifted"
-fi
-
-test_start "evidenced local behavior remains compact when Node is unavailable, while shared and unresolved paths expand"
+test_start "evidenced local behavior remains compact without a checklist, while shared and unresolved paths expand"
 local_proportionality_failures=()
 for local_contract in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml" \
@@ -126,8 +105,8 @@ for local_reference in \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/change-impact.md" \
     "$FRAMEWORK_DIR/skills/assistant-debugging/references/change-impact.md" \
     "$FRAMEWORK_DIR/skills/assistant-review/references/change-impact.md"; do
-    grep -Eqi 'local' "$local_reference" && grep -Eqi 'Node' "$local_reference" \
-        || local_proportionality_failures+=("local no-Node path absent in $local_reference")
+    grep -Eqi 'local' "$local_reference" && grep -Fq 'no script or runtime is needed' "$local_reference" \
+        || local_proportionality_failures+=("local no-runtime path absent in $local_reference")
 done
 if [[ "${#local_proportionality_failures[@]}" -eq 0 ]]; then
     pass
@@ -171,7 +150,7 @@ selector_specs.each do |skill, (output_selector_id, completion_selector_id)|
   abort "#{skill} input loses explicit expansion control" unless input_applicability.fetch("validation").include?("expanded_artifact_carried")
   abort "#{skill} output loses shared/unresolved explicit expansion control" unless output_applicability.fetch("condition").include?("shared") && output_applicability.fetch("validation").include?("expanded_artifact_carried=true")
   compact_no_checker = output_applicability.fetch("validation")
-  abort "#{skill} does not retain compact no-checker local output" unless compact_no_checker.include?("no checker") || compact_no_checker.include?("without an expanded artifact or checker refs")
+  abort "#{skill} does not retain compact no-checker local output" unless compact_no_checker.include?("no checklist") || compact_no_checker.include?("without an expanded artifact or checklist refs")
   if %w[assistant-workflow assistant-review].include?(skill)
     recovery = output_applicability.fetch("on_fail")
     recovery_artifact = skill == "assistant-review" ? "change_impact_review_projection" : "change_impact_evidence"
@@ -213,7 +192,7 @@ invariant = gates.fetch("invariants").find { |item| item["id"] == "INV_CHANGE_IM
 abort "missing workflow change-impact invariant" unless invariant
 check = invariant.fetch("check")
 abort "prepare-only does not preserve change-impact discovery identity" unless check.include?("prepare_only") && check.include?("discovery") && check.include?("artifact identity")
-abort "prepare-only still inherits implementation completion coverage" unless check.include?("execution_intent != prepare_only") && check.include?("common completion validation and assistant-review terminal coverage")
+abort "prepare-only still inherits implementation completion coverage" unless check.include?("execution_intent != prepare_only") && check.include?("a passing completion checklist result and assistant-review terminal coverage")
 RUBY
 then
     pass
@@ -401,7 +380,7 @@ review_output = load.call(File.join(framework, "skills/assistant-review/contract
   artifact_name = contract["skill"] == "assistant-review" ? "change_impact_review_projection" : "change_impact_evidence"
   envelope = field.call(contract.fetch("artifacts"), artifact_name)
   fields = envelope.fetch("object_fields")
-  result_ref = field.call(fields, "validator_result_ref")
+  result_ref = field.call(fields, "checklist_result_ref")
   blocker_ref = field.call(fields, "gap_or_blocker_ref")
   abort "valid result ref is not conditional" unless result_ref && result_ref["required"] == "conditional" && result_ref["condition"] == "status == valid"
   abort "non-valid blocker ref is not conditional" unless blocker_ref && blocker_ref["required"] == "conditional" && blocker_ref["condition"] == "status in [gaps_reported, blocked, invalid]"
@@ -417,25 +396,25 @@ review_output = load.call(File.join(framework, "skills/assistant-review/contract
       (!required || present) && enum_valid
     end
   end
-  blocked = {"artifact_identity" => "impact-1", "phase" => "discovery", "impact_scope" => "shared", "status" => "blocked", "gap_or_blocker_ref" => "node-runtime-unavailable"}
-  valid = {"artifact_identity" => "impact-1", "phase" => "discovery", "impact_scope" => "shared", "status" => "valid", "validator_result_ref" => "result.json", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json"}
+  blocked = {"artifact_identity" => "impact-1", "phase" => "discovery", "impact_scope" => "shared", "status" => "blocked", "gap_or_blocker_ref" => "checklist-item-failed"}
+  valid = {"artifact_identity" => "impact-1", "phase" => "discovery", "impact_scope" => "shared", "status" => "valid", "checklist_result_ref" => "result.json", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json"}
   if contract["skill"] == "assistant-review"
-    valid = {"artifact_identity" => "impact-1", "status" => "valid", "validator_result_ref" => "completion-result.json", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "assessment_ref" => "assessment.json", "review_projection_ref" => "review.json", "scope_manifest_id" => "manifest-1", "coverage_ledger_id" => "ledger-1", "review_snapshot_id" => "review-1", "snapshot_id" => "source-1", "canonical_final_summary_ref" => "final-summary.json"}
+    valid = {"artifact_identity" => "impact-1", "status" => "valid", "checklist_result_ref" => "completion-result.json", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "assessment_ref" => "assessment.json", "review_projection_ref" => "review.json", "scope_manifest_id" => "manifest-1", "coverage_ledger_id" => "ledger-1", "review_snapshot_id" => "review-1", "snapshot_id" => "source-1", "canonical_final_summary_ref" => "final-summary.json"}
   end
-  abort "valid output rejects complete checker evidence" unless accepts.call(valid)
+  abort "valid output rejects complete checklist evidence" unless accepts.call(valid)
   %w[gaps_reported blocked invalid].each do |status|
     payload = {"artifact_identity" => "impact-1", "phase" => "discovery", "impact_scope" => "shared", "status" => status, "gap_or_blocker_ref" => "gap.json"}
-    abort "non-valid output requires unavailable checker result" unless accepts.call(payload)
+    abort "non-valid output requires an unavailable checklist result" unless accepts.call(payload)
   end
-  abort "blocked output requires unavailable checker result" unless accepts.call(blocked)
+  abort "blocked output requires an unavailable checklist result" unless accepts.call(blocked)
   abort "blocked output accepts no blocker" if accepts.call(blocked.reject { |key, _| key == "gap_or_blocker_ref" })
-  abort "valid output accepts no checker result" if accepts.call(valid.reject { |key, _| key == "validator_result_ref" })
-  abort "valid output accepts empty checker result" if accepts.call(valid.merge("validator_result_ref" => ""))
+  abort "valid output accepts no checklist result" if accepts.call(valid.reject { |key, _| key == "checklist_result_ref" })
+  abort "valid output accepts empty checklist result" if accepts.call(valid.merge("checklist_result_ref" => ""))
   if contract["skill"] == "assistant-review"
     validation = envelope.fetch("validation")
-    abort "review output loses completion receipt semantics" unless validation.include?("validator_result_ref") && validation.include?("current valid completion validator result") && validation.include?("receipt") && validation.include?("current parsed inputs")
+    abort "review output loses completion checklist semantics" unless validation.include?("checklist_result_ref") && validation.include?("current passing completion checklist result") && validation.include?("evidence for each item") && validation.include?("checked it against the diff")
     abort "review output loses final-summary authority" unless validation.include?("final_summary coverage_complete") && validation.include?("CLEAN/ISSUES_FIXED")
-    abort "review output lacks completion result recovery" unless envelope.fetch("on_fail").include?("completion checker")
+    abort "review output lacks completion result recovery" unless envelope.fetch("on_fail").include?("fresh completion checklist result")
   end
   if contract["skill"] == "assistant-workflow"
     validation = envelope.fetch("validation")
@@ -448,11 +427,11 @@ end
   context = field.call(input.fetch("fields"), "change_impact_context")
   phase = field.call(context.fetch("object_fields"), "phase")
   assessment = field.call(context.fetch("object_fields"), "assessment_ref")
-  result_ref = field.call(context.fetch("object_fields"), "validator_result_ref")
+  result_ref = field.call(context.fetch("object_fields"), "checklist_result_ref")
   review_ref = field.call(context.fetch("object_fields"), "review_projection_ref")
   abort "#{skill} discovery phase is absent" unless phase && phase["required"] == "conditional" && phase["condition"] == "status == valid" && phase["enum_values"] == ["discovery", "pre_build", "completion"]
   abort "#{skill} discovery still fabricates assessment" unless assessment && assessment["condition"] == "status == valid and phase in [pre_build, completion]"
-  abort "#{skill} valid context omits validator result ref" unless result_ref && result_ref["required"] == "conditional" && result_ref["condition"] == "status == valid" && context.fetch("validation").include?("validator result")
+  abort "#{skill} valid context omits checklist result ref" unless result_ref && result_ref["required"] == "conditional" && result_ref["condition"] == "status == valid" && context.fetch("validation").include?("checklist result")
   abort "#{skill} completion omits review projection ref" unless review_ref && review_ref["required"] == "conditional" && review_ref["condition"] == "status == valid and phase == completion" && context.fetch("validation").include?("review projection")
   accepts_context = lambda do |payload|
     context.fetch("object_fields").all? do |schema|
@@ -460,14 +439,14 @@ end
       !required || (payload.key?(schema["name"]) && !payload[schema["name"]].to_s.empty?)
     end
   end
-  valid_context = {"artifact_identity" => "impact-1", "status" => "valid", "phase" => "pre_build", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "assessment_ref" => "assessment.json", "validator_result_ref" => "result.json"}
-  abort "#{skill} accepts valid context without result ref" if accepts_context.call(valid_context.reject { |key, _| key == "validator_result_ref" })
+  valid_context = {"artifact_identity" => "impact-1", "status" => "valid", "phase" => "pre_build", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "assessment_ref" => "assessment.json", "checklist_result_ref" => "result.json"}
+  abort "#{skill} accepts valid context without result ref" if accepts_context.call(valid_context.reject { |key, _| key == "checklist_result_ref" })
   abort "#{skill} rejects valid context with result ref" unless accepts_context.call(valid_context)
   completion_context = valid_context.merge("phase" => "completion", "review_projection_ref" => "review.json")
   abort "#{skill} rejects valid completion context with review projection" unless accepts_context.call(completion_context)
   abort "#{skill} accepts valid completion context without review projection" if accepts_context.call(completion_context.reject { |key, _| key == "review_projection_ref" })
   abort "#{skill} accepts blank completion review projection" if accepts_context.call(completion_context.merge("review_projection_ref" => ""))
-  abort "#{skill} requires review projection outside valid completion" if !accepts_context.call(valid_context) || !accepts_context.call({"artifact_identity" => "impact-1", "status" => "valid", "phase" => "discovery", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "validator_result_ref" => "result.json"})
+  abort "#{skill} requires review projection outside valid completion" if !accepts_context.call(valid_context) || !accepts_context.call({"artifact_identity" => "impact-1", "status" => "valid", "phase" => "discovery", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "checklist_result_ref" => "result.json"})
   %w[gaps_reported blocked invalid].each do |status|
     payload = {"artifact_identity" => "impact-1", "status" => status, "gap_or_blocker_ref" => "gap.json"}
     abort "#{skill} non-valid context requires result ref" unless accepts_context.call(payload)
@@ -525,7 +504,7 @@ reviewer_impact = field.call(reviewer.fetch("context_fields"), "change_impact_ev
   abort "#{role} carrier requires discovery assessment" unless assessment && assessment["condition"].include?("phase in [pre_build, completion]")
   abort "#{role} carrier rejects a carried local impact artifact" unless scope && scope["enum_values"] == canonical_scopes
   abort "#{role} completion carrier omits review projection ref" unless review_ref && review_ref["type"] == "string" && review_ref["required"] == "conditional" && review_ref["condition"] == expected_review_condition
-  abort "#{role} completion carrier loses review pointer reuse semantics" unless review_ref["validation"].to_s.include?("actual review document pointer for rerun or receipt reuse")
+  abort "#{role} completion carrier loses review pointer reuse semantics" unless review_ref["validation"].to_s.include?("actual review document pointer for the completion checklist")
 
   accepts = lambda do |payload|
     fields.all? do |schema|
@@ -543,7 +522,7 @@ reviewer_impact = field.call(reviewer.fetch("context_fields"), "change_impact_ev
     end
   end
 
-  discovery = {"artifact_identity" => "impact-1", "status" => "valid", "impact_scope" => "shared", "phase" => "discovery", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "validator_result_ref" => "result.json"}
+  discovery = {"artifact_identity" => "impact-1", "status" => "valid", "impact_scope" => "shared", "phase" => "discovery", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "checklist_result_ref" => "result.json"}
   pre_build = discovery.merge("phase" => "pre_build", "assessment_ref" => "assessment.json")
   completion = pre_build.merge("phase" => "completion", "review_projection_ref" => "review.json")
   abort "#{role} rejects valid discovery carrier" unless accepts.call(discovery)
@@ -586,11 +565,11 @@ mutation_handoffs.each do |role, (contract, handoff_name)|
   abort "#{role} carries completion review projection into a pre-build-only mutation handoff" if review_ref
   abort "#{role} permits optional pre-build assessment" unless assessment && assessment["required"] == true
   abort "#{role} permits non-valid mutation evidence" unless status && status["enum_values"] == ["valid"]
-  abort "#{role} does not require current resolved pre-build bindings" unless carrier["validation"].to_s.include?("current valid pre_build") && carrier["validation"].to_s.include?("resolve")
-  abort "#{role} permits stale pre-build evidence reuse" unless carrier.fetch("validation").include?("--receipt validator_result_ref") && carrier.fetch("validation").include?("current valid pre_build")
+  abort "#{role} does not require current resolved pre-build bindings" unless carrier["validation"].to_s.include?("passing pre_build expanded-work checklist result") && carrier["validation"].to_s.include?("resolve")
+  abort "#{role} permits stale pre-build evidence reuse" unless carrier.fetch("validation").include?("naming each checklist item with its evidence") && carrier.fetch("validation").include?("A status or result ref alone is insufficient")
   abort "BuilderTester permits evidence reuse after CodeWriter mutation" if role == "BuilderTester" && !carrier.fetch("validation").include?("BuilderTester must not reuse CodeWriter's pre-build result after earlier mutations")
 
-  valid_payload = {"phase" => "pre_build", "status" => "valid", "assessment_ref" => "assessment.json", "artifact_identity" => "impact-1", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "validator_result_ref" => "result.json", "impact_scope" => "shared"}
+  valid_payload = {"phase" => "pre_build", "status" => "valid", "assessment_ref" => "assessment.json", "artifact_identity" => "impact-1", "capture_ref" => "capture.json", "expected_context_ref" => "expected.json", "checklist_result_ref" => "result.json", "impact_scope" => "shared"}
   invalid_payloads = [
     valid_payload.merge("phase" => "discovery"),
     valid_payload.merge("phase" => "completion"),
@@ -671,35 +650,12 @@ test_start "light expanded impact requires a canonical review projection without
 expanded_fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/workflow-light-expanded-impact.XXXXXX")"
 p0p4_register_cleanup "$expanded_fixture_root"
 expanded_fixture="$expanded_fixture_root/cases.json"
-expanded_completion="$expanded_fixture_root/completion.json"
-expanded_capture="$expanded_fixture_root/capture.json"
-expanded_expected="$expanded_fixture_root/expected.json"
-expanded_assessment="$expanded_fixture_root/assessment.json"
-expanded_review="$expanded_fixture_root/review.json"
+expanded_completion="$FRAMEWORK_DIR/tests/p0-p4/fixtures/change-impact-completion-review.json"
 expanded_skill="$expanded_fixture_root/assistant-workflow"
 expanded_responses="$expanded_fixture_root/responses"
 mkdir -p "$expanded_skill/evals" "$expanded_responses/assistant-workflow"
 cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$expanded_skill/SKILL.md"
 p0p4_filter_workflow_eval_cases "$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json" "$expanded_fixture" light-pack-review-result-retains-current-snapshot
-jq '
-  .expected.review_context.scope_manifest_id = "current-scope-digest"
-  | .expected.review_context.coverage_ledger_id = "journal#final-summary/coverage_ledger"
-  | .expected.review_context.review_snapshot_id = "review-current"
-  | .expected.review_context.snapshot_id = "current-review-snapshot"
-  | .review.review_source.scope_manifest_id = "current-scope-digest"
-  | .review.review_source.coverage_ledger_id = "journal#final-summary/coverage_ledger"
-  | .review.review_source.review_snapshot_id = "review-current"
-  | .review.review_source.snapshot_id = "current-review-snapshot"
-  | .expected.review_context.required_bindings[0].scope_item_id = "workflow-terminal-evidence"
-  | .expected.review_context.required_bindings[0].coverage_concern_id = "canonical producer consumption"
-  | .review.bindings[0].scope_item_id = "workflow-terminal-evidence"
-  | .review.bindings[0].coverage_concern_id = "canonical producer consumption"
-' "$FRAMEWORK_DIR/tools/change-impact/example.completion.v1.json" >"$expanded_completion"
-jq '.capture' "$expanded_completion" >"$expanded_capture"
-jq '.expected' "$expanded_completion" >"$expanded_expected"
-jq '.assessment' "$expanded_completion" >"$expanded_assessment"
-jq '.review' "$expanded_completion" >"$expanded_review"
-node "$FRAMEWORK_DIR/tools/change-impact/validate-change-impact.cjs" --phase completion --capture "$expanded_capture" --expected "$expanded_expected" --assessment "$expanded_assessment" --review "$expanded_review" >"$expanded_fixture_root/completion-checker.log"
 jq '
   .cases[0].title = "Light expanded impact retains canonical review evidence"
   | .cases[0].setup_context = ["controller_intensity=light; risk_tier=low.", "architecture_design_mode=not_applicable.", "impact_scope=shared and expanded_artifact_carried=true; shared fanout alone does not promote Build."]
@@ -712,12 +668,11 @@ jq '
       {"operator":"equals","path":["architecture_design_mode"],"expected":"not_applicable"},
       {"operator":"equals","path":["change_impact_evidence","phase"],"expected":"completion"},
       {"operator":"equals","path":["change_impact_evidence","artifact_identity"],"expected":"capture-example-current"},
-      {"operator":"equals","path":["change_impact_evidence","validator_result_ref"],"expected":"fixture#completion-checker"},
+      {"operator":"equals","path":["change_impact_evidence","checklist_result_ref"],"expected":"fixture#completion-checklist"},
       {"operator":"equals","path":["change_impact_evidence","capture_ref"],"expected":"fixture#capture"},
       {"operator":"equals","path":["change_impact_evidence","expected_context_ref"],"expected":"fixture#expected"},
       {"operator":"equals","path":["change_impact_evidence","assessment_ref"],"expected":"fixture#assessment"},
       {"operator":"equals","path":["change_impact_evidence","review_projection_ref"],"expected":"fixture#review"},
-      {"operator":"equals","path":["change_impact_review","schema_version"],"expected":"change-impact-review/v1"},
       {"operator":"equals","path":["current_review_delegation_path","artifact","subagent_policy_state"],"expected":"delegation_triggered"},
       {"operator":"equals","path":["current_review_delegation_path","artifact","subagent_execution_mode"],"expected":"delegated"},
       {"operator":"path_absent","path":["fresh_review_result","architecture_decision_pack_review_ref"]},
@@ -734,7 +689,7 @@ jq --slurpfile completion "$expanded_completion" '
   | .risk_tier = "low"
   | .expanded_artifact_carried = true
   | .architecture_design_mode = "not_applicable"
-  | .change_impact_evidence = {artifact_identity:"capture-example-current",phase:"completion",impact_scope:"shared",validator_result_ref:"fixture#completion-checker",status:"valid",capture_ref:"fixture#capture",expected_context_ref:"fixture#expected",assessment_ref:"fixture#assessment",review_projection_ref:"fixture#review"}
+  | .change_impact_evidence = {artifact_identity:"capture-example-current",phase:"completion",impact_scope:"shared",checklist_result_ref:"fixture#completion-checklist",status:"valid",capture_ref:"fixture#capture",expected_context_ref:"fixture#expected",assessment_ref:"fixture#assessment",review_projection_ref:"fixture#review"}
   | .change_impact_review = $completion[0].review
   | .current_review_delegation_path.artifact.subagent_policy_state = "delegation_triggered"
   | .current_review_delegation_path.artifact.subagent_execution_mode = "delegated"
@@ -743,12 +698,6 @@ jq --slurpfile completion "$expanded_completion" '
 ' "$expanded_response" >"$expanded_response.rewritten" && mv "$expanded_response.rewritten" "$expanded_response"
 run_light_expanded_fixture() {
     local expected="$2"
-    jq '.change_impact_review' "$expanded_response" >"$expanded_fixture_root/candidate-review.json"
-    if ! node "$FRAMEWORK_DIR/tools/change-impact/validate-change-impact.cjs" --phase completion --capture "$expanded_capture" --expected "$expanded_expected" --assessment "$expanded_assessment" --review "$expanded_fixture_root/candidate-review.json" >"$expanded_fixture_root/candidate-checker.log"; then
-        [[ "$expected" == FAIL ]] && return 0
-        cat "$expanded_fixture_root/candidate-checker.log" >&2
-        return 1
-    fi
     if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$expanded_responses" --skill "$expanded_skill" >"$expanded_fixture_root/runner.out" 2>&1; then
         [[ "$expected" == PASS ]]
     else
@@ -766,7 +715,7 @@ for mutation in \
     'del(.change_impact_evidence.capture_ref)' \
     '.current_final_batch.final_snapshot_identity.value = "foreign-current-snapshot"' \
     '.current_review_delegation_path.artifact.subagent_execution_mode = "not_applicable"' \
-    '.change_impact_review.bindings[0].scope_item_id = "foreign-scope"'; do
+    'del(.change_impact_evidence.checklist_result_ref)'; do
     jq "$mutation" "$expanded_response" >"$expanded_response.mutated"
     mv "$expanded_response.mutated" "$expanded_response"
     if ! run_light_expanded_fixture "$expanded_response" FAIL; then
@@ -775,7 +724,7 @@ for mutation in \
     build_workflow_review_lifecycle_eval_response light-pack-review-result-retains-current-snapshot "$expanded_response" "$expanded_summary"
     jq --slurpfile completion "$expanded_completion" '
       .impact_scope = "shared" | .controller_intensity = "light" | .risk_tier = "low" | .expanded_artifact_carried = true | .architecture_design_mode = "not_applicable"
-      | .change_impact_evidence = {artifact_identity:"capture-example-current",phase:"completion",impact_scope:"shared",validator_result_ref:"fixture#completion-checker",status:"valid",capture_ref:"fixture#capture",expected_context_ref:"fixture#expected",assessment_ref:"fixture#assessment",review_projection_ref:"fixture#review"}
+      | .change_impact_evidence = {artifact_identity:"capture-example-current",phase:"completion",impact_scope:"shared",checklist_result_ref:"fixture#completion-checklist",status:"valid",capture_ref:"fixture#capture",expected_context_ref:"fixture#expected",assessment_ref:"fixture#assessment",review_projection_ref:"fixture#review"}
       | .change_impact_review = $completion[0].review
       | .current_review_delegation_path.artifact.subagent_policy_state = "delegation_triggered"
       | .current_review_delegation_path.artifact.subagent_execution_mode = "delegated"

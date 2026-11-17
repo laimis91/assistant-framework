@@ -37,9 +37,6 @@ python3 tools/skills/check-skill-containment.py
 
 # Contract suites
 ./tests/test-p0-p4-contracts.sh
-
-# Cognitive complexity tool
-dotnet build tools/cognitive-complexity/CognitiveComplexity.csproj --tl:on -v:minimal
 ```
 
 Codex execution policies live in `codex-rules/`; do not weaken permission prompts or destructive-operation safeguards. C# code targets modern .NET and follows the existing Clean Architecture style. Tests use descriptive names and Arrange-Act-Assert where applicable.

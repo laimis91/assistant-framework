@@ -7,7 +7,7 @@
 # The review loop has 4 steps per round plus entry and exit conditions.
 # These gates enforce correct sequencing within each round and across the loop.
 
-schema_version: "10.0"
+schema_version: "11.0"
 contract: phase-gates
 skill: assistant-review
 
@@ -44,7 +44,7 @@ gates:
         on_fail: "Keep the audit/fix result incomplete; load references/change-impact.md and record valid applicability before dispatch or expanded-scope selection."
 
       - id: E_CHANGE_IMPACT
-        check: "When impact is shared or materially unresolved, or an expanded artifact is explicitly carried, discovery requires identity/capture/expected refs; assessment is required only for pre-build or completion. The batch scope/coverage obligations include an independent locality, captured-consumer, material-transition, and canonical-mapping challenge. Evidenced local work retains ordinary review obligations without a common-checker gate."
+        check: "When impact is shared or materially unresolved, or an expanded artifact is explicitly carried, discovery requires identity/capture/expected refs; assessment is required only for pre-build or completion. The batch scope/coverage obligations include an independent locality, captured-consumer, material-transition, and canonical-mapping challenge. Evidenced local work retains ordinary review obligations without a checklist gate."
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         on_fail: "Keep the audit/fix result incomplete, load references/change-impact.md, and repair or report the missing evidence before dispatch."
 
@@ -251,7 +251,7 @@ gates:
         on_fail: "Stop before source/test mutation or dispatch. Return uncovered verification needs to the composing workflow to invoke assistant-verification, resolve approval and impact state, and bind a consistent packet-local TDD decision. For active TDD, return the current finding and exact decision/selected-check/binding context to the Build owner and wait for assistant-tdd completion before fresh Review. Reuse a sufficient current decision without reselection; wait for any required reapproval."
 
       - id: F_CHANGE_IMPACT_PREBUILD
-        check: "Before any source/test mutation or mutation dispatch, a review-fix with triggered shared, unresolved, or expanded impact runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs for bounded planned obligations, consumer union, and material transitions."
+        check: "Before any source/test mutation or mutation dispatch, a review-fix with triggered shared, unresolved, or expanded impact records a passing pre_build expanded-work checklist result (checklist_result_ref) against referenced capture, independent expected context, and assessment, covering bounded planned obligations, consumer union, and material transitions."
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         on_fail: "Do not edit source, write a regression test, or dispatch a fixer; repair the pre-build assessment or return the review-fix as blocked/remaining."
     exit_assertions:
@@ -293,9 +293,9 @@ gates:
         on_fail: "Fix failing tests before incrementing round"
 
       - id: V3
-        check: "For C# projects: cognitive complexity analysis was run on changed files"
-        condition: "project is C# and complexity tool is available"
-        on_fail: "Run complexity analysis and flag methods exceeding threshold"
+        check: "Each changed function with nested branches or loops that the reviewer flags as hard to follow carries a cognitive-complexity estimate from references/cognitive-complexity.md, and no finding rests on that estimate alone as blocking"
+        condition: "the reviewed change adds or edits executable code"
+        on_fail: "Estimate the flagged functions with references/cognitive-complexity.md, show the counted lines, and downgrade any finding that rests only on the estimate to should-fix"
 
       - id: V4
         check: "After any source fix, invalidate the current batch and refresh build_test_verification_ref.evidence_ref to current passed selected/binding verification with canonical decision, assessment, results, exclusions, and source binding before every pass in the next frozen-snapshot batch; not_applicable is absent. For active TDD, require the actual complete current assistant-tdd cycle_log for the same decision and selected/applicable ID, including right-reason authorizing RED and passing GREEN and REFACTOR invocations, before that batch."
@@ -372,7 +372,7 @@ gates:
         on_fail: "Keep the compatible machine enum, replace the user-facing certainty claim with the required evidence-bounded wording, and state residual risk."
 
       - id: X_CHANGE_IMPACT
-        check: "When change-impact accounting is triggered, a current review projection maps the same artifact identity to the original canonical scope_manifest, coverage_ledger, current snapshot, and concern bindings. Common completion validation, final_summary coverage_complete, and CLEAN/ISSUES_FIXED remain independently required; a read-only audit reports gaps rather than manufacturing a clean claim."
+        check: "When change-impact accounting is triggered, a current review projection maps the same artifact identity to the original canonical scope_manifest, coverage_ledger, current snapshot, and concern bindings. A passing completion checklist result checked against the diff by the fresh independent reviewer, final_summary coverage_complete, and CLEAN/ISSUES_FIXED remain independently required; a read-only audit reports gaps rather than manufacturing a clean claim."
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         on_fail: "Retain HAS_REMAINING_ITEMS/BLOCKED or audit gaps, refresh the canonical review batch, and rebuild the projection."
 

@@ -21,3 +21,8 @@ Migration 9.0 to 10.0: current producers never emit `direct_fallback`,
 only on records that explicitly declare 9.0 with the original binding.
 They remain readable and deduplicable; a new current review requires fresh v10
 authority rather than relabelling retained evidence.
+Migration 10.0 to 11.0: only the change-impact evidence pointer changed
+(`validator_result_ref` became `checklist_result_ref`; see
+[change-impact.md](change-impact.md#older-packets)). A 10.0 snapshot, review
+result or authority stays current; 10.0 references in the older migration steps
+above mean "10.0 or later".

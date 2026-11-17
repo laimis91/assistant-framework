@@ -118,7 +118,7 @@ rubric_scores:
 ```
 
 ## Complexity check
-For C# projects, note in your findings that cognitive complexity analysis should be run by the orchestrator during the VERIFY step (`bash ~/.claude/tools/cognitive-complexity/run-complexity.sh --changed`). If complexity results are provided to you as context, flag methods exceeding the threshold as SHOULD-FIX items with a recommendation to extract or simplify.
+For changed functions with nested branches or loops, estimate cognitive complexity by hand with the assistant-review skill's `references/cognitive-complexity.md` method (SonarSource rules, any language, no tool needed). Show the counted lines. Around 15 is a pointer, not a gate: report a hard-to-follow function as a SHOULD-FIX item with a recommendation to extract or simplify, never as blocking on the estimate alone.
 
 ## Constraints
 - **Architecture Decision Pack (when supplied)**: Review source/revision freshness, facts/assumptions, invalidators, ownership/lifecycle/dependency boundary, control/early-exit behavior, ownership/disposal, resource envelope, extension registration, representative path, and compatibility/rollback. Flag erased domain/public/lifecycle/unit/extension semantics behind generic strings, numbers, collections, or callbacks unless an explicit primitive exception and conversion/validation boundary is documented. Do not approve memory, performance, or extensibility claims without workload, budget/threshold or explicit unknown, measurement, and failure condition; return `architecture_decision_pack_checks` scoped to the current decision.

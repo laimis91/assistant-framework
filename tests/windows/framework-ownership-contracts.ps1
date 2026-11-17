@@ -440,7 +440,7 @@ function Get-FrameworkItemsLeft {
         if (Test-Path -LiteralPath (Join-Path (Join-Path $AgentHome 'tools') $name)) { [void]$left.Add("tools/$name") }
     }
     if ($Agent -eq 'codex') {
-        foreach ($name in @('change-impact', 'progress')) {
+        foreach ($name in @('progress')) {
             if (Test-Path -LiteralPath (Join-Path (Join-Path (Join-Path $TestHome.Home '.agents') 'tools') $name)) { [void]$left.Add("<agents_tools>/$name") }
         }
     }
@@ -1460,8 +1460,7 @@ Invoke-Contract 'uninstall of a home with no framework is a no-op' {
 Invoke-Contract 'uninstall of a used tool directory' {
     $h = New-TestHome
     [void](Invoke-TestInstall $h 'claude')
-    $tool = Join-Path (Get-AgentHome $h 'claude') 'tools/cognitive-complexity'
-    if (-not [System.IO.Directory]::Exists($tool)) { $tool = Join-Path (Get-AgentHome $h 'claude') 'tools/progress' }
+    $tool = Join-Path (Get-AgentHome $h 'claude') 'tools/progress'
     foreach ($name in @('bin/Debug/x.dll', 'obj/project.assets.json', '.publish/run', '__pycache__/x.cpython-39.pyc', 'loose.cpython-39.pyc')) { Write-TestBytes (Join-Path $tool $name) ([byte[]](0, 98, 10)) }
     $result = Invoke-ConfirmedUninstall $h 'claude'
     Assert-Equal 0 $result.Code ($result.Out + $result.Err)

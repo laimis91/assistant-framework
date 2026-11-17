@@ -4,7 +4,7 @@
 # including trivial/small scope, whose light review plans one fresh pass covering both concerns. Current review and required independent QA use
 # newly created actors; explicit historical v9 fallback keeps its original authority.
 
-schema_version: "10.0"
+schema_version: "11.0"
 contract: handoffs
 skill: assistant-review
 # pre-10.0 migration: persisted 6.0 and incompatible 7.0/7.1/7.2/8.0 packets are invalidated and
@@ -538,7 +538,7 @@ handoffs:
         required: conditional
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         description: "Pass-local pointer for independently challenging locality, captured consumers, transitions, and mapping gaps."
-        validation: "Preserves artifact_identity, impact_scope, status, and phase. valid carries current capture/expected/checker refs and assessment only for pre-build or completion. Completion carries the actual review document pointer for rerun or receipt reuse; gaps_reported, blocked, or invalid carries a gap_or_blocker_ref and remains independently challengeable. It provides no sibling output or alternate ledger."
+        validation: "Preserves artifact_identity, impact_scope, status, and phase. valid carries current capture/expected/checklist refs and assessment only for pre-build or completion. Completion carries the actual review document pointer for the completion checklist and independent review; gaps_reported, blocked, or invalid carries a gap_or_blocker_ref and remains independently challengeable. It provides no sibling output or alternate ledger."
         object_fields:
           - {name: artifact_identity, type: string, required: true}
           - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
@@ -547,12 +547,12 @@ handoffs:
           - {name: capture_ref, type: string, required: conditional, condition: "status == valid"}
           - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
           - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
-          - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
+          - {name: checklist_result_ref, type: string, required: conditional, condition: "status == valid", description: "Recorded change-impact checklist result: each expanded-work checklist item with pass, fail or not_applicable and its evidence ref (assistant-review references/change-impact.md)", on_missing: fail}
           - name: review_projection_ref
             type: string
             required: conditional
             condition: "status == valid and phase == completion"
-            validation: "Completion carries the actual review document pointer for rerun or receipt reuse."
+            validation: "Completion carries the actual review document pointer for the completion checklist and independent review."
           - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
 
       - name: coverage_obligations

@@ -28,13 +28,17 @@ from pathlib import Path
 
 
 _progress_spec = importlib.util.spec_from_file_location(
-    "assistant_shared_progress", Path(__file__).resolve().parents[3] / "tools/progress/stagnation.py")
+    "assistant_shared_progress", Path(__file__).resolve().parent / "stagnation.py")
 PROGRESS = importlib.util.module_from_spec(_progress_spec)
 sys.modules[_progress_spec.name] = PROGRESS
 _progress_spec.loader.exec_module(PROGRESS)
 
 
 MAX_BYTES = 2 * 1024 * 1024
+# Current assistant-review producers. Review 11.0 changed only change-impact
+# envelopes (the Node checker receipt became a prose checklist result); its
+# review authority facts keep the 10.0 shape, so both are current.
+CURRENT_REVIEW_PRODUCERS = frozenset(("10.0", "11.0"))
 MAX_PACKETS = 256
 class PacketExecutionState(str, Enum):
     PENDING = "PENDING"
@@ -1545,9 +1549,9 @@ def require_builder_actors_resolved(context, path):
 
 
 def require_distinct_review_authorities(facts, path):
-    """Each current v10 review authority is a different native actor/invocation/dispatch."""
+    """Each current v10/v11 review authority is a different native actor/invocation/dispatch."""
     for ref, fact in facts.items():
-        if fact.get("producer_version") != "10.0":
+        if fact.get("producer_version") not in CURRENT_REVIEW_PRODUCERS:
             continue
         exact_actor_id(fact.get("actor_id"), path)
         for other_ref, other in facts.items():
@@ -1597,7 +1601,7 @@ def validate_review_authority(ref, subject, plan, context, snapshot=None):
     require(isinstance(authorities, dict) and ref in authorities, "review_authority", subject + ".review_ref",
             subject + "_review_missing: the referenced current review is not retained in review_authorities")
     fact = object_value(authorities[ref], subject)
-    require(fact.get("review_subject") == subject and fact.get("producer_version") == "10.0"
+    require(fact.get("review_subject") == subject and fact.get("producer_version") in CURRENT_REVIEW_PRODUCERS
             and fact.get("result") in {"CLEAN", "ISSUES_FIXED"} and fact.get("coverage_complete") is True
             and (subject == "plan" or fact.get("approved_plan_identity") == plan["approved_plan_identity"])
             and fact.get("canonical_review_ref") == ref,
@@ -1666,7 +1670,7 @@ def validate_completion_authority(gate, terminal, plan, context, snapshot):
                 and fact.get("subagent_execution_mode") in {"delegated", "direct_fallback"},
                 "review_authority", gate, "Historical completion needs original approval/provenance and actual original policy")
     else:
-        require(version == "10.0" and fact.get("approved_plan_identity") == plan["approved_plan_identity"]
+        require(version in CURRENT_REVIEW_PRODUCERS and fact.get("approved_plan_identity") == plan["approved_plan_identity"]
                 and fact.get("validation_status") == "validated"
                 and fact.get("subagent_execution_mode") == "delegated",
                 "review_authority", gate, "Current acceptance needs validated fresh native authority independently of plan review")
@@ -1681,7 +1685,7 @@ def validate_completion_authority(gate, terminal, plan, context, snapshot):
         require(len(criteria) == len(set(criteria)) and len(observed) == len(set(observed))
                 and set(observed) == set(criteria) and fact.get("acceptance_source_ref") == source,
                 "review_authority", gate, "Actual QA coverage must exactly match independently accepted scoped criteria")
-    elif version == "10.0":
+    elif version in CURRENT_REVIEW_PRODUCERS:
         validate_review_authority(ref, "acceptance", plan, context, snapshot)
     return fact
 

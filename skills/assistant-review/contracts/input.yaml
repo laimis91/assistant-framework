@@ -3,7 +3,7 @@
 # omit empty/internal sections; frozen snapshots, independent passes, coverage,
 # verification, authorization, and the shared semantic guard apply to every selected review.
 
-schema_version: "10.0"
+schema_version: "11.0"
 contract: input
 skill: assistant-review
 
@@ -39,7 +39,7 @@ fields:
     type: object
     required: false
     description: "Common change-impact artifact and independent expected authority for a review with shared, unresolved, or explicitly carried expanded impact."
-    validation: "Uses artifact identity, refs, validator result when valid, and review scope; valid completion resolves the review projection to the actual review document. Read-only audit may report gaps but cannot claim CLEAN from expanded impact evidence."
+    validation: "Uses artifact identity, refs, checklist result when valid, and review scope; valid completion resolves the review projection to the actual review document. Read-only audit may report gaps but cannot claim CLEAN from expanded impact evidence."
     object_fields:
       - {name: artifact_identity, type: string, required: true}
       - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
@@ -48,7 +48,7 @@ fields:
       - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
       - {name: review_projection_ref, type: string, required: conditional, condition: "status == valid and phase == completion"}
-      - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: checklist_result_ref, type: string, required: conditional, condition: "status == valid", description: "Recorded change-impact checklist result: each expanded-work checklist item with pass, fail or not_applicable and its evidence ref (assistant-review references/change-impact.md)", on_missing: fail}
       - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
     default: null
     on_missing: infer
@@ -606,8 +606,8 @@ fields:
     type: object
     required: conditional
     condition: "persisted review packet was created under v6"
-    description: "v6 to producer 10.0 migration."
-    validation: "Invalidate v6 and rebuild from a freshly rehashed 10.0 snapshot; block CLEAN/ISSUES_FIXED. Retain raw history and preserve each complete identity tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with it and missing source_provenance with review_pass:persisted-v6-migration. Missing aggregate_finding_id: SHA-256 UTF-8 NFC(description) into legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use the base; every colliding record appends :<ordinal> by packet order from 1. Before closure, source_finding_ids uses that ID with review_pass:persisted-v6-migration provenance only when each field is missing."
+    description: "v6 to producer 11.0 migration."
+    validation: "Invalidate v6 and rebuild from a freshly rehashed 11.0 snapshot; block CLEAN/ISSUES_FIXED. Retain raw history and preserve each complete identity tuple unchanged. For a partial tuple, preserve a supplied aggregate_finding_id and fill only missing source_finding_ids with it and missing source_provenance with review_pass:persisted-v6-migration. Missing aggregate_finding_id: SHA-256 UTF-8 NFC(description) into legacy-v6:<fixed_in_round>:<first-24-hex>. Non-colliding records use the base; every colliding record appends :<ordinal> by packet order from 1. Before closure, source_finding_ids uses that ID with review_pass:persisted-v6-migration provenance only when each field is missing."
     on_missing: fail
     object_fields:
       - name: source_schema_version
@@ -624,7 +624,7 @@ fields:
       - name: rebuilt_snapshot_identity
         type: object
         required: true
-        description: "Fresh 10.0 identity."
+        description: "Fresh 11.0 identity."
         object_fields:
           - name: basis
             type: enum
@@ -806,9 +806,9 @@ fields:
     type: enum
     required: conditional
     condition: "Current Review return, terminal barrier or aggregate accounting authority"
-    enum_values: ["10.0", "9.0"]
+    enum_values: ["11.0", "10.0", "9.0"]
     description: "Explicit producer label on each return authority and on terminal/aggregate authority; every return authority equals the top-level label"
-    validation: "Current producers declare 10.0. 9.0 is a historical reader label valid only with historical_dispatch_binding. A missing label never downgrades to 9.0, and a 9.0 top-level label with any 10.0 return authority is relabelling."
+    validation: "Current producers declare 11.0; a 10.0 label stays current because 11.0 changed only the change-impact evidence pointer. 9.0 is a historical reader label valid only with historical_dispatch_binding. A missing label never downgrades to 9.0, and a 9.0 top-level label with any 10.0 or 11.0 return authority is relabelling."
     on_missing: fail
     on_fail: "Block validation and re-resolve the retained native producer label; never infer it from the payload."
   - name: historical_dispatch_binding

@@ -39,10 +39,11 @@ remain controlling. Optional agents cannot bypass any boundary.
 ## Expanded-impact mutation authorization
 
 Before any source/test mutation, including a regression-test write, or any
-mutation dispatch, run or revalidate the common checker against the referenced
-capture, independent expected context, and assessment for shared, unresolved,
-or explicitly expanded impact. The current valid `pre_build` result must resolve
-against the task packet; a status or result ref alone is insufficient. Reuse is
+mutation dispatch, record a passing `pre_build` expanded-work checklist result
+(assistant-review `references/change-impact.md`) against the referenced capture,
+independent expected context, and assessment for shared, unresolved, or
+explicitly expanded impact. The result must resolve against the task packet; a
+status or `checklist_result_ref` alone is insufficient. Reuse is
 allowed only for demonstrably current same-input evidence.
 
 After an earlier mutation, refresh this evidence before each subsequent

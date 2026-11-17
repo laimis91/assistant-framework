@@ -522,9 +522,8 @@ def install_runner(target):
     shutil.copytree(root / "tools/evals", target / "tools/evals")
     shutil.copytree(root / "tools/progress", target / "tools/progress")
 def install_workflow(target):
-    shutil.copytree(root / "tools/progress", target.parent.parent / "tools/progress", dirs_exist_ok=True)
     target.mkdir(parents=True, exist_ok=True)
-    for relative in ("SKILL.md", "evals/cases.json", "scripts/task-packet-admission.py"):
+    for relative in ("SKILL.md", "evals/cases.json", "scripts/task-packet-admission.py", "scripts/stagnation.py"):
         destination = target / relative; destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / "skills/assistant-workflow" / relative, destination)
     shutil.copytree(root / "skills/assistant-workflow/contracts", target / "contracts", dirs_exist_ok=True)
@@ -1051,13 +1050,17 @@ shapes = packets.map { |f| f.fetch('object_fields').find { |x| x['name'] == 'wri
 raise 'selection drift/missing' if shapes.any?(&:nil?) || shapes.uniq.length != 1
 shape = shapes.first
 raise 'legacy omission broken' unless shape['required'] == 'conditional' && shape['condition'].include?('legacy packets')
-raise 'version changed' unless [h,o].all? { |d| d['schema_version'] == '16.0' }
+raise 'version changed' unless [h,o].all? { |d| d['schema_version'] == '17.0' }
 canonical_versions = o.fetch('artifacts').find { |f| f['name'] == 'plan_schema_version' }.fetch('enum_values')
 gates = YAML.load_file("#{root}/skills/assistant-workflow/contracts/phase-gates.yaml")
 p1 = gates.fetch('gates').find { |g| g['phase'] == 'PLAN' }.fetch('exit_assertions').find { |g| g['id'] == 'P1' }
 gate_version = p1.fetch('check')[/\bplan_schema_version=(\d+\.\d+)\b/, 1]
 producer_version = File.read("#{root}/skills/assistant-workflow/references/plan-template.md")[/New producers store `plan_schema_version: "([^"]+)"`/, 1]
-raise 'Plan gate/producer/output canonical version drift' unless canonical_versions == [o.fetch('schema_version')] && canonical_versions == [gate_version] && gate_version == producer_version
+# Workflow 17.0 kept plan_schema_version 16.0 (no plan field changed), so the plan
+# schema is pinned on its own and its decoupling must stay documented.
+legacy = File.read("#{root}/skills/assistant-workflow/references/legacy-compatibility.md")
+raise 'Plan gate/producer/output canonical version drift' unless canonical_versions == ['16.0'] && canonical_versions == [gate_version] && gate_version == producer_version
+raise 'plan/contract version decoupling undocumented' unless o.fetch('schema_version') == '17.0' && legacy.include?('v16 → v17 (contract set only)') && legacy.include?('plan_schema_version')
 fields = shape.fetch('object_fields').to_h { |f| [f['name'],f] }
 raise 'normal identity widened' unless fields.fetch('agent')['enum_values'] == %w[intelligent-writer mechanical-writer]
 eligibility = fields.fetch('mechanical_eligibility')

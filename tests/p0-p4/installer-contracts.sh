@@ -75,7 +75,8 @@ if HOME="$INSTALL_HOME" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill a
             && grep -Fq "Keep orchestration proportional" "$agents_file" \
             && grep -Fq "including when no skill matches" "$agents_file" \
             && cmp -s "$FRAMEWORK_DIR/tools/progress/operating-guidance.md" "$INSTALL_HOME/.codex/tools/progress/operating-guidance.md" \
-            && cmp -s "$FRAMEWORK_DIR/tools/progress/stagnation.py" "$INSTALL_HOME/.codex/tools/progress/stagnation.py" \
+            && cmp -s "$FRAMEWORK_DIR/tools/progress/wire-boundary.md" "$INSTALL_HOME/.codex/tools/progress/wire-boundary.md" \
+            && [[ ! -e "$INSTALL_HOME/.codex/tools/progress/stagnation.py" ]] \
             && grep -Fq "approve a plan before medium+ or elevated-risk development edits" "$agents_file" \
             && grep -Fq "Stop for the user only to:" "$agents_file" \
             && grep -Fq "Use subagents when the user asks or applicable project or skill instructions require them; no separate spawn consent is needed." "$agents_file" \
@@ -805,7 +806,7 @@ else
     fail "Codex --no-hooks install failed; see /tmp/p0p4-install-codex-no-hooks.err"
 fi
 
-test_start "selective debugging and review installs ship an executable common change-impact checker"
+test_start "selective debugging and review installs resolve the expanded-work checklist without workflow or a checker tool"
 CHANGE_IMPACT_INSTALL_ROOT="$(mktemp -d)"
 p0p4_register_cleanup "$CHANGE_IMPACT_INSTALL_ROOT"
 change_impact_install_failure=""
@@ -813,16 +814,17 @@ for change_impact_skill in assistant-debugging assistant-review; do
     change_impact_home="$CHANGE_IMPACT_INSTALL_ROOT/$change_impact_skill home [isolated]"
     change_impact_case="$change_impact_home/change impact fixture"
     change_impact_skill_file="$change_impact_home/.codex/skills/$change_impact_skill/SKILL.md"
-    change_impact_tool="$(dirname "$change_impact_skill_file")/../../tools/change-impact/validate-change-impact.cjs"
-    change_impact_protocol="$(dirname "$change_impact_skill_file")/../../tools/change-impact/protocol.v1.json"
-    change_impact_example="$(dirname "$change_impact_skill_file")/../../tools/change-impact/example.completion.v1.json"
+    change_impact_checklist="$change_impact_home/.codex/skills/assistant-review/references/change-impact.md"
     change_impact_reference="$change_impact_home/.codex/skills/$change_impact_skill/references/change-impact.md"
     mkdir -p "$change_impact_case"
     if ! HOME="$change_impact_home" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill "$change_impact_skill" --no-hooks >/tmp/p0p4-change-impact-${change_impact_skill}.out 2>/tmp/p0p4-change-impact-${change_impact_skill}.err; then
         change_impact_install_failure="$change_impact_skill selective install failed"
         break
-    elif [[ ! -f "$change_impact_skill_file" || ! -f "$change_impact_tool" || ! -f "$change_impact_protocol" || ! -f "$change_impact_example" || ! -f "$(dirname "$change_impact_skill_file")/../../tools/progress/operating-guidance.md" || ! -f "$(dirname "$change_impact_skill_file")/../../tools/progress/stagnation.py" ]]; then
-        change_impact_install_failure="$change_impact_skill selective install omitted common validator resources at the path resolved from its loaded SKILL.md"
+    elif [[ ! -f "$change_impact_skill_file" || ! -f "$(dirname "$change_impact_skill_file")/references/operating-guidance.md" ]]; then
+        change_impact_install_failure="$change_impact_skill selective install omitted its skill-local operating guidance"
+        break
+    elif [[ -e "$change_impact_home/.codex/tools/change-impact" || -e "$change_impact_home/.agents/tools/change-impact" ]]; then
+        change_impact_install_failure="$change_impact_skill selective install still ships the retired change-impact checker"
         break
     elif ! cmp -s "$FRAMEWORK_DIR/docs/lifecycle-verification.md" "$(dirname "$change_impact_skill_file")/references/lifecycle-verification.md" \
         || ! grep -Eq "references/lifecycle-verification.md|lifecycle_reviewer_context" "$change_impact_skill_file" \
@@ -833,8 +835,13 @@ for change_impact_skill in assistant-debugging assistant-review; do
         change_impact_install_failure="standalone review acquired a verification dependency solely for guidance"
         break
     elif [[ -d "$change_impact_home/.codex/skills/assistant-workflow" || ! -f "$change_impact_reference" ]] \
-        || ! grep -Fq '../../tools/change-impact/validate-change-impact.cjs' "$change_impact_reference"; then
-        change_impact_install_failure="$change_impact_skill did not resolve the installed common checker without workflow"
+        || [[ ! -f "$change_impact_checklist" ]] \
+        || ! grep -Fq '## Expanded-work checklist' "$change_impact_checklist"; then
+        change_impact_install_failure="$change_impact_skill did not resolve the installed expanded-work checklist without workflow"
+        break
+    elif [[ "$change_impact_skill" == "assistant-debugging" ]] \
+        && ! grep -Fq '](../../assistant-review/references/change-impact.md#expanded-work-checklist)' "$change_impact_reference"; then
+        change_impact_install_failure="assistant-debugging reference does not link the installed review checklist"
         break
     elif [[ "$change_impact_skill" == "assistant-debugging" && ! -f "$change_impact_home/.codex/skills/assistant-review/SKILL.md" ]]; then
         change_impact_install_failure="assistant-debugging selective installation omitted its canonical assistant-review producer"
@@ -847,33 +854,6 @@ for change_impact_skill in assistant-debugging assistant-review; do
         break
     elif [[ "$change_impact_skill" == "assistant-review" ]] && { [[ -d "$change_impact_home/.codex/skills/assistant-debugging" ]] || [[ -d "$change_impact_home/.codex/skills/assistant-workflow" ]]; }; then
         change_impact_install_failure="assistant-review selective installation copied an unrelated consumer"
-        break
-    elif ! node -e 'const fs=require("node:fs"); const source=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); const target=process.argv[2]; for (const [name, value] of Object.entries(source)) fs.writeFileSync(`${target}/${name}.json`, JSON.stringify(value));' "$FRAMEWORK_DIR/tools/change-impact/example.completion.v1.json" "$change_impact_case"; then
-        change_impact_install_failure="$change_impact_skill could not materialize the valid checker fixture"
-        break
-    elif ! node "$change_impact_tool" --phase completion --capture "$change_impact_case/capture.json" --expected "$change_impact_case/expected.json" --assessment "$change_impact_case/assessment.json" --review "$change_impact_case/review.json" >/tmp/p0p4-change-impact-${change_impact_skill}-valid.out; then
-        change_impact_install_failure="$change_impact_skill installed checker rejected its valid protocol example"
-        break
-    elif ! node -e 'const fs=require("node:fs"); const p=process.argv[1]; const value=JSON.parse(fs.readFileSync(p,"utf8")); const edge=value.edges.pop(); value.requirements=value.requirements.filter((requirement) => requirement.edge_id !== edge.id); fs.writeFileSync(p,JSON.stringify(value));' "$change_impact_case/capture.json"; then
-        change_impact_install_failure="$change_impact_skill could not materialize the consumer-omission fixture"
-        break
-    elif node "$change_impact_tool" --phase completion --capture "$change_impact_case/capture.json" --expected "$change_impact_case/expected.json" --assessment "$change_impact_case/assessment.json" --review "$change_impact_case/review.json" >/tmp/p0p4-change-impact-${change_impact_skill}-consumer-omission.out; then
-        change_impact_install_failure="$change_impact_skill installed checker accepted a capture missing a known consumer"
-        break
-    elif ! grep -Fq 'CAPTURE_EXPECTED_EDGES_MISMATCH' /tmp/p0p4-change-impact-${change_impact_skill}-consumer-omission.out; then
-        change_impact_install_failure="$change_impact_skill consumer omission did not fail against independent expected truth"
-        break
-    elif ! node -e 'const fs=require("node:fs"); const source=JSON.parse(fs.readFileSync(process.argv[1], "utf8")); fs.writeFileSync(process.argv[2],JSON.stringify(source.capture));' "$FRAMEWORK_DIR/tools/change-impact/example.completion.v1.json" "$change_impact_case/capture.json"; then
-        change_impact_install_failure="$change_impact_skill could not restore the root-omission fixture"
-        break
-    elif ! node -e 'const fs=require("node:fs"); const p=process.argv[1]; const value=JSON.parse(fs.readFileSync(p,"utf8")); value.roots=[]; fs.writeFileSync(p,JSON.stringify(value));' "$change_impact_case/capture.json"; then
-        change_impact_install_failure="$change_impact_skill could not materialize the omission fixture"
-        break
-    elif node "$change_impact_tool" --phase completion --capture "$change_impact_case/capture.json" --expected "$change_impact_case/expected.json" --assessment "$change_impact_case/assessment.json" --review "$change_impact_case/review.json" >/tmp/p0p4-change-impact-${change_impact_skill}-omission.out; then
-        change_impact_install_failure="$change_impact_skill installed checker accepted an empty shared discovery-root capture"
-        break
-    elif ! grep -Fq 'CAPTURE_DISCOVERY_ROOTS_MISSING' /tmp/p0p4-change-impact-${change_impact_skill}-omission.out; then
-        change_impact_install_failure="$change_impact_skill omission did not fail for the missing discovery-root reason"
         break
     fi
 done
@@ -1055,9 +1035,9 @@ write_ownership_workflow_fixture() {
     local workflow="$1" variant="$2" file
     mkdir -p "$workflow/contracts"
     printf '%s\n' '---' 'name: assistant-workflow' 'description: Retained ownership protocol fixture.' '---' >"$workflow/SKILL.md"
-    printf '%s\n' 'schema_version: "16.0"' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml"
+    printf '%s\n' 'schema_version: "17.0"' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml"
     cat >"$workflow/contracts/handoffs.yaml" <<'PROTOCOL'
-schema_version: "16.0"
+schema_version: "17.0"
 contract: handoffs
 skill: assistant-workflow
 worker_stage_protocol:
@@ -1080,20 +1060,20 @@ PROTOCOL
             local target_version=14.0
             [[ "$variant" != old13 ]] || target_version=13.0
             [[ "$variant" != old15 ]] || target_version=15.0
-            [[ "$variant" != unknown-version ]] || target_version=17.0
+            [[ "$variant" != unknown-version ]] || target_version=18.0
             for file in "$workflow/contracts/index.yaml" "$workflow/contracts/handoffs.yaml"; do
-                sed "s/16.0/$target_version/" "$file" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$file"
+                sed "s/17.0/$target_version/" "$file" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$file"
             done ;;
-        mixed-version) sed 's/16.0/14.0/' "$workflow/contracts/index.yaml" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$workflow/contracts/index.yaml" ;;
+        mixed-version) sed 's/17.0/14.0/' "$workflow/contracts/index.yaml" >"$workflow/version.tmp"; mv "$workflow/version.tmp" "$workflow/contracts/index.yaml" ;;
         old|recovery|full) printf '%s\n' 'schema_version: "12.0"' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
         no-stages) sed '/^worker_stage_protocol:/,$d' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
         stage-mismatch) sed 's/current_matching_red/none/' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
         early-completion) sed 's/completes_build: false/completes_build: true/' "$workflow/contracts/handoffs.yaml" >"$workflow/handoffs.tmp"; mv "$workflow/handoffs.tmp" "$workflow/contracts/handoffs.yaml" ;;
         missing-index) rm "$workflow/contracts/index.yaml" ;;
         duplicate-index) printf '%s\n' 'skill: assistant-workflow' >>"$workflow/contracts/index.yaml" ;;
-        duplicate-handoffs) printf '%s\n' 'schema_version: "16.0"' >>"$workflow/contracts/handoffs.yaml" ;;
-        malformed) printf '%s\n' 'schema_version: "16.0' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
-        wrong-identity) printf '%s\n' 'schema_version: "16.0"' 'contract: output' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
+        duplicate-handoffs) printf '%s\n' 'schema_version: "17.0"' >>"$workflow/contracts/handoffs.yaml" ;;
+        malformed) printf '%s\n' 'schema_version: "17.0' 'contract: index' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
+        wrong-identity) printf '%s\n' 'schema_version: "17.0"' 'contract: output' 'skill: assistant-workflow' >"$workflow/contracts/index.yaml" ;;
         unsafe-workflow) rm -r "$workflow"; printf 'wrong path type\n' >"$workflow" ;;
         unsafe-skill) rm "$workflow/SKILL.md"; mkdir "$workflow/SKILL.md" ;;
         unsafe-index) rm "$workflow/contracts/index.yaml"; ln -s "$workflow/SKILL.md" "$workflow/contracts/index.yaml" ;;
@@ -1389,7 +1369,7 @@ for protocol_agent in codex claude gemini; do
         mkdir -p "$protocol_target/assistant-debugging/contracts"
         printf '%s\n' '---' 'name: assistant-debugging' 'description: Retained debugging consumer.' '---' >"$protocol_target/assistant-debugging/SKILL.md"
         [[ "$protocol_case" == missing-index ]] \
-            || printf '%s\r\n' 'schema_version: "3.0"' 'contract: index' 'skill: assistant-debugging' >"$protocol_target/assistant-debugging/contracts/index.yaml"
+            || printf '%s\r\n' 'schema_version: "4.0"' 'contract: index' 'skill: assistant-debugging' >"$protocol_target/assistant-debugging/contracts/index.yaml"
         protocol_log="$protocol_root/metadata-$protocol_agent-$protocol_case.log"
         protocol_before="$(ownership_install_fingerprint "$protocol_home")"
         protocol_status=0

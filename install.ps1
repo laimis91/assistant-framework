@@ -2362,7 +2362,7 @@ function Test-DeclaredWorkflowContract {
 
 function Assert-ProtocolCompatibility {
     param([string]$SkillsSource, [string]$SkillsTarget, [string[]]$SelectedSkills)
-    foreach ($pair in @(@('assistant-workflow','16.0','assistant-review','10.0'), @('assistant-workflow','16.0','assistant-tdd','3.0'), @('assistant-debugging','3.0','assistant-tdd','3.0'), @('assistant-debugging','3.0','assistant-review','10.0'))) {
+    foreach ($pair in @(@('assistant-workflow','17.0','assistant-review','11.0'), @('assistant-workflow','17.0','assistant-tdd','3.0'), @('assistant-debugging','4.0','assistant-tdd','3.0'), @('assistant-debugging','4.0','assistant-review','11.0'))) {
         $left = $pair[0]; $right = $pair[2]
         if ($SelectedSkills -notcontains $left -and $SelectedSkills -notcontains $right) { continue }
         $leftPath = if ($SelectedSkills -contains $left) { Join-Path $SkillsSource $left } else { Join-Path $SkillsTarget $left }
@@ -2416,10 +2416,10 @@ function Assert-WorkflowRoleCompatibility {
         }
         $index = Read-StrictUtf8Text -LiteralPath (Join-Path $workflow 'contracts/index.yaml')
         $handoffs = Read-StrictUtf8Text -LiteralPath (Join-Path $workflow 'contracts/handoffs.yaml')
-        $compatible16 = (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index' -ExpectedVersion '16.0') -and
-            (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs' -ExpectedVersion '16.0')
-        if (-not $compatible16) {
-            throw 'Retained index/handoffs do not uniquely declare matching schema 16.0 and the supported ownership stage tuples.'
+        $compatible17 = (Test-DeclaredWorkflowContract -Text $index -ExpectedContract 'index' -ExpectedVersion '17.0') -and
+            (Test-DeclaredWorkflowContract -Text $handoffs -ExpectedContract 'handoffs' -ExpectedVersion '17.0')
+        if (-not $compatible17) {
+            throw 'Retained index/handoffs do not uniquely declare matching schema 17.0 and the supported ownership stage tuples.'
         }
     }
     catch {
@@ -2648,7 +2648,6 @@ function Invoke-AssistantFrameworkInstall {
     Write-Info "Skills target: $skillsTarget"
 
     $toolsSource = Join-Path $script:FrameworkDir 'tools'
-    $changeImpactToolsSource = Join-Path $toolsSource 'change-impact'
     $progressToolsSource = Join-Path $toolsSource 'progress'
     $toolExclusions = @('.DS_Store', '.publish', 'bin', 'obj', '__pycache__', '*.pyc')
     $evalDocsSource = Join-Path (Join-Path $script:FrameworkDir 'docs') 'evals'
@@ -2697,9 +2696,6 @@ function Invoke-AssistantFrameworkInstall {
     if (Test-Path -LiteralPath $toolsSource -PathType Container) {
         Assert-ManagedTopLevelEntriesSafe -Source $toolsSource -Target $toolsTarget -ManagedRoot $agentHome -ExcludedNames $toolExclusions -ExcludedExactPaths $toolSyncExcludedExactPaths -Label 'Tools'
     }
-    if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $changeImpactToolsSource -PathType Container)) {
-        [void](Assert-ManagedDirectoryCopySafe -Source $changeImpactToolsSource -Target (Join-Path $codexCommonToolsTarget 'change-impact') -ManagedRoot $agentsRoot -ExcludedNames @('.DS_Store', '__pycache__', '*.pyc') -Label 'Codex common change-impact checker')
-    }
     if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $progressToolsSource -PathType Container)) {
         [void](Assert-ManagedDirectoryCopySafe -Source $progressToolsSource -Target (Join-Path $codexCommonToolsTarget 'progress') -ManagedRoot $agentsRoot -ExcludedNames @('.DS_Store', '__pycache__', '*.pyc') -Label 'Codex common progress guidance')
     }
@@ -2742,9 +2738,6 @@ function Invoke-AssistantFrameworkInstall {
 
         if (Test-Path -LiteralPath $toolsSource -PathType Container) {
             Sync-ManagedTopLevelEntries -Source $toolsSource -Target $toolsTarget -ManagedRoot $agentHome -ExcludedNames $toolExclusions -ExcludedExactPaths $toolSyncExcludedExactPaths -Label 'Tools'
-        }
-        if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $changeImpactToolsSource -PathType Container)) {
-            Sync-ManagedDirectory -Source $changeImpactToolsSource -Target (Join-Path $codexCommonToolsTarget 'change-impact') -ManagedRoot $agentsRoot -ExcludedNames @('.DS_Store', '__pycache__', '*.pyc') -Label 'Codex common change-impact checker'
         }
         if ($agentName -eq 'codex' -and (Test-Path -LiteralPath $progressToolsSource -PathType Container)) {
             Sync-ManagedDirectory -Source $progressToolsSource -Target (Join-Path $codexCommonToolsTarget 'progress') -ManagedRoot $agentsRoot -ExcludedNames @('.DS_Store', '__pycache__', '*.pyc') -Label 'Codex common progress guidance'

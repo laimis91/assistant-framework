@@ -95,26 +95,20 @@ If you find no new issues above your confidence threshold, say "No new findings.
 - No dead code, commented-out code, or leftover debug statements
 - Consistent formatting with the rest of the codebase
 
-### Cognitive Complexity (C# projects — auto-run)
+### Cognitive Complexity (any language, advisory)
 
-For C# projects, run the cognitive complexity tool against changed files:
+For changed functions with nested branches or loops, estimate cognitive
+complexity by hand with assistant-review's
+[cognitive-complexity method](../../../assistant-review/references/cognitive-complexity.md).
+No tool or runtime is needed.
 
-```bash
-bash "<framework-tools>/cognitive-complexity/run-complexity.sh" --changed --verbose
-```
-
-Where `<framework-tools>` is the installed tools directory (typically `~/{agent_state_dir}/tools`).
-
-- **Threshold: 15** (SonarSource default). Methods above this are flagged.
-- Flagged methods are **must-fix** — refactor to reduce complexity before merge.
-- Common fixes: extract helper methods, use early returns/guard clauses, simplify boolean expressions, replace nested conditionals with pattern matching.
-- If the tool is not built/available, note it and continue with manual readability review.
-
-**Interpreting results:**
-- Score 0-5: simple, no action needed
-- Score 6-15: moderate, acceptable
-- Score 16-25: high — refactor recommended (must-fix in review)
-- Score 26+: very high — refactor required, likely multiple concerns in one method
+- Report the estimate with the counted lines so it can be checked.
+- Around 15 (SonarQube's default) is a pointer for where to look, not a gate.
+  No estimate blocks a merge by itself; a complexity finding is should-fix at most
+  unless it hides a correctness, security or testability defect.
+- Common fixes: guard clauses or early returns, extracted helpers for nested
+  loop bodies, named predicates for mixed boolean conditions, table or
+  polymorphic dispatch for long branch chains.
 
 ### Performance (medium+ tasks)
 

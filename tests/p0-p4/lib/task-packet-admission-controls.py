@@ -4140,6 +4140,16 @@ def run_controls():
 
     canonical_v14_plan_format_admission()
     total += 1
+    # Review producers 10.0 and 11.0 are both current (Review 11.0 changed only
+    # the change-impact evidence pointer); an unknown producer stays blocked.
+    for version, status, code in (("10.0", "accepted", None), ("11.0", "accepted", None), ("12.0", "blocked", "review_authority")):
+        case = valid_request()
+        case["plan"]["plan_schema_version"] = "16.0"
+        seal(case)
+        assert case["context"]["review_authorities"], "fixture lost its plan review authority"
+        for fact in case["context"]["review_authorities"].values():
+            fact["producer_version"] = version
+        expect(case, status, code, name="plan review producer " + version)
     truthful_no_tests_verification()
     total += 1
     active_writer_verification_barrier()

@@ -274,8 +274,8 @@ alone is insufficient; all prerequisites must be current evidence-bound VERIFIED
 - Delta from previous: — (first round)
 - Drift check: — (first round)
 - Pivot/Restart decision: [ref for evidenced shared guard stagnation or material change, including a domain pivot; otherwise N/A. Numeric score diagnostics alone do not require a decision]
-- Complexity: [ran / skipped (not C#) / tool unavailable]
-  - [method (line N): score X — refactored to Y, or "within threshold"]
+- Complexity: [estimated / not needed] (advisory; see assistant-review references/cognitive-complexity.md)
+  - [function (line N): about X from the counted lines — refactored to Y, or kept with reason]
 - Must-fix:
   - [x] [file:line] — [issue] → [fix applied]
 - Should-fix:
