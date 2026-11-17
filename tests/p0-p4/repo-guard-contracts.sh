@@ -14,113 +14,63 @@ aggregate = File.read(aggregate_script)
 workflow = YAML.load_file(workflow_file)
 errors = []
 
-all_aggregate_sources = aggregate.scan(/^[ \t]*source "\$P0P4_SUITE_DIR\/([^\"\/]+\.sh)"$/).flatten
-guarded_pairs = aggregate.scan(/^if ! p0p4_suite_is_excluded "([^\"\/]+\.sh)"; then\n[ \t]+source "\$P0P4_SUITE_DIR\/([^\"\/]+\.sh)"\nfi$/)
-guarded_suites = guarded_pairs.map(&:last)
-aggregate_suites = all_aggregate_sources.dup
-guarded_suites.each do |suite|
-  index = aggregate_suites.index(suite)
-  index ? aggregate_suites.delete_at(index) : errors << "guarded suite lacks source: #{suite}"
-end
-guarded_pairs.each do |guard_suite, source_suite|
-  errors << "suite exclusion guard/source mismatch: #{guard_suite} != #{source_suite}" unless guard_suite == source_suite
-end
+# Contract test cleanup R-TC-8: one aggregate job runs every suite; no shards or exclusions.
+aggregate_suites = aggregate.scan(/^[ \t]*source "\$P0P4_SUITE_DIR\/([^\"\/]+\.sh)"$/).flatten
+errors << "aggregate must not exclude suites" if aggregate.include?("p0p4_suite_is_excluded") || aggregate.include?("P0P4_EXCLUDED_SUITES")
 suite_names = Dir[File.join(suite_dir, "*.sh")].map { |path| File.basename(path) }.sort
 compatibility_wrappers = %w[agent-status-contracts.sh workflow-contracts.sh]
 
 jobs = workflow.fetch("jobs", {})
-fast_job = jobs["framework-contracts"]
-shard_job = jobs["contract-shards"]
-errors << "missing framework-contracts job" unless fast_job.is_a?(Hash)
-errors << "missing contract-shards job" unless shard_job.is_a?(Hash)
-
-validate_ruby_prerequisite = lambda do |job, job_name, contract_step_name|
+contract_job = jobs["framework-contracts"]
+errors << "missing framework-contracts job" unless contract_job.is_a?(Hash)
+jobs.each do |name, job|
   next unless job.is_a?(Hash)
+  errors << "job #{name} must not shard contract suites" if job.dig("strategy", "matrix") || job.fetch("steps", []).any? { |step| step.is_a?(Hash) && step["run"].to_s.match?(/tests\/p0-p4\/[^ ]*\.sh/) && !step["run"].to_s.include?("response-fixture-entrypoint-probe.py") }
+end
 
-  steps = job.fetch("steps", [])
-  prerequisite_indexes = steps.each_index.select do |index|
+if contract_job.is_a?(Hash)
+  steps = contract_job.fetch("steps", [])
+  aggregate_index = steps.index { |step| step.is_a?(Hash) && step["name"] == "Run aggregate framework contracts" }
+  if aggregate_index.nil?
+    errors << "missing aggregate contract step"
+  else
+    aggregate_step = steps[aggregate_index]
+    errors << "aggregate contract command must be ./tests/test-p0-p4-contracts.sh" unless aggregate_step["run"] == "./tests/test-p0-p4-contracts.sh"
+    errors << "aggregate contract step must not exclude suites" if aggregate_step.fetch("env", {}).to_h.key?("P0P4_EXCLUDED_SUITES")
+  end
+  ruby_indexes = steps.each_index.select do |index|
     step = steps[index]
     next false unless step.is_a?(Hash) && step["name"] == "Verify runner prerequisites"
     run = step["run"]
     run.is_a?(String) && run.lines.any? { |line| line.strip == "command -v ruby" } &&
       run.lines.any? { |line| line.strip.start_with?("ruby -rjson -ryaml -rbigdecimal -e ") }
   end
-  contract_index = steps.index { |step| step.is_a?(Hash) && step["name"] == contract_step_name }
-  if prerequisite_indexes.empty?
-    errors << "#{job_name} must verify Ruby with JSON, Psych/YAML, and BigDecimal support"
-  elsif contract_index && prerequisite_indexes.none? { |index| index < contract_index }
-    errors << "#{job_name} Ruby/Psych verification must precede #{contract_step_name}"
+  if ruby_indexes.empty?
+    errors << "framework-contracts must verify Ruby with JSON, Psych/YAML, and BigDecimal support"
+  elsif aggregate_index && ruby_indexes.none? { |index| index < aggregate_index }
+    errors << "Ruby/Psych verification must precede the aggregate contracts"
+  end
+  probes = steps.select { |step| step.is_a?(Hash) && step["run"].to_s.include?("response-fixture-entrypoint-probe.py") }
+  expected_probe = %w[skill-eval-contracts.sh progressive-discovery-contracts.sh].map { |suite| "python3 tests/p0-p4/lib/response-fixture-entrypoint-probe.py #{suite}" }
+  if probes.length != 1 || probes[0]["name"] != "Check response fixture entrypoints" || probes[0]["run"].to_s.lines.map(&:strip).reject(&:empty?) != expected_probe
+    errors << "one response entrypoint probe step must check both response-builder suites"
+  elsif aggregate_index && steps.index(probes[0]) >= aggregate_index
+    errors << "response entrypoint probe must precede the aggregate contracts"
   end
 end
 
-validate_ruby_prerequisite.call(fast_job, "framework-contracts", "Run aggregate framework contracts")
-validate_ruby_prerequisite.call(shard_job, "contract-shards", "Run long contract shard")
-
-excluded_suites = []
-matrix_suites = []
-if fast_job.is_a?(Hash)
-  aggregate_step = fast_job.fetch("steps", []).find { |step| step.is_a?(Hash) && step["name"] == "Run aggregate framework contracts" }
-  unless aggregate_step.is_a?(Hash)
-    errors << "missing aggregate contract step"
-  else
-    exclusions = aggregate_step.dig("env", "P0P4_EXCLUDED_SUITES")
-    if exclusions.is_a?(String)
-      excluded_suites = exclusions.split
-    else
-      errors << "aggregate contract step must declare string P0P4_EXCLUDED_SUITES"
-    end
-    errors << "aggregate contract command must be ./tests/test-p0-p4-contracts.sh" unless aggregate_step["run"] == "./tests/test-p0-p4-contracts.sh"
-  end
+unless aggregate_suites.uniq.length == aggregate_suites.length
+  errors << "aggregate declares duplicate suites: #{aggregate_suites.tally.select { |_suite, count| count != 1 }.keys.sort.join(', ')}"
 end
-
-if shard_job.is_a?(Hash)
-  matrix_suites = shard_job.dig("strategy", "matrix", "suite")
-  unless matrix_suites.is_a?(Array) && matrix_suites.all? { |suite| suite.is_a?(String) }
-    errors << "contract-shards matrix suite must be a string array"
-    matrix_suites = []
-  end
-  long_shard_step = shard_job.fetch("steps", []).find { |step| step.is_a?(Hash) && step["name"] == "Run long contract shard" }
-  unless long_shard_step.is_a?(Hash) && long_shard_step["run"] == 'bash "tests/p0-p4/${{ matrix.suite }}"'
-    errors << "long shard must run exactly bash tests/p0-p4 matrix suite"
-  end
-  steps = shard_job.fetch("steps", [])
-  probes = steps.select { |step| step.is_a?(Hash) && step["name"] == "Check response fixture entrypoint" }
-  probe_condition = "matrix.suite == 'skill-eval-contracts.sh' || matrix.suite == 'progressive-discovery-contracts.sh'"
-  probe_command = 'python3 tests/p0-p4/lib/response-fixture-entrypoint-probe.py "${{ matrix.suite }}"'
-  if probes.length != 1 || probes[0]["if"] != probe_condition || probes[0]["run"] != probe_command
-    errors << "response entrypoint probes must run only in their two owning shards"
-  elsif long_shard_step && steps.index(probes[0]) >= steps.index(long_shard_step)
-    errors << "response entrypoint probe must precede long shard grading"
-  end
-end
-
-if fast_job.is_a?(Hash) && fast_job.fetch("steps", []).any? { |step| step.is_a?(Hash) && step["run"].to_s.include?("response-fixture-entrypoint-probe.py") }
-  errors << "aggregate job must not run response entrypoint probes"
-end
-
-unless all_aggregate_sources.uniq.length == all_aggregate_sources.length
-  errors << "aggregate declares duplicate suites: #{all_aggregate_sources.tally.select { |_suite, count| count != 1 }.keys.sort.join(', ')}"
-end
-unless matrix_suites.uniq.length == matrix_suites.length
-  errors << "matrix contains duplicate suites: #{matrix_suites.tally.select { |_suite, count| count != 1 }.keys.sort.join(', ')}"
-end
-unless excluded_suites.sort == matrix_suites.sort && excluded_suites.uniq.length == excluded_suites.length
-  errors << "aggregate exclusions and matrix suites differ"
-end
-unless guarded_suites.sort == excluded_suites.sort && guarded_suites.uniq.length == guarded_suites.length
-  errors << "guarded aggregate suites and declared exclusions differ"
-end
-
-(aggregate_suites + matrix_suites).uniq.each do |suite|
+aggregate_suites.uniq.each do |suite|
   errors << "scheduled suite is not top-level P0-P4 suite: #{suite}" unless suite_names.include?(suite)
 end
-
 suite_names.each do |suite|
-  schedule_count = aggregate_suites.count(suite) + matrix_suites.count(suite)
+  count = aggregate_suites.count(suite)
   if compatibility_wrappers.include?(suite)
-    errors << "compatibility wrapper must remain explicitly unscheduled: #{suite}" unless schedule_count.zero?
-  elsif schedule_count != 1
-    errors << "top-level P0-P4 suite must be scheduled exactly once: #{suite} (#{schedule_count})"
+    errors << "compatibility wrapper must remain explicitly unscheduled: #{suite}" unless count.zero?
+  elsif count != 1
+    errors << "top-level P0-P4 suite must be scheduled exactly once: #{suite} (#{count})"
   end
 end
 
@@ -131,7 +81,7 @@ end
 RUBY
 }
 
-test_start "P0-P4 aggregate and long shards schedule every substantive suite exactly once"
+test_start "P0-P4 aggregate schedules every substantive suite exactly once in one CI job"
 ci_schedule_output="$(mktemp)"
 p0p4_register_cleanup "$ci_schedule_output"
 if validate_p0p4_ci_schedule \
@@ -143,95 +93,40 @@ else
     fail "P0-P4 CI schedule violations: $(cat "$ci_schedule_output")"
 fi
 
-test_start "P0-P4 CI schedule oracle rejects missing, orphaned, bypassed, misplaced, and wrongly owned checks"
+test_start "P0-P4 CI schedule oracle rejects missing, duplicated, excluded, sharded and misplaced checks"
 ci_schedule_mutation_dir="$(mktemp -d)"
 p0p4_register_cleanup "$ci_schedule_mutation_dir"
 ci_schedule_mutation_failures=()
-for ci_schedule_mutation in missing_aggregate_suite orphaned_shard_suite unguarded_shard_suite mismatched_shard_guard misplaced_shard_ruby_prerequisite missing_response_probe unguarded_response_probe misplaced_response_probe aggregate_response_probe duplicate_response_probe wrong_response_probe_command; do
+for ci_schedule_mutation in missing_aggregate_suite duplicate_aggregate_suite sourced_wrapper excluded_suite shard_job \
+    excluded_env misplaced_ruby_prerequisite missing_response_probe misplaced_response_probe wrong_response_probe_command; do
     ci_schedule_mutation_aggregate="$ci_schedule_mutation_dir/$ci_schedule_mutation-aggregate.sh"
     ci_schedule_mutation_workflow="$ci_schedule_mutation_dir/$ci_schedule_mutation-workflow.yml"
     cp "$FRAMEWORK_DIR/tests/test-p0-p4-contracts.sh" "$ci_schedule_mutation_aggregate"
     cp "$FRAMEWORK_DIR/.github/workflows/framework-validation.yml" "$ci_schedule_mutation_workflow"
-    case "$ci_schedule_mutation" in
-        missing_aggregate_suite)
-            ruby -e '
-path = ARGV.fetch(0)
-contents = File.read(path)
-needle = "source \"$P0P4_SUITE_DIR/harness-controller-contracts.sh\"\n"
-abort "missing harness source mutation target" unless contents.include?(needle)
-File.write(path, contents.sub(needle, ""))
-' "$ci_schedule_mutation_aggregate"
-            ;;
-        orphaned_shard_suite)
-            ruby -e '
-path = ARGV.fetch(0)
-contents = File.read(path)
-needle = "          - codex-behavioral-eval-contracts.sh\n"
-abort "missing shard mutation target" unless contents.include?(needle)
-File.write(path, contents.sub(needle, "          - orphaned-contracts.sh\n"))
-' "$ci_schedule_mutation_workflow"
-            ;;
-        unguarded_shard_suite)
-            ruby -e '
-path = ARGV.fetch(0)
-contents = File.read(path)
-guarded = <<~SH
-if ! p0p4_suite_is_excluded "skill-eval-contracts.sh"; then
-    source "$P0P4_SUITE_DIR/skill-eval-contracts.sh"
-fi
-SH
-replacement = "    source \"$P0P4_SUITE_DIR/skill-eval-contracts.sh\"\n"
-abort "missing guarded shard source mutation target" unless contents.include?(guarded)
-File.write(path, contents.sub(guarded, replacement))
-' "$ci_schedule_mutation_aggregate"
-            ;;
-        mismatched_shard_guard)
-            ruby -e '
-path = ARGV.fetch(0)
-contents = File.read(path)
-needle = "if ! p0p4_suite_is_excluded \"skill-eval-contracts.sh\"; then\n"
-abort "missing shard guard mutation target" unless contents.include?(needle)
-File.write(path, contents.sub(needle, "if ! p0p4_suite_is_excluded \"progressive-discovery-contracts.sh\"; then\n"))
-' "$ci_schedule_mutation_aggregate"
-            ;;
-        misplaced_shard_ruby_prerequisite)
-            ruby -e '
-path = ARGV.fetch(0)
-contents = File.read(path)
-block = <<YAML
-      - name: Verify runner prerequisites
-        run: |
-          command -v ruby
-          ruby -rjson -ryaml -rbigdecimal -e '\''abort "Ruby JSON, Psych/YAML, or BigDecimal unavailable" unless defined?(JSON) && defined?(Psych) && defined?(YAML) && YAML.respond_to?(:load_file) && defined?(BigDecimal)'\''
-
-YAML
-index = contents.rindex(block)
-abort "missing shard Ruby/Psych prerequisite mutation target" unless index
-contents.slice!(index, block.length)
-marker = "      - name: Run aggregate framework contracts\n"
-abort "missing aggregate step mutation target" unless contents.include?(marker)
-File.write(path, contents.sub(marker, block + marker))
-' "$ci_schedule_mutation_workflow"
-            ;;
-        *_response_probe|wrong_response_probe_command)
-            ruby -ryaml -e '
-path, mutation = ARGV
-workflow = YAML.load_file(path)
-steps = workflow.fetch("jobs").fetch("contract-shards").fetch("steps")
-probe = steps.find { |step| step["name"] == "Check response fixture entrypoint" }
-abort "missing response probe mutation target" unless probe
+    ruby -ryaml -e '
+aggregate_path, workflow_path, mutation = ARGV
+aggregate = File.read(aggregate_path)
+workflow = YAML.load_file(workflow_path)
+steps = workflow.fetch("jobs").fetch("framework-contracts").fetch("steps")
+harness = "source \"$P0P4_SUITE_DIR/harness-controller-contracts.sh\"\n"
+abort "missing harness source mutation target" unless aggregate.include?(harness)
+find = ->(name) { steps.find { |step| step["name"] == name } or abort "missing step #{name}" }
 case mutation
-when "missing_response_probe" then steps.delete(probe)
-when "unguarded_response_probe" then probe.delete("if")
-when "misplaced_response_probe" then steps.delete(probe); steps << probe
-when "aggregate_response_probe" then workflow["jobs"]["framework-contracts"]["steps"] << probe.dup
-when "duplicate_response_probe" then steps << probe.dup
-when "wrong_response_probe_command" then probe["run"] = "echo skipped"
+when "missing_aggregate_suite" then aggregate = aggregate.sub(harness, "")
+when "duplicate_aggregate_suite" then aggregate = aggregate.sub(harness, harness * 2)
+when "sourced_wrapper" then aggregate = aggregate.sub(harness, harness + "source \"$P0P4_SUITE_DIR/workflow-contracts.sh\"\n")
+when "excluded_suite" then aggregate = aggregate.sub(harness, "if ! p0p4_suite_is_excluded \"harness-controller-contracts.sh\"; then\n    #{harness}fi\n")
+when "shard_job" then workflow["jobs"]["contract-shards"] = { "strategy" => { "matrix" => { "suite" => ["skill-eval-contracts.sh"] } }, "steps" => [{ "run" => "bash \"tests/p0-p4/${{ matrix.suite }}\"" }] }
+when "excluded_env" then find.call("Run aggregate framework contracts")["env"] = { "P0P4_EXCLUDED_SUITES" => "skill-eval-contracts.sh" }
+when "misplaced_ruby_prerequisite" then step = find.call("Verify runner prerequisites"); steps.delete(step); steps << step
+when "missing_response_probe" then steps.delete(find.call("Check response fixture entrypoints"))
+when "misplaced_response_probe" then step = find.call("Check response fixture entrypoints"); steps.delete(step); steps << step
+when "wrong_response_probe_command" then find.call("Check response fixture entrypoints")["run"] = "echo skipped"
 end
-File.write(path, YAML.dump(workflow))
-' "$ci_schedule_mutation_workflow" "$ci_schedule_mutation"
-            ;;
-    esac
+File.write(aggregate_path, aggregate)
+File.write(workflow_path, YAML.dump(workflow))
+' "$ci_schedule_mutation_aggregate" "$ci_schedule_mutation_workflow" "$ci_schedule_mutation" \
+        || { ci_schedule_mutation_failures+=("$ci_schedule_mutation (mutation not applied)"); continue; }
     if validate_p0p4_ci_schedule "$ci_schedule_mutation_aggregate" "$ci_schedule_mutation_workflow" "$FRAMEWORK_DIR/tests/p0-p4" >/dev/null 2>&1; then
         ci_schedule_mutation_failures+=("$ci_schedule_mutation")
     fi
@@ -286,20 +181,19 @@ else
         fi
     done
 
-    [[ "$(grep -Ec '^[[:space:]]+uses: actions/checkout@v5[[:space:]]*$' "$framework_validation_workflow")" -eq 2 ]] \
-        || framework_validation_failures+=("framework-validation.yml: expected checkout@v5 in both contract jobs")
-    [[ "$(grep -Ec '^[[:space:]]+persist-credentials: false[[:space:]]*$' "$framework_validation_workflow")" -eq 2 ]] \
-        || framework_validation_failures+=("framework-validation.yml: both checkouts must disable credential persistence")
+    [[ "$(grep -Ec '^[[:space:]]+uses: actions/checkout@v5[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
+        || framework_validation_failures+=("framework-validation.yml: expected checkout@v5 in the contract job")
+    [[ "$(grep -Ec '^[[:space:]]+persist-credentials: false[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
+        || framework_validation_failures+=("framework-validation.yml: the checkout must disable credential persistence")
     [[ "$(grep -Ec '^[[:space:]]+timeout-minutes: 30[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: the fast framework-contract job must use the bounded timeout")
     if ! ruby -ryaml - "$framework_validation_workflow" <<'RUBY'
 jobs = YAML.load_file(ARGV.fetch(0)).fetch("jobs")
-shard_timeout = "${{ matrix.suite == 'skill-eval-contracts.sh' && 75 || 60 }}"
-abort "unexpected shard timeout policy" unless jobs.fetch("contract-shards")["timeout-minutes"] == shard_timeout
-abort "unexpected fast timeout policy" unless jobs.fetch("framework-contracts")["timeout-minutes"] == 30
+abort "unexpected contract timeout policy" unless jobs.fetch("framework-contracts")["timeout-minutes"] == 30
+abort "unexpected extra contract job" unless jobs.keys == ["framework-contracts"]
 RUBY
     then
-        framework_validation_failures+=("framework-validation.yml: skill-eval must use 75 minutes, other shards 60, and the fast job 30")
+        framework_validation_failures+=("framework-validation.yml: one framework-contracts job with a 30-minute timeout")
     fi
     [[ "$(grep -Ec '^permissions:[[:space:]]*$' "$framework_validation_workflow")" -eq 1 ]] \
         || framework_validation_failures+=("framework-validation.yml: expected one workflow-level permissions block")
@@ -350,27 +244,21 @@ else
     fail "general CI ripgrep setup violations: ${ripgrep_setup_failures[*]}"
 fi
 
-test_start "general CI verifies Ruby Psych before every contract job"
+test_start "general CI verifies Ruby Psych before the contract job"
 ruby_setup_failures=()
 if [[ ! -f "$framework_validation_workflow" ]]; then
     ruby_setup_failures+=("missing .github/workflows/framework-validation.yml")
 else
     ruby_verify_count="$(grep -Ec '^[[:space:]]+command -v ruby[[:space:]]*$' "$framework_validation_workflow" || true)"
-psych_verify_count="$(grep -Ec '^[[:space:]]+ruby -rjson -ryaml -rbigdecimal -e ' "$framework_validation_workflow" || true)"
+    psych_verify_count="$(grep -Ec '^[[:space:]]+ruby -rjson -ryaml -rbigdecimal -e ' "$framework_validation_workflow" || true)"
     first_ruby_verify_line="$(grep -nF -- "command -v ruby" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
     aggregate_contract_line="$(grep -nF -- "./tests/test-p0-p4-contracts.sh" "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
-    second_ruby_verify_line="$(grep -nF -- "command -v ruby" "$framework_validation_workflow" | sed -n '2s/:.*//p' || true)"
-    shard_contract_line="$(grep -nF -- 'bash "tests/p0-p4/${{ matrix.suite }}"' "$framework_validation_workflow" | sed -n '1s/:.*//p' || true)"
 
-    [[ "$ruby_verify_count" -eq 2 ]] || ruby_setup_failures+=("framework-validation.yml: both contract jobs must verify Ruby")
-    [[ "$psych_verify_count" -eq 2 ]] || ruby_setup_failures+=("framework-validation.yml: both contract jobs must verify Ruby JSON, Psych/YAML, and BigDecimal")
+    [[ "$ruby_verify_count" -eq 1 ]] || ruby_setup_failures+=("framework-validation.yml: the contract job must verify Ruby once")
+    [[ "$psych_verify_count" -eq 1 ]] || ruby_setup_failures+=("framework-validation.yml: the contract job must verify Ruby JSON, Psych/YAML, and BigDecimal")
     if [[ -z "$first_ruby_verify_line" || -z "$aggregate_contract_line" ]] \
         || ! (( first_ruby_verify_line < aggregate_contract_line )); then
         ruby_setup_failures+=("framework-validation.yml: Ruby verification must precede aggregate contracts")
-    fi
-    if [[ -z "$second_ruby_verify_line" || -z "$shard_contract_line" ]] \
-        || ! (( second_ruby_verify_line < shard_contract_line )); then
-        ruby_setup_failures+=("framework-validation.yml: Ruby verification must precede long contract shards")
     fi
 fi
 if [[ "${#ruby_setup_failures[@]}" -eq 0 ]]; then

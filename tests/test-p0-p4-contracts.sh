@@ -8,14 +8,6 @@ P0P4_SUITE_DIR="$SCRIPT_DIR/p0-p4"
 
 source "$P0P4_SUITE_DIR/lib/p0p4-harness.sh"
 
-p0p4_suite_is_excluded() {
-    local suite_name="$1"
-    case " ${P0P4_EXCLUDED_SUITES:-} " in
-        *" $suite_name "*) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
 source "$P0P4_SUITE_DIR/repo-guard-contracts.sh"
 source "$P0P4_SUITE_DIR/harness-controller-contracts.sh"
 source "$P0P4_SUITE_DIR/change-impact-contracts.sh"
@@ -37,20 +29,14 @@ source "$P0P4_SUITE_DIR/qa-evaluator-contracts.sh"
 source "$P0P4_SUITE_DIR/review-loop-cap-contracts.sh"
 source "$P0P4_SUITE_DIR/skill-validator-contracts.sh"
 source "$P0P4_SUITE_DIR/response-fixture-preflight-contracts.sh"
-if ! p0p4_suite_is_excluded "skill-eval-contracts.sh"; then
-    source "$P0P4_SUITE_DIR/skill-eval-contracts.sh"
-fi
+source "$P0P4_SUITE_DIR/skill-eval-contracts.sh"
 source "$P0P4_SUITE_DIR/skill-creator-semantic-contracts.sh"
 source "$P0P4_SUITE_DIR/skill-creator-upstream-contracts.sh"
 source "$P0P4_SUITE_DIR/workflow-basics-contracts.sh"
 source "$P0P4_SUITE_DIR/workflow-reference-loading-contracts.sh"
 source "$P0P4_SUITE_DIR/workflow-verification-reuse-contracts.sh"
-if ! p0p4_suite_is_excluded "progressive-discovery-contracts.sh"; then
-    source "$P0P4_SUITE_DIR/progressive-discovery-contracts.sh"
-fi
-if ! p0p4_suite_is_excluded "workflow-architecture-completion-contracts.sh"; then
-    source "$P0P4_SUITE_DIR/workflow-architecture-completion-contracts.sh"
-fi
+source "$P0P4_SUITE_DIR/progressive-discovery-contracts.sh"
+source "$P0P4_SUITE_DIR/workflow-architecture-completion-contracts.sh"
 source "$P0P4_SUITE_DIR/workflow-end-to-end-eval-contracts.sh"
 source "$P0P4_SUITE_DIR/workflow-evidence-spine-contracts.sh"
 source "$P0P4_SUITE_DIR/feature-preparation-evidence-contracts.sh"
@@ -69,9 +55,7 @@ source "$P0P4_SUITE_DIR/harness-docs-evals-contracts.sh"
 source "$P0P4_SUITE_DIR/eval-contracts.sh"
 source "$P0P4_SUITE_DIR/clarification-evidence-contracts.sh"
 source "$P0P4_SUITE_DIR/codex-instruction-overlay-contracts.sh"
-if ! p0p4_suite_is_excluded "codex-behavioral-eval-contracts.sh"; then
-    source "$P0P4_SUITE_DIR/codex-behavioral-eval-contracts.sh"
-fi
+source "$P0P4_SUITE_DIR/codex-behavioral-eval-contracts.sh"
 source "$P0P4_SUITE_DIR/codex-agent-config-contracts.sh"
 source "$P0P4_SUITE_DIR/context-budget-report-contracts.sh"
 source "$P0P4_SUITE_DIR/pattern-library-contracts.sh"
