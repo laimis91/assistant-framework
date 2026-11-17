@@ -117,6 +117,42 @@ if ! python3 -I "$containment_tool" --skills-dir "$bad_root/skills" >"$bad_out" 
 fi
 if [[ ${#containment_failures[@]} -eq 0 ]]; then pass; else fail "containment check: ${containment_failures[*]}; see $bad_out"; fi
 
+test_start "containment check resolves backtick reference paths (contract test cleanup D-TC-2)"
+ref_root="$(mktemp -d)"
+p0p4_register_cleanup "$ref_root"
+mkdir -p "$ref_root/skills/assistant-workflow/references" "$ref_root/skills/assistant-workflow/scripts" \
+    "$ref_root/skills/needs-refs/references" "$ref_root/skills/needs-refs/contracts"
+printf -- '---\nname: assistant-workflow\n---\n' >"$ref_root/skills/assistant-workflow/SKILL.md"
+printf 'p\n' >"$ref_root/skills/assistant-workflow/references/protocol.md"
+printf 'print(1)\n' >"$ref_root/skills/assistant-workflow/scripts/helper.py"
+printf 'x\n' >"$ref_root/skills/needs-refs/references/present.md"
+printf 'version: 1\n' >"$ref_root/skills/needs-refs/contracts/index.yaml"
+printf 'Sibling `present.md` and nested `contracts/index.yaml`.\n' >"$ref_root/skills/needs-refs/references/inner.md"
+cat >"$ref_root/skills/needs-refs/SKILL.md" <<'FIXTURE'
+---
+name: needs-refs
+---
+Load `references/present.md` and `contracts/index.yaml#entry`.
+Load `references/missing.md` and `evals/cases.json`.
+Load workflow's `references/protocol.md` and Workflow's `scripts/helper.py`.
+Load workflow's `references/absent.md`.
+FIXTURE
+ref_out="/tmp/p0p4-skill-containment-refs.out"
+ref_failures=()
+if python3 -I "$containment_tool" --skills-dir "$ref_root/skills" >"$ref_out" 2>&1; then
+    ref_failures+=("accepted missing backtick reference paths")
+fi
+for expected in \
+    "needs-refs/SKILL.md:5: reference path does not exist: references/missing.md" \
+    "needs-refs/SKILL.md:5: reference path does not exist: evals/cases.json" \
+    "needs-refs/SKILL.md:7: reference path does not exist: references/absent.md"; do
+    grep -Fq -- "$expected" "$ref_out" || ref_failures+=("missing report: $expected")
+done
+for unexpected in "references/present.md" "contracts/index.yaml" "references/protocol.md" "scripts/helper.py" "inner.md"; do
+    grep -Fq -- "$unexpected" "$ref_out" && ref_failures+=("reported a resolvable path: $unexpected")
+done
+if [[ ${#ref_failures[@]} -eq 0 ]]; then pass; else fail "backtick reference paths: ${ref_failures[*]}; see $ref_out"; fi
+
 test_start "each skill copied alone with its requires closure resolves every link"
 closure_failures=()
 for skill_file in "$FRAMEWORK_DIR"/skills/*/SKILL.md; do
