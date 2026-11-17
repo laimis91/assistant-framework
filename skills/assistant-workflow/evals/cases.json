@@ -37930,6 +37930,37 @@
           "no open questions remain"
         ]
       }
+    },
+    {
+      "id": "plugin-install-without-agents-builds-hands-on",
+      "title": "Plugin install without framework agents builds hands-on and keeps fresh review",
+      "category": "subagent_delegation_trigger",
+      "purpose": "Checks that a plugin install with no framework agent definitions neither stops as a deployment mismatch nor skips fresh independent review.",
+      "prompt": "Implement the approved medium change. Optional Build delegation would help, but this runtime has no framework agent definitions installed.",
+      "setup_context": [
+        "The workflow skill came from the assistant-framework plugin; no intelligent-writer, mechanical-writer or code-reviewer definition is installed.",
+        "The runtime offers a general-purpose subagent type."
+      ],
+      "expected_behavior": [
+        "Builds hands-on by the main agent and records framework agents not installed as the reason.",
+        "Dispatches formal review to a newly created general-purpose agent given the code-reviewer role prompt from assistant-review references/roles."
+      ],
+      "pass_criteria": [
+        "The response keeps Build moving without delegation and still uses a fresh independent reviewer with the shipped role prompt."
+      ],
+      "fail_signals": [
+        "Stops with a deployment mismatch because no framework agents are installed.",
+        "Skips fresh independent review or has the main agent review its own work."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "framework agents not installed",
+          "references/roles/code-reviewer.md"
+        ],
+        "forbidden_substrings": [
+          "deployment mismatch"
+        ]
+      }
     }
   ],
   "canonical_feature_preparation_result_expectations": {

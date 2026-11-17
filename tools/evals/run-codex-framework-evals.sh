@@ -942,12 +942,8 @@ materialize_variant() {
         cp -R "$entry" "$destination/" || return 1
     done < <(find "$REPO_ROOT/skills/assistant-workflow" -mindepth 1 -maxdepth 1 ! -name evals -print | LC_ALL=C sort)
     cp "$source" "$destination/SKILL.md" || return 1
-    while IFS= read -r instruction_file; do
-        sed -i.bak -e 's|{agent_state_dir}|.codex|g' "$instruction_file" || return 1
-        rm -f "${instruction_file}.bak" || return 1
-    done < <(find "$destination" -type f \( \
-        -name '*.md' -o -name '*.yaml' -o -name '*.yml' -o -name '*.json' \
-        -o -name '*.conf' -o -name '*.toml' \))
+    # Skill text keeps {agent_state_dir} as written, as plugin installs do;
+    # the synced operating guidance defines it.
     return 0
 }
 

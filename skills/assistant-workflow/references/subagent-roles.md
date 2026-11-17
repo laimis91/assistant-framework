@@ -111,7 +111,7 @@ standards at every ordinal. Use the shared semantic task guard for correction.
 
 ## Fallback: agents not installed
 
-For missing new Claude or Codex writer definitions, report a deployment mismatch and stop; never silently use a nearest generic worker. Explicit legacy `code-writer` requests and separately authorized bootstrap execution record their real runtime identity. For other supported provider fallbacks, use the nearest available built-in subagent type and choose by capability tier rather than by provider-specific model name:
+When no framework agent definitions are installed, the normal case for a plugin install, the main agent builds hands-on and records `framework agents not installed` as the reason; optional Build delegation never blocks on it. When framework definitions are installed, a partial install stays an error. For missing new Claude or Codex writer definitions, report a deployment mismatch and stop; never silently use a nearest generic worker. Explicit legacy `code-writer` requests and separately authorized bootstrap execution record their real runtime identity. For other supported provider fallbacks, use the nearest available built-in subagent type and choose by capability tier rather than by provider-specific model name:
 
 | Role | Supported fallback role | Recommended tier |
 |---|---|---|
@@ -124,6 +124,6 @@ For missing new Claude or Codex writer definitions, report a deployment mismatch
 | Reviewer compatibility | `general-purpose` or nearest read-only reviewer | Strongest / deep reasoning |
 | QA Evaluator | `general-purpose` or nearest read-only evaluator | Strongest / deep reasoning |
 
-When using fallback types, include the full role instructions in the dispatch prompt (the agent won't have a built-in system prompt for the role). Prefer the matching role definition for the active runtime under the framework's `agents/` directory when available; otherwise adapt the closest provider-neutral role prompt.
+When using fallback types, include the full role instructions in the dispatch prompt (the agent won't have a built-in system prompt for the role). Use the provider-neutral role prompt shipped with the owning skill: assistant-review's `references/roles/` for Code Reviewer, Reviewer compatibility and QA Evaluator; assistant-research's `references/roles/` for the research lens and peer roles; this skill's `references/roles/` for Code Mapper, Explorer, Architect, Builder/Tester and the writers. A user's own subagent setup may take the same role prompt. Formal review, QA and research-lens isolation still need a newly created fresh agent.
 
 Writer selection is owned by the Orchestrator; load `subagent-dispatch.md#concrete-writer-selection` for the four actual-evidence conditions, intelligent default, provider mapping, stale evidence stop, and compatibility rules. CodeWriter remains a logical role; concrete names do not weaken its verification, TDD, status, partial-work or independent-review contract.

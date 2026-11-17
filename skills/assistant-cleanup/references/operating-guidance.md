@@ -108,6 +108,13 @@ evidence remain explicit. Review confidence/severity standards do not depend on
 round ordinal; concrete findings and complete coverage remain mandatory. Audit
 retains its authorized one-batch read-only scope. Scores are diagnostic only.
 
+## Agent state directory
+
+Skill text writes the agent's state directory as `{agent_state_dir}`. It means
+`.claude` on Claude Code and `.codex` on Codex, in the project root unless the
+path starts with `~/`, which means the user's home directory. A plugin install
+leaves the token as written; read it with this meaning.
+
 ## Persisted and executable consumers
 
 Only when parsing, admitting, retaining or certifying persisted/executable progress,

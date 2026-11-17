@@ -111,7 +111,9 @@ Architect proposals do not authorize selection. Carry the identical selection
 through the task packet and inline CodeWriter context; packet context is
 authoritative and conflicts block. Old packets remain valid with intelligent
 compatibility semantics. New Claude and Codex dispatch defaults to intelligent-writer;
-missing named definitions are a deployment mismatch, never silent generic fallback.
+with framework definitions installed, missing named definitions are a deployment
+mismatch, never silent generic fallback; with none installed (a plugin install), the
+main agent builds hands-on and records that reason.
 Claude uses the same intelligent/mechanical roles with native Opus/Sonnet aliases and explicit deprecated code-writer intelligent compatibility. Gemini retains native/default tiers and shared writer ownership; do not invent custom roles. Eligibility covers BOTH tests and implementation, including approved cases, expected values/oracles, negative cases and assertion/fixture patterns.
 
 When mechanical evidence becomes stale, stop dependent mutations and return all

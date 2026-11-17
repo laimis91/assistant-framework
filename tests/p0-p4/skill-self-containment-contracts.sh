@@ -165,4 +165,20 @@ else
     fail "admission helper did not load from a lone workflow copy; see $admission_out"
 fi
 
+test_start "every skill that writes {agent_state_dir} carries the guidance that defines it (plugin packaging R-MP-1)"
+token_failures=()
+grep -Fq '## Agent state directory' "$FRAMEWORK_DIR/tools/progress/operating-guidance.md" \
+    || token_failures+=("canonical operating guidance lacks the Agent state directory definition")
+grep -Fq '`.claude` on Claude Code and `.codex` on Codex' "$FRAMEWORK_DIR/tools/progress/operating-guidance.md" \
+    || token_failures+=("canonical definition no longer names both runtimes")
+while IFS= read -r token_skill; do
+    grep -Fq '## Agent state directory' "$FRAMEWORK_DIR/skills/$token_skill/references/operating-guidance.md" 2>/dev/null \
+        || token_failures+=("$token_skill uses {agent_state_dir} without the defining guidance copy")
+done < <(grep -rlF '{agent_state_dir}' "$FRAMEWORK_DIR/skills" | sed -e "s|^$FRAMEWORK_DIR/skills/||" -e 's|/.*||' | LC_ALL=C sort -u)
+if [[ "${#token_failures[@]}" -eq 0 ]]; then
+    pass
+else
+    fail "${token_failures[*]}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"
