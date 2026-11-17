@@ -19,6 +19,8 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "tools" / "skills"))
+import plugin_manifest  # noqa: E402  shared with tools/skills/sync-plugin.py
 ALLOWED_OUTPUT_ROOT = REPO / ".codex" / "skill-activation" / "plugins"
 PLUGIN_NAME = "af"
 MANIFEST = "generation.json"
@@ -140,7 +142,7 @@ def _build(output, guidance_override, stubs, descriptions):
         shutil.copytree(installed / "tools" / "progress", output / "tools" / "progress", symlinks=False)
 
     changed = apply_descriptions(output / "skills", descriptions)
-    (output / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": PLUGIN_NAME, "version": "0.0.0"}))
+    plugin_manifest.write_manifests(output, PLUGIN_NAME, "0.0.0", claude_only=True)
     hooks = output / "hooks"
     hooks.mkdir()
     (hooks / "session-context.json").write_text(json.dumps(

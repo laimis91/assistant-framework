@@ -24,6 +24,52 @@ Start with the [documentation map](docs/README.md) for task-specific guides, [du
 14. **Exploratory UI QA** — Explores a running UI through the available browser tools and reports reproducible issues with severity and tested, not tested and blocked coverage; acceptance stays with the QA Evaluator
 15. **Framework Cleanup** — Removes retired Assistant Framework items from an installed agent home only after an ownership helper proves them framework-owned and you confirm the plan's digest; answers uninstall requests with the command to run
 
+## Install from the marketplace
+
+This repository is a plugin marketplace for Claude Code and Codex. It ships one plugin, `assistant-framework`, with every skill except `assistant-cleanup`.
+
+**Claude Code** (CLI and the desktop app's Code tab):
+
+```bash
+claude plugin marketplace add laimis91/assistant-framework
+```
+
+```bash
+claude plugin install assistant-framework@assistant-framework
+```
+
+Inside a session the same commands are `/plugin marketplace add laimis91/assistant-framework` and `/plugin install assistant-framework@assistant-framework`. Auto-update is off for third-party marketplaces: turn it on under **Marketplaces** in `/plugin`, or update by hand with `claude plugin update assistant-framework@assistant-framework`. Plugin skills are namespaced, so `assistant-workflow` runs as `/assistant-framework:assistant-workflow`; skills still activate from their descriptions.
+
+**Codex** (CLI and app):
+
+```bash
+codex plugin marketplace add laimis91/assistant-framework
+```
+
+Then install `assistant-framework` from the Plugins Directory in the Codex app, or with the CLI. Refresh with `codex plugin marketplace upgrade`.
+
+**One copy of each skill.** Remove a manual install (below) before installing the plugin, so the same skill is not loaded twice. If you also upload the chat skills to your Claude account, see [Claude chat skills](#claude-chat-skills).
+
+**Agents are optional.** The plugin does not ship the subagent definitions in `agents/`. Without them, Workflow builds hands-on and gives each formal reviewer the role prompt shipped in the owning skill (`references/roles/`). You can copy `agents/claude/*.md` into `~/.claude/agents/` or `agents/codex/*.toml` into `~/.codex/agents/`, or use your own subagent setup.
+
+**Releases.** The plugin version comes from `version.txt`. Users get a new copy only when that version changes, so a release bumps `version.txt` and runs `tools/skills/sync-plugin.py --apply`. The editable source stays `skills/`; the contract suites fail when `plugins/assistant-framework/` drifts from it.
+
+### Claude chat skills
+
+Three skills work in Claude chat on the web, desktop and mobile apps, with no repository and no subagents: `assistant-research`, `assistant-thinking` and `assistant-clarify`. Build their upload ZIPs:
+
+```bash
+python3 tools/skills/build-chat-zips.py
+```
+
+Upload each ZIP from `dist/chat-skills/` under **Customize → Skills → + → Create skill → Upload a skill**, with code execution turned on. Uploads are manual, so repeat them after each release. Mobile availability is not yet confirmed.
+
+Skills on your account also sync into Claude Code (v2.1.273 or later). With the plugin installed too, Claude Code then has two copies of these three skills. Keep one: delete the account copy in Customize → Skills if you use Claude Code mainly, at the cost of losing it in chat.
+
+### Optional instruction block
+
+The skills work without any instruction file. To apply the framework's routing and working rules before a skill loads, paste the block from [docs/instruction-block.md](docs/instruction-block.md) into `~/.claude/CLAUDE.md` or a project's `CLAUDE.md` (Claude Code), or `~/.codex/AGENTS.md` or a project's `AGENTS.md` (Codex). Nothing writes it for you.
+
 ## Installation
 
 Installations whose selected bundled closure includes `assistant-workflow` require Python 3.9+ for its packet-admission helper and Workflow eval adapter. Both installers probe a usable supported interpreter before writes, including dry-run; closures without Workflow remain Python-independent. Install the runtime yourself, then rerun the installer. Unix probes `python3`; native Windows probes `py -3`, `python3`, then `python` and reports the supported invocation. No runtime is downloaded.

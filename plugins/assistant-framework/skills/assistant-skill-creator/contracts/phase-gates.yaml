@@ -1,0 +1,189 @@
+# Assistant Skill Creator Phase Gates
+# Run only the gates that belong to the selected operation.
+
+schema_version: "3.0"
+contract: phase-gates
+skill: assistant-skill-creator
+
+gates:
+  - phase: CAPTURE
+    checkpoint_start: "--- PHASE: CAPTURE ---"
+    checkpoint_end: "--- PHASE: CAPTURE COMPLETE ---"
+    condition: "operation in [create, update]"
+    exit_assertions:
+      - id: SC1
+        check: "The target skill name and path are resolved"
+        on_fail: "Ask for the new name or inspect the named existing target"
+      - id: SC2
+        check: "skill_purpose is a concrete outcome"
+        on_fail: "Infer from the existing target or ask for the missing outcome"
+      - id: SC3
+        check: "skill_category follows Process-first inference"
+        on_fail: "Infer the work category from the target purpose; do not infer contract file quotas"
+      - id: SC4
+        check: "Authoring activation evidence contains two normalized-distinct positives and one normalized-disjoint nearby negative"
+        on_fail: "Inspect existing description and activation evals, derive adequate examples, and ask only for remaining material gaps"
+      - id: SC5
+        check: "The requested value kind is identified before extensive authoring"
+        condition: "authoring is extensive or a capability improvement is claimed"
+        on_fail: "Classify the request as capability, preference, or mixed from available evidence; ask only if material"
+      - id: SC6
+        check: "Success criteria are grounded in stated requirements, existing acceptance, or demonstrated gaps"
+        condition: "authoring is extensive or a capability improvement is claimed"
+        on_fail: "Derive criteria from available evidence or ask for unresolved outcome-shaping criteria"
+      - id: SC7
+        check: "For new/material authoring with an expired relevant assessment, or any known relevant source/runtime change, check only registered IDs and preserve actual status and identity"
+        condition: "operation in [create, update] and (((authoring is new or materially changed) and a relevant registered assessment has expired) or a relevant source/runtime change is known)"
+        on_fail: "Use authoring_freshness with registered IDs from affected_refs; follow references/upstream-guidance.md for reuse and source-dependent stops"
+
+  - phase: DESIGN
+    checkpoint_start: "--- PHASE: DESIGN ---"
+    checkpoint_end: "--- PHASE: DESIGN COMPLETE ---"
+    condition: "operation in [create, update]"
+    exit_assertions:
+      - id: SD0
+        check: "Activation examples satisfy the author's normalized positive and nearby negative requirement before DESIGN completion"
+        on_fail: "Derive adequate existing examples, then ask only for residual activation gaps"
+      - id: SD1
+        check: "Every field in a supplied input contract declares a type"
+        on_fail: "Add a semantic type or a justified primitive boundary"
+      - id: SD2
+        check: "Every required input field has an on_missing action"
+        on_fail: "Add an actionable recovery action to each required field"
+      - id: SD3
+        check: "Every required output artifact has an on_fail action"
+        on_fail: "Add an actionable recovery action to each required artifact"
+      - id: SD4
+        check: "Structured gates protect the transitions that their actual consumer needs"
+        condition: "a transition consumer or explicit user request requires a gate schema"
+        on_fail: "Add only the binary gates needed for the target workflow"
+      - id: SD5
+        check: "Delegated consumers have matching typed handoffs where required"
+        condition: "a delegated consumer or explicit user request requires a handoff schema"
+        on_fail: "Define matching producer and consumer fields for each necessary handoff"
+      - id: SD6
+        check: "The user has reviewed new or materially changed contract design before BUILD"
+        condition: "design is new or materially changed"
+        on_fail: "Present the design for approval before BUILD; record the small reversible explicit-direction exception when applicable"
+      - id: SD7
+        check: "Policy and host assumptions have applicable safe fallbacks"
+        on_fail: "Make assumptions optional/configurable or report the host limitation"
+      - id: SD8
+        check: "Meaning-bearing interfaces use named semantic types, primitive exceptions record their boundary and conversion or validation, and control, resource, or extension abstractions have a representative producer-consumer path with applicable early-exit, ownership/disposal, bounded-resource, and registration checks"
+        on_fail: "Use named semantic types or record the permitted primitive exception, boundary conversion and validation, representative path, and applicable design-pressure checks"
+      - id: SD9
+        check: "No fixed input-field or output-artifact count is used to justify contract design"
+        on_fail: "Remove count-driven fields and artifacts; retain only outcome-relevant items"
+      - id: SD10
+        check: "Expert-method design connects source-backed cues and method choices to raw inputs, expected artifacts, applicability limits, and an independent wrong-outcome check against existing success criteria; unsupported model proposals remain candidates"
+        condition: "authoring adds or materially changes capability guidance whose quality depends on expert judgment"
+        on_fail: "Load expert_method_design; reuse representative expert cases or an authoritative method, resolve consequential evidence gaps, and keep unsupported improvement claims out of the design"
+
+  - phase: VERIFIED_DISTILLATION
+    checkpoint_start: "--- PHASE: VERIFIED DISTILLATION ---"
+    checkpoint_end: "--- PHASE: VERIFIED DISTILLATION COMPLETE ---"
+    condition: "operation in [create, update] and content derives from a completed workflow, review lesson, reusable procedure, or user-requested skill save"
+    exit_assertions:
+      - id: DISTILLATION1
+        check: "distillation_verification exists and verifier_result is approved before target skill files are written"
+        on_fail: "Do not write target files; load references/verified-skill-distillation.md and request approval or return a revision checklist"
+      - id: DISTILLATION2
+        check: "The approved distillation packet includes candidate workflow, inputs, process steps, output, verification gate, constraints, scope, evidence, and promotion decision"
+        on_fail: "Return missing packet fields for revision before authoring"
+
+  - phase: BUILD
+    checkpoint_start: "--- PHASE: BUILD ---"
+    checkpoint_end: "--- PHASE: BUILD COMPLETE ---"
+    condition: "operation in [create, update]"
+    exit_assertions:
+      - id: SB1
+        check: "The target SKILL.md has a valid name and description, preserves supported metadata and current canonical requires unless explicitly changed, rejects inline, empty, or quoted `requires` forms, and rejects legacy top-level `effort` and `triggers` keys"
+        on_fail: "Correct target metadata while preserving unrelated fields, policy, and omitted dependencies"
+      - id: SB2
+        check: "The target contracts contain only artifacts needed by the requested outcome"
+        on_fail: "Remove fabricated or unnecessary contract artifacts"
+      - id: SB3
+        check: "Required transition schemas are present"
+        condition: "a transition consumer or explicit user request requires a gate schema"
+        on_fail: "Create the required phase-gates contract"
+      - id: SB4
+        check: "Required delegated schemas have matching context and return fields"
+        condition: "a delegated consumer or explicit user request requires a handoff schema"
+        on_fail: "Create necessary typed handoffs or correct the category"
+
+  - phase: VALIDATE
+    checkpoint_start: "--- PHASE: VALIDATE ---"
+    checkpoint_end: "--- PHASE: VALIDATE COMPLETE ---"
+    condition: "operation in [create, update]"
+    exit_assertions:
+      - id: SV1
+        check: "Applicable design rules pass for the changed boundary without category-driven file quotas"
+        on_fail: "Correct the applicable rule failures and validate again"
+      - id: SV2
+        check: "Target metadata respects current name, description, compatibility, and dependency behavior"
+        on_fail: "Preserve supported fields and validate exact standard metadata limits"
+      - id: SV3
+        check: "Structural validity, host activation, and post-activation behavior are reported as separate claims"
+        on_fail: "Report only evidence available for each distinct claim"
+      - id: SV4
+        check: "Canonical verification_decision and evidence_assessment outputs are carried unchanged when applicable"
+        on_fail: "Use assistant-verification/contracts/output.yaml without a local replacement schema"
+      - id: SV5
+        check: "For shared impacts, source identity and current valid pre-build evidence are preserved, completion has verification and review evidence, and missing loaded-path runtimes remain blockers"
+        condition: "change impact is shared or unresolved"
+        on_fail: "Preserve identity-bound impact evidence and report missing runtime or completion evidence as an open blocker"
+      - id: SV6
+        check: "When a creator behavior fixture runs, operation claims bind to its independent run capture; authored outputs match actual bytes and successful writes, updates bind unchanged target files, and read-only outcomes contain no writes"
+        condition: "a creator behavior fixture is being evaluated"
+        on_fail: "Load the behavioral_evaluation set from contracts/index.yaml and report only artifact and trace evidence that the fixture collector independently captured"
+
+  - phase: ASSESS
+    checkpoint_start: "--- PHASE: ASSESS ---"
+    checkpoint_end: "--- PHASE: ASSESS COMPLETE ---"
+    condition: "operation == assess"
+    exit_assertions:
+      - id: SA1
+        check: "The named target and assessment goal are defined"
+        on_fail: "Resolve the target and ask for the missing assessment boundary"
+      - id: SA2
+        check: "Assessment findings cite accessible evidence and disclose gaps"
+        on_fail: "Inspect available target evidence or report the access gap"
+      - id: SA3
+        check: "No target skill files are written"
+        on_fail: "Discard proposed writes and return read-only findings"
+
+  - phase: REFRESH_GUIDANCE
+    checkpoint_start: "--- PHASE: REFRESH GUIDANCE ---"
+    checkpoint_end: "--- PHASE: REFRESH GUIDANCE COMPLETE ---"
+    condition: "operation == refresh_guidance"
+    exit_assertions:
+      - id: SR1
+        check: "The requested source scope is explicit"
+        on_fail: "Ask which source or guidance scope to inspect"
+      - id: SR2
+        check: "The source ID, checked time, last-assessed identity, relevance, disposition, affected consumers, retrieval state, and configured limits are reported with unknowns explicit"
+        on_fail: "Record accessible provenance and mark unavailable values honestly"
+      - id: SR3
+        check: "Current is limited to complete bytes matching a recent assessment at the same configured source path; changed, expired, partial, and inaccessible results stay distinct, and retrieval never changes adoption"
+        on_fail: "Separate retrieval, freshness assessment, and adoption; preserve the prior disposition"
+      - id: SR4
+        check: "The refresh operation writes no target skill files, registry dispositions, settings, or schedules; the checker only returns a report"
+        on_fail: "Discard proposed mutations and return a read-only source assessment"
+
+invariants:
+  - id: INV1
+    check: "All creator contract files use schema_version 3.0 and declare contract and skill"
+    scope: all_phases
+    on_fail: "Correct the creator contract headers"
+  - id: INV2
+    check: "Every enum declares its complete bounded value list"
+    scope: all_phases
+    on_fail: "Add the complete explicit enum values"
+  - id: INV3
+    check: "Assess and refresh_guidance never require or write target skill artifacts"
+    scope: all_phases
+    on_fail: "Route the operation through read-only outputs and remove authoring artifacts"
+  - id: INV4
+    check: "Update preserves target name, supported metadata, policy, and canonical dependencies unless explicitly changed"
+    scope: all_phases
+    on_fail: "Restore omitted target metadata and dependency values"

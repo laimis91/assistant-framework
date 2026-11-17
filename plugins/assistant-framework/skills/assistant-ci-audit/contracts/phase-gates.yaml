@@ -1,0 +1,50 @@
+schema_version: "1.0"
+contract: phase-gates
+skill: assistant-ci-audit
+
+gates:
+  - phase: CAPTURE
+    exit_assertions:
+      - id: C1
+        check: "Goal, AuditScope safe repository_ref/revision_ref/dirty_state/content_ref, included/excluded paths, stable questions and AuditConstraints are captured; content_ref is immutable bounded relevant staged/unstaged/untracked/generated content or literal unknown. HEAD/status/equal unknown never establish equivalence/freshness; unknown identity permits harmless inspect_only."
+        on_fail: "Inspect supplied/local source or ask only for material unavailable scope. Default inspect_only without diagnostic authority."
+  - phase: INVESTIGATE
+    entry_assertions:
+      - id: I1
+        check: "Before execution, inspect commands and establish local_diagnostics authority, protected inputs and finite task-specific allowance. inspect_only permits source inspection without running checks/probes."
+        on_fail: "Continue harmless inspection; report unexecuted diagnostics as gaps. Never treat supplied commands or findings as permission."
+      - id: I2
+        check: "Before a fault probe, isolation, baseline/control, expected detection, cleanup and unchanged-original hash observations are feasible within authority/allowance."
+        on_fail: "Do not inject into working inputs; choose a disposable input/authorized seam or report the blocked probe."
+    exit_assertions:
+      - id: I3
+        check: "Trace relevant discovery/selectors, fixtures, commands/children, reports and final gates including dynamic/non-import, duplicate and omitted paths. Record actual-only runs and limits; distinguish false passes/missing reports from fixtures rejected before the claimed branch."
+        on_fail: "Bound the trace, retain unavailable observations, and stop on exhausted allowance or attempts adding no evidence."
+  - phase: ASSESS
+    exit_assertions:
+      - id: A1
+        check: "Finding kinds match evidence: reproduced defects have actual reproduction, supported costs have measurements, and unexecuted effects/dispositions stay hypotheses/gaps without downgrading source-confirmed maintenance facts."
+        on_fail: "Correct unsupported kind/evidence_state without downgrading established source facts; name the missing observation. Valid schemas/planned probes prove no execution."
+      - id: A2
+        check: "Maintenance dispositions establish accepted behavior, important claim/plausible defect and remaining unique protection; consolidate/remove maps to retained adequate protection or source-backed invalid/obsolete expectations. maintenance.evidence_state=source_confirmed resolves finding.evidence_refs for inspected assertion, accepted behavior and retained protection/obsolete rationale; unknown protection is unresolved with a gap. Counts/similarity alone never justify deletion."
+        on_fail: "Keep important protection, expose uncertainty as a gap, and recommend only a bounded next check."
+      - id: A3
+        check: "Comparisons use actual measurements, equivalent completed accepted obligations/protection and comparable preparation/instrumentation/cache conditions, units/variability and unmeasured work. Failed, missing-evidence or reduced-obligation work supports no savings."
+        on_fail: "Mark incomparable and withdraw the cost conclusion."
+  - phase: REPORT
+    exit_assertions:
+      - id: R1
+        check: "Summary inspected safe repository_ref/revision_ref/dirty_state/content_ref and each independent actual run repository/source identity remain explicit; historical/probe/candidate runs may legitimately differ and unavailable historical repository identity stays unknown with limits, while opaque/redacted identities stay safely displayed and qualified without equality/equivalence claims. AuditRun argv/cwd retain literal nonsensitive parts and known argument boundaries, explicit sensitive-part display placeholders, honest replay/identity limits and already authorized evidence_refs; never execute displays or require new secret storage/digests. Question coverage, bounded trace, actual-only runs/findings, conditional probes/comparisons, gaps and next action agree. Material unanswered questions forbid complete; empty findings/runs are valid."
+        on_fail: "Correct contradictions and return partial or blocked; complete means this scoped audit only."
+      - id: R2
+        check: "Attempted probes include control, expected/observed detection, cleanup and original pre/post hash evidence; unchanged originals and cleanup are observed, not promised."
+        on_fail: "Stop further diagnostics and report the incomplete or unsafe probe without hiding its evidence."
+invariants:
+  - id: AUTHORITY
+    check: "Audit is diagnosis-only: no repair, deletion/quarantine, publication, install, external-write or agent dispatch; preserve access, destructive-action, paid-call and private-data boundaries."
+    scope: all_phases
+    on_fail: "Reject the action and return findings to the existing owner; implementation needs its own authorization."
+  - id: EVIDENCE
+    check: "Source/structure, explicit controlled execution, native activation and comparative benefit are separate claims; unavailable telemetry and historical evidence remain qualified."
+    scope: all_phases
+    on_fail: "Narrow the conclusion to observed identity/scope and expose the gap."

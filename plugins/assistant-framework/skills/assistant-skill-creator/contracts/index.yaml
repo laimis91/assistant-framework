@@ -1,0 +1,131 @@
+schema_version: "3.0"
+contract: index
+skill: assistant-skill-creator
+
+authoritative_contracts:
+  - path: contracts/input.yaml
+    contract: input
+  - path: contracts/output.yaml
+    contract: output
+  - path: contracts/phase-gates.yaml
+    contract: phase-gates
+
+load_sets:
+  entry:
+    selectors:
+      - id: skill-creator-entry-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [operation, skill_name, existing_skill_path, skill_purpose]
+  authoring_inputs:
+    selectors:
+      - id: skill-creator-authoring-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [skill_category, skill_value_kind, success_criteria, activation_examples, dependencies, policy_constraints]
+  assessment_inputs:
+    selectors:
+      - id: skill-creator-assessment-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [assessment_goal]
+  authoring_freshness:
+    references:
+      - references/upstream-guidance.md
+    selectors:
+      - id: skill-creator-authoring-guidance-source-ids
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [authoring_guidance_sources]
+  guidance_inputs:
+    references:
+      - references/upstream-guidance.md
+    selectors:
+      - id: skill-creator-guidance-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [guidance_scope]
+  current_phase:
+    selectors:
+      - id: skill-creator-current-operation-phase
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        name_from: active_skill_creator_phase
+        allowed_names: [CAPTURE, DESIGN, VERIFIED_DISTILLATION, BUILD, VALIDATE, ASSESS, REFRESH_GUIDANCE]
+      - id: skill-creator-invariants
+        path: contracts/phase-gates.yaml
+        section: invariants
+        key: id
+        names: [INV1, INV2, INV3, INV4]
+  contract_design:
+    references:
+      - references/skill-contract-design-guide.md
+    selectors:
+      - id: skill-creator-contract-category
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [skill_category, skill_value_kind, success_criteria]
+  expert_method_design:
+    references:
+      - references/expert-method-design.md
+    selectors:
+      - id: skill-creator-expert-method-criteria
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [skill_value_kind, success_criteria]
+  harness_design:
+    references:
+      - references/skill-contract-design-guide.md
+      - references/harness-patterns.md
+    selectors:
+      - id: skill-creator-harness-category
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [skill_category]
+  verified_distillation:
+    references:
+      - references/verified-skill-distillation.md
+    selectors:
+      - id: skill-creator-distillation-path
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [existing_skill_path]
+  validation:
+    references:
+      - references/contract-design-checklist.md
+    selectors:
+      - id: skill-creator-validation-summary
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [validation_summary]
+  behavioral_evaluation:
+    references:
+      - references/behavioral-evaluation.md
+    selectors:
+      - id: skill-creator-behavior-evidence
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [operation_summary]
+  completion:
+    selectors:
+      - id: skill-creator-completion-artifacts
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        names: [operation_summary, skill_md, input_contract, output_contract, phase_gates_contract, handoffs_contract, validation_summary, policy_safety_summary, distillation_verification, upstream_guidance_assessment, verification_decision, evidence_assessment]
+
+fallback:
+  on_missing_selector: load_full_authoritative_file
+  on_invalid_selector: load_full_authoritative_file

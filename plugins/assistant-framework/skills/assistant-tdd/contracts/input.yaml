@@ -1,0 +1,134 @@
+# TDD Input Contract
+# Resolve these fields when TDD mode activates.
+
+schema_version: "3.0"
+contract: input
+skill: assistant-tdd
+
+fields:
+  - name: execution_lane
+    type: enum
+    required: false
+    enum_values: [bounded_executor, separated_workers]
+    description: "bounded_executor owns the cycle; separated_workers pairs SAME writer with execution-only BuilderTester."
+    default: bounded_executor
+    on_missing: infer
+    infer_from: "Use workflow build_execution_lane when composed; otherwise bounded_executor unless high/critical risk, explicit independent RED evidence, broad/noisy/environment-heavy verification, or explicit role separation requires separated_workers"
+
+  - name: activation_reason
+    type: enum
+    required: true
+    enum_values: [user_request, plan_constraint, project_convention, verification_selection]
+    description: "The source that activates TDD"
+    validation: "verification_selection requires an unchanged selected_technique decision and current applicable-ID intersection; preserve actual provenance."
+    on_missing: infer
+    infer_from: >
+      User TDD → user_request; approved-plan TDD → plan_constraint; project tests-first → project_convention. Otherwise verification_selection requires unchanged selected_technique and intersecting current/applicable IDs; never invent a source.
+
+  - name: verification_decision
+    type: object
+    required: conditional
+    condition: "invoked from assistant-workflow or activation_reason == verification_selection"
+    description: "Canonical verifier decision carried unchanged when TDD is composed."
+    validation: "Unchanged for all workflow activations; verification_selection requires truthful selected_technique provenance. Standalone may omit; global mode alone cannot activate TDD."
+    on_missing: fail
+
+  - name: selected_check_ids
+    type: string[]
+    required: conditional
+    condition: "verification_decision is present or invoked from assistant-workflow or activation_reason == verification_selection"
+    description: "Due increment checks"
+    validation: "Ordered unique IDs resolving exactly once in verification_decision.checks; at least one intersects tdd_choice.applicable_check_ids."
+    on_missing: fail
+
+  - name: behaviors
+    type: object[]
+    required: true
+    description: "Behaviors for Red-Green-Refactor"
+    min_items: 1
+    validation: "One cycle per behavior; split complex behaviors. With verification_decision, admit only behaviors wholly covered by current selected/applicable CheckSpec procedures/oracles; reject excluded or mixed-scope behaviors before RED."
+    object_fields:
+      - name: description
+        type: string
+        required: true
+        description: "What the behavior does — becomes the test name basis"
+      - name: plan_step
+        type: int
+        required: false
+        description: "Which plan step this behavior belongs to (when used with workflow)"
+    on_missing: ask
+    ask_prompt: "What behaviors should I implement with TDD? List each one."
+
+  - name: debugging_evidence
+    type: object
+    required: conditional
+    condition: "when behavior is a bugfix whose root cause was not already obvious"
+    description: "assistant-debugging evidence used to define the RED regression test"
+    validation: "Must include reproduction_status, root_cause_or_mitigation, confidence, and original_failure_path; do not start RED for unknown-cause bugfixes without this evidence or a documented blocker"
+    on_missing: fail
+    object_fields:
+      - name: reproduction_status
+        type: enum
+        required: true
+        enum_values: [yes, partial, blocked, no]
+        description: "Whether the reported symptom was reproduced. `yes`: a check asserting the exact reported symptom (the specific wrong value, error identity, message or state) observed it, and a nearby unrelated failure on the same path would not satisfy that check. `partial`: the symptom was observed, but the check does not distinguish it from a nearby unrelated failure, or only part of the symptom was observed. Historical `yes` records may predate this discrimination rule."
+      - name: root_cause_or_mitigation
+        type: string
+        required: true
+      - name: original_failure_path
+        type: string
+        required: true
+      - name: confidence
+        type: enum
+        required: true
+        enum_values: [high, medium, low]
+
+  - name: architecture_test_obligations
+    type: object[]
+    required: false
+    default: []
+    description: "Testable obligations carried from an applicable workflow Architecture Decision Pack; this is not a request to create architecture work for every TDD cycle"
+    validation: "Each obligation names its Pack reference, behavior, and verification. Quality scenarios include workload, budget/explicit unknown, measurement, and failure condition. Design-pressure obligations cover control/early exit, ownership/disposal, resource envelope, extension registration, or representative path behavior."
+    object_fields:
+      - name: obligation_id
+        type: string
+        required: true
+        description: "Stable identifier used to bind this input obligation to exactly one coverage entry"
+        validation: "Non-empty and unique within architecture_test_obligations"
+      - name: architecture_decision_pack_ref
+        type: string
+        required: true
+      - name: obligation_kind
+        type: enum
+        required: true
+        enum_values: [semantic_type_validation, primitive_boundary_conversion, public_contract_compatibility, quality_scenario, control_or_early_exit, ownership_or_disposal, resource_envelope, extension_registration, representative_path]
+      - name: behavior
+        type: string
+        required: true
+      - name: verification
+        type: string
+        required: true
+
+  - name: test_framework
+    type: string
+    required: true
+    description: "Testing framework in use (e.g., xUnit, NUnit, Jest, pytest)"
+    on_missing: infer
+    infer_from: "Detect from project files: *.csproj references, package.json, requirements.txt"
+
+  - name: exceptions
+    type: string[]
+    required: false
+    description: "Behaviors explicitly exempted from TDD (requires user approval)"
+    default: []
+    validation: "Each exception must have user approval and a reason"
+    examples:
+      - "Scaffolding/generated code"
+      - "Configuration-only changes"
+      - "UI layout with no logic"
+
+# Validation behavior:
+# 1. Resolve all fields and conditional architecture_test_obligations before writing any test or production code
+# 2. If behaviors list is empty, ask user what to implement
+# 3. Add constraint to task journal: "TDD: active (Red-Green-Refactor enforced)"
+# 4. Log: >> TDD active | {count} behaviors | framework: {test_framework}
