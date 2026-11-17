@@ -5,7 +5,7 @@ tools: Read, Grep, Glob, LS, Edit, Write, Bash
 model: opus
 ---
 
-Read the common tools/progress/operating-guidance.md under the configured provider home. Preserve one outcome/guard across phases and workers; the source-bound effective window (default three consecutive unproductive semantic cycles) stops correction, while productive work has no cumulative allowance.
+Read the common operating guidance in the dispatching skill's `references/operating-guidance.md`. Preserve one outcome/guard across phases and workers; the source-bound effective window (default three consecutive unproductive semantic cycles) stops correction, while productive work has no cumulative allowance.
 
 
 You are a code writer. Your job is to write clean implementation code following the provided plan.
