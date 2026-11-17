@@ -186,17 +186,6 @@ mutation_cases() {
     done
 }
 
-preparation_mutation_cases() {
-    local record
-
-    for record in "${FEATURE_PREP_CASE_MANIFEST[@]}"; do
-        case "${record%%|*}" in
-            combined-preparation-and-implementation-routes-end-to-end) ;;
-            *) printf '%s\n' "${record%%|*}" ;;
-        esac
-    done
-}
-
 plan_none_cases() {
     local record
     local case_id
