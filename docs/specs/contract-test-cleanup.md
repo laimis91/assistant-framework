@@ -1,6 +1,6 @@
 # Contract test cleanup
 
-Status: **Accepted** by the user 2026-11-17, with decisions D-TC-1 to D-TC-6 as recommended; implementation in progress. Revised the same day after an independent review (5 major, 10 minor, 1 nit findings), all addressed below. Baseline: main 487b8d3.
+Status: **Accepted** by the user 2026-11-17, with decisions D-TC-1 to D-TC-6 as recommended. Slices A–D implemented 2026-11-18 in one pull request; the runtime target (D-TC-3) and the checks proposed for deletion are open decisions, see Implementation notes. Revised the same day after an independent review (5 major, 10 minor, 1 nit findings), all addressed below. Baseline: main 487b8d3.
 Source: user request of 2026-11-17 to clean up the tests because they take too long to run and feel over-engineered, with too many checks. The check inventory and classifier behind this specification are local working material (`docs/plans/test-cleanup/`, Git-ignored); each pull request carries the evidence it relies on (R-TC-11).
 
 ## Problem and intended outcome
@@ -97,7 +97,7 @@ If Slice A's new rules find real inconsistencies in `skills/`, the fix lands fir
 
 ## Decisions
 
-Recommended; open until the user approves.
+Approved by the user 2026-11-17 as recommended.
 
 - **D-TC-1.** Wording pins are deleted, not moved into evals. Behavior belongs to the skill eval cases; a pin restated as an eval would still only check wording.
 - **D-TC-2.** Pins that only show a skill names one of its files ("Load `references/x.md`") are replaced by one check in `tools/skills/check-skill-containment.py`, which today resolves `](…)` Markdown links but not backtick paths. A backtick path starting `references/`, `contracts/`, `evals/` or `scripts/` resolves from the skill root, then from the file's folder. Text that describes the structure of another skill or project, such as `assistant-skill-creator/SKILL.md` describing a skill being created, is allowlisted per file with a reason. Fixtures cover both outcomes.
@@ -105,3 +105,44 @@ Recommended; open until the user approves.
 - **D-TC-4.** One test command stays; no separate fast and full tiers.
 - **D-TC-5.** If the target is missed only because of safety or unit coverage, a fast default tier with an opt-in full run is the fallback, decided then by the user.
 - **D-TC-6.** `tests/test-skill-activation-tools.sh` (14s) is out of scope. How the eval runners grade is out of scope; R-TC-7 allows only an additive response-lookup option.
+
+## Implementation notes
+
+Recorded 2026-11-18 for the pull request that implements slices A–D.
+
+- **One pull request.** The user asked for all slices on one branch and one pull request instead of one per slice.
+- **No generic contract validator (R-TC-5).** None of the 10 bucket-5 checks matched fields across contract files; they pinned wording. They were deleted as pins under R-TC-1, and no rule was added to `validate-contracts.sh`.
+- **No batched grading (R-TC-7).** One grader call measured about 0.25s of process start-up and 0.6–0.7s of grading, so batching would save about 25%. Suites instead grade single-rule mutations in-process with the grader's own functions, and keep one full runner call per case or runner path:
+  - `skill-eval` sums `count_structured_json_assertion_failures` and the review envelope count, as the runner does.
+  - `codex-behavioral-eval` sources the runner's functions, extracted up to its argument parsing and guarded against drift.
+- **D-TC-2** is implemented as Rule 3 of `tools/skills/check-skill-containment.py`, with fixtures in `skill-self-containment-contracts.sh`.
+- **R-TC-8** is implemented: one CI job, `framework-contracts`, with a 30-minute timeout, and the repo-guard checks rewritten.
+- **Dispositions.** 1,226 checks were reviewed per suite. 233 were deleted and 151 shrunk. 125 were proposed for deletion but left in place, because they touch R-TC-3 safety terms or a spec names them; the user decides on these. The rest were kept. Five unused helpers were removed from `tests/p0-p4/lib/`.
+- **Kill probes (R-TC-9).** These ran on disposable copies. The probes the suite agents ran for their own suites were all caught except two, which the user must accept or give new checks:
+  - A dropped `required_substring` in `docs/evals/framework-instruction-cases.json` goes undetected.
+  - Trimming `pilot_cases` in the workflow-kernel manifest goes undetected.
+
+  The workflow-evidence-spine check "eval fixtures disclose every closed-world artifact constraint" was found to be vacuous: it cannot fail.
+
+### Runtime
+
+| Measurement on the user's Mac | Before | After |
+|---|---:|---:|
+| Serial aggregate, one suite at a time | 4,265s | 1,940s |
+| `skill-eval`, standalone | about 2,632s (contention) | 618s |
+| `codex-behavioral-eval`, standalone | 1,309s | 498s |
+| `workflow-architecture-completion`, standalone | 1,579s | about 430s (under load) |
+| `assistant-research`, standalone | 418s | 200s |
+| `progressive-discovery`, standalone | 473s | 80s |
+
+**The 10-minute target (D-TC-3) is not met.** The remaining time sits in kept units:
+- one rejected mutation per eval assertion (R-TC-6);
+- one accepted response per case;
+- one end-to-end runner witness for each distinct runner path in `codex-behavioral-eval`.
+
+Reaching 10 minutes would mean a coarser unit of protection or the D-TC-5 fast tier. The user picks between those and a new target.
+
+### Known flakes, not caused by this change
+
+- The skill validator intermittently rejects a valid fixture description with `FRONTMATTER_DESCRIPTION`. It was seen in the `skill-creator-semantic` and `skill-validator` suites, including on the unchanged baseline, and was not reproduced in four later runs under either locale.
+- "supervisor cleanup confirms absence or fails within its deadline…" in `codex-behavioral-eval` failed only while two suites ran in parallel.
