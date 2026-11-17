@@ -7,7 +7,7 @@
 # Any subagent returning results MUST include the required output fields.
 # If a required field is missing from the return, follow the on_missing action.
 
-schema_version: "16.0"
+schema_version: "17.0"
 contract: handoffs
 skill: assistant-workflow
 
@@ -1315,7 +1315,7 @@ handoffs:
         required: conditional
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         description: "Current expanded common impact artifact for Architect planning."
-        validation: "Preserves artifact_identity, phase, capture_ref, expected_context_ref, validator_result_ref, impact_scope, and status unchanged through task-packet planning; assessment_ref is carried only for pre-build or completion. Completion carries the actual review document pointer for rerun or receipt reuse."
+        validation: "Preserves artifact_identity, phase, capture_ref, expected_context_ref, checklist_result_ref, impact_scope, and status unchanged through task-packet planning; assessment_ref is carried only for pre-build or completion. Completion carries the actual review document pointer for the completion checklist and independent review."
         on_missing: re-dispatch
         object_fields:
           - {name: artifact_identity, type: string, required: true}
@@ -1325,12 +1325,12 @@ handoffs:
           - {name: capture_ref, type: string, required: true}
           - {name: expected_context_ref, type: string, required: true}
           - {name: assessment_ref, type: string, required: conditional, condition: "phase in [pre_build, completion]"}
-          - {name: validator_result_ref, type: string, required: true}
+          - {name: checklist_result_ref, type: string, required: true, description: "Recorded change-impact checklist result: each expanded-work checklist item with pass, fail or not_applicable and its evidence ref (assistant-review references/change-impact.md)", on_missing: fail}
           - name: review_projection_ref
             type: string
             required: conditional
             condition: "phase == completion"
-            validation: "Completion carries the actual review document pointer for rerun or receipt reuse."
+            validation: "Completion carries the actual review document pointer for the completion checklist and independent review."
       - name: requirement_acceptance_map
         type: string
         required: true
@@ -2493,20 +2493,20 @@ handoffs:
         type: object
         required: conditional
         condition: "the current slice has a behavior-bearing change or locality/shared/unresolved impact decision"
-        validation: "impact_scope and applicability_reason are carried unchanged. local carries causal evidence and does not require expanded checker refs; shared/unresolved or explicit expansion carries the matching expanded artifact envelope."
+        validation: "impact_scope and applicability_reason are carried unchanged. local carries causal evidence and does not require expanded checklist refs; shared/unresolved or explicit expansion carries the matching expanded artifact envelope."
       - name: change_impact_evidence
         type: object
         required: conditional
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         description: "Current resolved pre-build artifact envelope that authorizes this CodeWriter mutation dispatch."
-        validation: "The common checker was freshly run, or was rerun with --receipt validator_result_ref against the referenced capture_ref, independent expected_context_ref, and assessment_ref for a current valid pre_build result that resolves artifact_identity against the current task packet; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient. The CodeWriter may not use discovery or completion evidence as mutation authorization."
+        validation: "A passing pre_build expanded-work checklist result (checklist_result_ref) was recorded against the referenced capture_ref, independent expected_context_ref, and assessment_ref, naming each checklist item with its evidence, and resolves artifact_identity against the current task packet; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient. The CodeWriter may not use discovery or completion evidence as mutation authorization."
         object_fields:
           - {name: artifact_identity, type: string, required: true}
           - {name: phase, type: enum, required: true, enum_values: [pre_build]}
           - {name: capture_ref, type: string, required: true}
           - {name: expected_context_ref, type: string, required: true}
           - {name: assessment_ref, type: string, required: true}
-          - {name: validator_result_ref, type: string, required: true}
+          - {name: checklist_result_ref, type: string, required: true, description: "Recorded change-impact checklist result: each expanded-work checklist item with pass, fail or not_applicable and its evidence ref (assistant-review references/change-impact.md)", on_missing: fail}
           - {name: impact_scope, type: enum, required: true, enum_values: [not_applicable, local, shared, unresolved]}
           - {name: status, type: enum, required: true, enum_values: [valid]}
       - name: build_execution_lane
@@ -3399,7 +3399,7 @@ handoffs:
         type: object
         required: conditional
         condition: "the current slice has a behavior-bearing change or locality/shared/unresolved impact decision"
-        validation: "impact_scope and applicability_reason are carried unchanged. local carries causal evidence and does not require expanded checker refs; shared/unresolved or explicit expansion carries the matching expanded artifact envelope."
+        validation: "impact_scope and applicability_reason are carried unchanged. local carries causal evidence and does not require expanded checklist refs; shared/unresolved or explicit expansion carries the matching expanded artifact envelope."
       - name: build_execution_lane
         type: enum
         required: true
@@ -3497,7 +3497,7 @@ handoffs:
         required: conditional
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
         description: "Current resolved pre-build artifact envelope that authorizes this BuilderTester mutation dispatch."
-        validation: "The common checker was freshly run, or was rerun with --receipt validator_result_ref against the referenced capture_ref, independent expected_context_ref, and assessment_ref for a current valid pre_build result that resolves artifact_identity against the current task packet; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient, and BuilderTester must not reuse CodeWriter's pre-build result after earlier mutations."
+        validation: "A passing pre_build expanded-work checklist result (checklist_result_ref) was recorded against the referenced capture_ref, independent expected_context_ref, and assessment_ref, naming each checklist item with its evidence, and resolves artifact_identity against the current task packet; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient, and BuilderTester must not reuse CodeWriter's pre-build result after earlier mutations."
         object_fields:
           - {name: artifact_identity, type: string, required: true}
           - {name: phase, type: enum, required: true, enum_values: [pre_build]}
@@ -3506,7 +3506,7 @@ handoffs:
           - {name: capture_ref, type: string, required: true}
           - {name: expected_context_ref, type: string, required: true}
           - {name: assessment_ref, type: string, required: true}
-          - {name: validator_result_ref, type: string, required: true}
+          - {name: checklist_result_ref, type: string, required: true, description: "Recorded change-impact checklist result: each expanded-work checklist item with pass, fail or not_applicable and its evidence ref (assistant-review references/change-impact.md)", on_missing: fail}
       - name: build_command
         type: string
         required: false

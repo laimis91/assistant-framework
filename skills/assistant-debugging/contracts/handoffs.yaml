@@ -1,7 +1,7 @@
 # Debugging handoff contracts
 # Handoffs are optional; direct execution is valid when subagents are unavailable or policy-disallowed.
 
-schema_version: "3.0"
+schema_version: "4.0"
 contract: handoffs
 skill: assistant-debugging
 
@@ -58,7 +58,7 @@ handoffs:
         type: object
         required: conditional
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
-        validation: "The common checker was freshly run, or was rerun with --receipt validator_result_ref against the referenced capture_ref, independent expected_context_ref, and assessment_ref for a current valid pre_build result that resolves artifact_identity before Fixer dispatch; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient, and discovery or completion evidence does not authorize a fix mutation."
+        validation: "A passing pre_build expanded-work checklist result (checklist_result_ref) was recorded against the referenced capture_ref, independent expected_context_ref, and assessment_ref, naming each checklist item with its evidence, and resolves artifact_identity before Fixer dispatch; impact_scope and status remain bound unchanged. A status or result ref alone is insufficient, and discovery or completion evidence does not authorize a fix mutation."
         object_fields:
           - {name: artifact_identity, type: string, required: true}
           - {name: phase, type: enum, required: true, enum_values: [pre_build]}
@@ -66,7 +66,7 @@ handoffs:
           - {name: capture_ref, type: string, required: true}
           - {name: expected_context_ref, type: string, required: true}
           - {name: assessment_ref, type: string, required: true}
-          - {name: validator_result_ref, type: string, required: true}
+          - {name: checklist_result_ref, type: string, required: true, description: "Recorded change-impact checklist result: each expanded-work checklist item with pass, fail or not_applicable and its evidence ref (assistant-review references/change-impact.md)", on_missing: fail}
           - {name: status, type: enum, required: true, enum_values: [valid]}
       - name: root_cause
         type: string

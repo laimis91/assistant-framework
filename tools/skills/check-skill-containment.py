@@ -70,13 +70,9 @@ ALLOWED_PATHS = {
         "names an installed directory under audit, not a dependency",
     ("assistant-workflow/contracts/input.yaml", "docs/readme/document/changelog"):
         "request keywords, not a path",
-    ("assistant-workflow/references/change-impact.md", "../../tools/change-impact/validate-change-impact.cjs"):
-        "pending slice D",
-    ("assistant-review/references/change-impact.md", "../../tools/change-impact/validate-change-impact.cjs"):
-        "pending slice D",
-    ("assistant-debugging/references/change-impact.md", "../../tools/change-impact/validate-change-impact.cjs"):
-        "pending slice D",
 }
+
+
 def read_requires(skill_md: Path) -> list[str]:
     lines = skill_md.read_text(encoding="utf-8").splitlines()
     if not lines or lines[0].strip() != "---":

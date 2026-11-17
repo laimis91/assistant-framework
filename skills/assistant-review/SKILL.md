@@ -36,7 +36,7 @@ changes, an impact artifact, or locality/shared/unresolved claims, load
 `change_impact` and [change-impact.md](references/change-impact.md) before planning or dispatch;
 keep caller-only guidance outside Reviewer bundles.
 
-Structured batches load [review-loop.md](references/review-loop.md) before the first batch; v10 rules:
+Structured batches load [review-loop.md](references/review-loop.md) before the first batch; v11 rules:
 
 - Formal review uses newly created independent actors and self-contained context
   (Codex `fork_turns=none`), bound to retained native creation/handoff/source
@@ -72,7 +72,9 @@ Structured batches load [review-loop.md](references/review-loop.md) before the f
   fresh complete batch. No-build admission requires no required/completed fix or
   due selected/executable binding check.
 
-Change-impact projection cannot replace snapshot/coverage closure. At entry, load
+Change-impact projection cannot replace snapshot/coverage closure. Review 11.0
+replaced the change-impact checker receipt with a checklist result; 10.0 packets
+stay current-readable ([change-impact.md](references/change-impact.md)). At entry, load
 `legacy_history` and [legacy-compatibility.md](references/legacy-compatibility.md)
 only for persisted pre-10.0 packets or v9 records;
 historical evidence cannot certify a current clean batch.

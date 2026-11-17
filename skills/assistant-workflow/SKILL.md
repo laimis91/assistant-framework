@@ -97,7 +97,7 @@ or user request. Other updates use concise natural language.
   compatibility, and review bindings. Size alone is no trigger.
 - Load [change impact](references/change-impact.md) for behavior/cosmetic or
   locality claims affecting verification. Shared, materially unresolved, or
-  explicitly carried expanded work keeps common pre-Build/completion checks.
+  explicitly carried expanded work keeps pre-Build/completion checklist results.
 - Load [progressive discovery](references/progressive-discovery.md) for
   predecessor-unlocked unknowns or retained progressive markers. It remains a
   no-execution boundary; mutating prerequisites need a separate approved workflow.
@@ -128,7 +128,9 @@ For canonical plans/task packets, persisted state, delegated handoffs, or
 executable admission/evaluation, load `contracts/index.yaml` and the relevant
 entry, current-phase, selected-handoff, packet-admission, and completion sets;
 executable admission also loads `build_admission` or `completion_admission`.
-These current v16 interfaces and prerequisites remain authoritative. Load
+These current v17 interfaces and prerequisites remain authoritative; v17 replaced
+the change-impact checker receipt with a checklist result and kept
+`plan_schema_version` 16.0 (see [legacy compatibility](references/legacy-compatibility.md)). Load
 [build-worker-protocol.md](references/build-worker-protocol.md) for packet/worker
 Build execution; generated size plans remain views of `references/plan-template.md`.
 Persisted progress state follows [the progress wire boundary](references/wire-boundary.md).

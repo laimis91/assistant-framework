@@ -21,7 +21,7 @@
 # work, but they do not by themselves block progress unless project policy opts
 # into stricter enforcement.
 
-schema_version: "16.0"
+schema_version: "17.0"
 contract: phase-gates
 skill: assistant-workflow
 
@@ -506,9 +506,9 @@ gates:
         on_fail: "Stop before edits or mutation dispatch; load references/change-impact.md and record valid applicability before selecting the local or expanded path."
 
       - id: B_CHANGE_IMPACT_PREBUILD
-        check: "Before any source/test mutation or mutation dispatch, shared/unresolved/expanded work runs or revalidates the common checker against referenced capture, independent expected context, and assessment for a current valid pre_build result resolving validator refs. Local uses ordinary verification plus local self-check and fresh independent review; no Node gate."
+        check: "Before any source/test mutation or mutation dispatch, shared/unresolved/expanded work records a passing pre_build expanded-work checklist result (checklist_result_ref) against referenced capture, independent expected context, and assessment, with evidence for each item. Local uses ordinary verification plus local self-check and fresh independent review; no checklist gate."
         condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
-        on_fail: "Stop before behavior edits, regression-test writes, or mutation dispatch; load references/change-impact.md, resolve the active installed checker, and repair the assessment or report the explicit blocker."
+        on_fail: "Stop before behavior edits, regression-test writes, or mutation dispatch; load references/change-impact.md, record the expanded-work checklist, and repair the assessment or report the explicit blocker."
     exit_assertions:
       - id: B_WRITER_SELECTION
         check: "For new Claude or Codex writer dispatch, the Orchestrator validated writer_selection against actual current evidence before mutation: intelligent-writer is default; mechanical-writer requires all four recipe/resolved-decisions/scope-dependencies/independent-correctness refs, never size/type labels. All six packet projections and inline context agree; supplied packet is authoritative and conflicts block. Legacy packets omitting selection remain valid with intelligent compatibility semantics. Missing new Claude or Codex definitions are deployment mismatches, not generic fallback; actual legacy/bootstrap identity is recorded honestly. Both writers retain unchanged scope, checks, policy tuples, TDD, status precedence and real partial mutations; reviewer obligations remain owned by Review."
@@ -873,7 +873,7 @@ invariants:
     on_fail: "Repair the Type Ledger and affected interface/task packet before implementation; do not hide domain meaning in unexplained generic primitives or introduce wrapper-only types without an owned semantic boundary."
 
   - id: INV_CHANGE_IMPACT
-    check: "Behavior changes retain applicability. Expanded artifacts preserve identity through every phase. execution_intent == prepare_only retains discovery applicability and artifact identity without completion/review claims. execution_intent != prepare_only requires common completion validation and assistant-review terminal coverage."
+    check: "Behavior changes retain applicability. Expanded artifacts preserve identity through every phase. execution_intent == prepare_only retains discovery applicability and artifact identity without completion/review claims. execution_intent != prepare_only requires a passing completion checklist result and assistant-review terminal coverage."
     condition: "impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried"
     scope: all_phases
     on_fail: "Refresh the bounded capture and expected authority, rerun affected verification/review, or retain the result as blocked/remaining rather than complete."

@@ -265,7 +265,7 @@ read_skill_protocol_version() {
 
 preflight_protocol_compatibility() {
     local pair left right left_path right_path left_version right_version left_expected right_expected file
-    for pair in 'assistant-workflow:16.0:assistant-review:10.0' 'assistant-workflow:16.0:assistant-tdd:3.0' 'assistant-debugging:3.0:assistant-tdd:3.0' 'assistant-debugging:3.0:assistant-review:10.0'; do
+    for pair in 'assistant-workflow:17.0:assistant-review:11.0' 'assistant-workflow:17.0:assistant-tdd:3.0' 'assistant-debugging:4.0:assistant-tdd:3.0' 'assistant-debugging:4.0:assistant-review:11.0'; do
         IFS=: read -r left left_expected right right_expected <<<"$pair"
         if ! array_contains "$left" "${SKILLS[@]}" && ! array_contains "$right" "${SKILLS[@]}"; then continue; fi
         left_path="$SKILLS_TARGET/$left"; right_path="$SKILLS_TARGET/$right"
@@ -306,9 +306,9 @@ preflight_workflow_role_compatibility() {
         fi
     done
     if ! cat "$workflow/SKILL.md" >/dev/null \
-        || ! declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index 16.0 \
-        || ! declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs 16.0; then
-        fail "INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE at $workflow: retained controller does not uniquely declare matching schema 16.0 and the supported ownership stage tuples. No installation files have been changed. Run ./install.sh --agent $AGENT --skill assistant-workflow, then retry the original selection; or run ./install.sh --agent $AGENT for a full install."
+        || ! declared_workflow_contract_compatible "$workflow/contracts/index.yaml" index 17.0 \
+        || ! declared_workflow_contract_compatible "$workflow/contracts/handoffs.yaml" handoffs 17.0; then
+        fail "INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE at $workflow: retained controller does not uniquely declare matching schema 17.0 and the supported ownership stage tuples. No installation files have been changed. Run ./install.sh --agent $AGENT --skill assistant-workflow, then retry the original selection; or run ./install.sh --agent $AGENT for a full install."
     fi
 }
 

@@ -1050,7 +1050,7 @@ shapes = packets.map { |f| f.fetch('object_fields').find { |x| x['name'] == 'wri
 raise 'selection drift/missing' if shapes.any?(&:nil?) || shapes.uniq.length != 1
 shape = shapes.first
 raise 'legacy omission broken' unless shape['required'] == 'conditional' && shape['condition'].include?('legacy packets')
-raise 'version changed' unless [h,o].all? { |d| d['schema_version'] == '16.0' }
+raise 'version changed' unless [h,o].all? { |d| d['schema_version'] == '17.0' }
 canonical_versions = o.fetch('artifacts').find { |f| f['name'] == 'plan_schema_version' }.fetch('enum_values')
 gates = YAML.load_file("#{root}/skills/assistant-workflow/contracts/phase-gates.yaml")
 p1 = gates.fetch('gates').find { |g| g['phase'] == 'PLAN' }.fetch('exit_assertions').find { |g| g['id'] == 'P1' }

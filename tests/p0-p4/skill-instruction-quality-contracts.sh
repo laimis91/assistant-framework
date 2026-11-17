@@ -545,7 +545,7 @@ for reviewer_agent in \
     done
 done
 for review_term in \
-    'schema_version: "10.0"' \
+    'schema_version: "11.0"' \
     "risk_selected_specialist" \
     "assistant-security"; do
     if ! grep -Fq "$review_term" "$review_handoffs"; then

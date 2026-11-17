@@ -9,7 +9,7 @@ common_guide="$FRAMEWORK_DIR/tools/progress/operating-guidance.md"
 wire_boundary="$FRAMEWORK_DIR/tools/progress/wire-boundary.md"
 research_root="$FRAMEWORK_DIR/skills/assistant-research/SKILL.md"
 research_reference="$FRAMEWORK_DIR/skills/assistant-research/research.md"
-for term in 'Workflow v16, review v10' 'Historical attempt totals'; do
+for term in 'Workflow v17, review v11' 'Historical attempt totals'; do
     if p0p4_contains_text "$common_guide" "$term"; then
         historical_prose_failures+=("operating guidance still carries migration prose: $term")
     fi

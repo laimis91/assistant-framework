@@ -1,0 +1,25 @@
+{
+  "review": {
+    "schema_version": "change-impact-review/v1",
+    "capture_id": "capture-example-current",
+    "snapshot": {
+      "base_id": "base-example",
+      "candidate_id": "candidate-example",
+      "universe_id": "universe-example-current"
+    },
+    "review_source": {
+      "scope_manifest_id": "current-scope-digest",
+      "coverage_ledger_id": "journal#final-summary/coverage_ledger",
+      "review_snapshot_id": "review-current",
+      "snapshot_id": "current-review-snapshot"
+    },
+    "bindings": [
+      {
+        "obligation_id": "obligation-dirty-cancel",
+        "requirement_id": "req-dirty-cancel",
+        "scope_item_id": "workflow-terminal-evidence",
+        "coverage_concern_id": "canonical producer consumption"
+      }
+    ]
+  }
+}

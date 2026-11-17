@@ -3,7 +3,7 @@
 # updates summarize decisions/evidence without serializing every internal field.
 # This boundary does not waive approval, verification, review, or active TDD.
 
-schema_version: "16.0"
+schema_version: "17.0"
 contract: index
 skill: assistant-workflow
 

@@ -2441,12 +2441,9 @@ requires:
         }
     }
 
-    Invoke-Contract 'selective debugging and review installs ship an executable common change-impact checker' {
+    Invoke-Contract 'selective debugging and review installs resolve the expanded-work checklist without workflow or a checker tool' {
         Use-IsolatedEnvironment 'selective change impact checker' {
             param($root, $isolatedUserProfile)
-            $node = Get-Command node -ErrorAction SilentlyContinue
-            Assert-True ($null -ne $node) 'Node runtime is unavailable: installed change-impact validation remains an explicit blocker'
-            $fixtureRoot = Join-Path $root 'Change Impact Fixture [isolated]'
             foreach ($skill in @('assistant-debugging', 'assistant-review')) {
                 $skillProfile = Join-Path $root ('Change Impact Profile ' + $skill)
                 $codexHome = Join-Path $root ('Codex Change Impact Home ' + $skill)
@@ -2458,9 +2455,7 @@ requires:
                 Assert-Equal 0 $result.ExitCode "Selective $skill installation failed: $($result.Output)"
                 $reference = Join-Path $skillProfile (".agents\skills\$skill\references\change-impact.md")
                 $installedSkill = Join-Path $skillProfile (".agents\skills\$skill\SKILL.md")
-                $tool = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $installedSkill) '..\..\tools\change-impact\validate-change-impact.cjs'))
-                $protocol = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $installedSkill) '..\..\tools\change-impact\protocol.v1.json'))
-                $example = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $installedSkill) '..\..\tools\change-impact\example.completion.v1.json'))
+                $checklist = Join-Path $skillProfile '.agents\skills\assistant-review\references\change-impact.md'
                 Assert-True ([System.IO.File]::Exists($installedSkill)) "$skill selective installation omitted its installed SKILL.md"
                 $progress = Join-Path $skillProfile '.agents\tools\progress'
                 foreach ($progressFile in @('operating-guidance.md', 'wire-boundary.md')) {
@@ -2480,35 +2475,15 @@ requires:
                 else {
                     Assert-False ([System.IO.Directory]::Exists((Join-Path $skillProfile '.agents\skills\assistant-debugging'))) 'assistant-review selective installation copied an unrelated consumer'
                 }
-                Assert-True ([System.IO.File]::Exists($tool)) "$skill selective installation omitted the common checker at the path resolved from its loaded SKILL.md"
-                Assert-True ([System.IO.File]::Exists($protocol) -and [System.IO.File]::Exists($example)) "$skill selective installation omitted common protocol resources"
+                Assert-False ([System.IO.Directory]::Exists((Join-Path $skillProfile '.agents\tools\change-impact'))) "$skill selective installation still ships the retired change-impact checker"
+                Assert-False ([System.IO.Directory]::Exists((Join-Path $codexHome 'tools\change-impact'))) "$skill selective installation still ships the retired change-impact checker in CODEX_HOME"
                 Assert-False ([System.IO.Directory]::Exists((Join-Path $skillProfile '.agents\skills\assistant-workflow'))) "$skill selective installation unexpectedly installed workflow"
                 Assert-True ([System.IO.File]::Exists($reference)) "$skill selective installation omitted its installed change-impact reference"
-                Assert-Contains ([System.IO.File]::ReadAllText($reference)) '../../tools/change-impact/validate-change-impact.cjs' "$skill reference does not resolve the installed common checker"
-
-                $caseRoot = Join-Path $fixtureRoot $skill
-                [void][System.IO.Directory]::CreateDirectory($caseRoot)
-                $documents = Read-JsonFile -LiteralPath $example
-                foreach ($property in $documents.PSObject.Properties) { Write-JsonFile -LiteralPath (Join-Path $caseRoot ($property.Name + '.json')) -Value $property.Value }
-                $validOutput = @(& $node.Source $tool '--phase' 'completion' '--capture' (Join-Path $caseRoot 'capture.json') '--expected' (Join-Path $caseRoot 'expected.json') '--assessment' (Join-Path $caseRoot 'assessment.json') '--review' (Join-Path $caseRoot 'review.json') 2>&1) -join [Environment]::NewLine
-                Assert-Equal 0 $LASTEXITCODE "$skill installed checker rejected valid protocol documents: $validOutput"
-                Assert-Contains $validOutput '"complete":true' "$skill installed checker did not report complete valid output"
-
-                $capture = Read-JsonFile -LiteralPath (Join-Path $caseRoot 'capture.json')
-                $omittedEdge = @($capture.edges)[-1]
-                $capture.edges = @($capture.edges | Where-Object { $_.id -ne $omittedEdge.id })
-                $capture.requirements = @($capture.requirements | Where-Object { $_.edge_id -ne $omittedEdge.id })
-                Write-JsonFile -LiteralPath (Join-Path $caseRoot 'capture.json') -Value $capture
-                $consumerOmissionOutput = @(& $node.Source $tool '--phase' 'completion' '--capture' (Join-Path $caseRoot 'capture.json') '--expected' (Join-Path $caseRoot 'expected.json') '--assessment' (Join-Path $caseRoot 'assessment.json') '--review' (Join-Path $caseRoot 'review.json') 2>&1) -join [Environment]::NewLine
-                Assert-True ($LASTEXITCODE -ne 0) "$skill installed checker accepted a capture missing a known consumer"
-                Assert-Contains $consumerOmissionOutput 'CAPTURE_EXPECTED_EDGES_MISMATCH' "$skill consumer omission did not fail against independent expected truth"
-
-                $capture = (Read-JsonFile -LiteralPath $example).capture
-                $capture.roots = @()
-                Write-JsonFile -LiteralPath (Join-Path $caseRoot 'capture.json') -Value $capture
-                $omissionOutput = @(& $node.Source $tool '--phase' 'completion' '--capture' (Join-Path $caseRoot 'capture.json') '--expected' (Join-Path $caseRoot 'expected.json') '--assessment' (Join-Path $caseRoot 'assessment.json') '--review' (Join-Path $caseRoot 'review.json') 2>&1) -join [Environment]::NewLine
-                Assert-True ($LASTEXITCODE -ne 0) "$skill installed checker accepted an empty shared discovery-root capture"
-                Assert-Contains $omissionOutput 'CAPTURE_DISCOVERY_ROOTS_MISSING' "$skill omission did not report the missing discovery-root reason"
+                Assert-True ([System.IO.File]::Exists($checklist)) "$skill selective installation omitted the review checklist"
+                Assert-Contains ([System.IO.File]::ReadAllText($checklist)) '## Expanded-work checklist' "$skill installed review reference lacks the expanded-work checklist"
+                if ($skill -eq 'assistant-debugging') {
+                    Assert-Contains ([System.IO.File]::ReadAllText($reference)) '](../../assistant-review/references/change-impact.md#expanded-work-checklist)' 'assistant-debugging reference does not link the installed review checklist'
+                }
             }
         }
     }
@@ -2641,10 +2616,10 @@ requires:
             [void][System.IO.Directory]::CreateDirectory((Join-Path $Workflow 'contracts'))
             $utf8 = New-Object System.Text.UTF8Encoding($false)
             $skillText = "---`nname: assistant-workflow`ndescription: Retained ownership protocol fixture.`n---`n"
-            $indexText = "schema_version: `"16.0`"`ncontract: index`nskill: assistant-workflow`n"
+            $indexText = "schema_version: `"17.0`"`ncontract: index`nskill: assistant-workflow`n"
             # Fixed declared tuples, independent of the production compatibility reader.
             $handoffsText = @'
-schema_version: "16.0"
+schema_version: "17.0"
 contract: handoffs
 skill: assistant-workflow
 worker_stage_protocol:
@@ -2664,12 +2639,12 @@ worker_stage_protocol:
 '@
             $handoffsText = $handoffsText.Replace("`r`n", "`n") + "`n"
             switch ($Variant) {
-                'old13' { $indexText = $indexText.Replace('16.0', '13.0'); $handoffsText = $handoffsText.Replace('16.0', '13.0') }
-                'old14' { $indexText = $indexText.Replace('16.0', '14.0'); $handoffsText = $handoffsText.Replace('16.0', '14.0') }
-                'old15' { $indexText = $indexText.Replace('16.0', '15.0'); $handoffsText = $handoffsText.Replace('16.0', '15.0') }
-                'unknown-version' { $indexText = $indexText.Replace('16.0', '17.0'); $handoffsText = $handoffsText.Replace('16.0', '17.0') }
-                'mixed-version' { $indexText = $indexText.Replace('16.0', '14.0') }
-                { $_ -in @('old', 'recovery', 'full') } { $indexText = $indexText.Replace('16.0', '12.0') }
+                'old13' { $indexText = $indexText.Replace('17.0', '13.0'); $handoffsText = $handoffsText.Replace('17.0', '13.0') }
+                'old14' { $indexText = $indexText.Replace('17.0', '14.0'); $handoffsText = $handoffsText.Replace('17.0', '14.0') }
+                'old15' { $indexText = $indexText.Replace('17.0', '15.0'); $handoffsText = $handoffsText.Replace('17.0', '15.0') }
+                'unknown-version' { $indexText = $indexText.Replace('17.0', '18.0'); $handoffsText = $handoffsText.Replace('17.0', '18.0') }
+                'mixed-version' { $indexText = $indexText.Replace('17.0', '14.0') }
+                { $_ -in @('old', 'recovery', 'full') } { $indexText = $indexText.Replace('17.0', '12.0') }
                 'no-stages' { $handoffsText = $handoffsText.Substring(0, $handoffsText.IndexOf('worker_stage_protocol:')) }
                 'stage-mismatch' { $handoffsText = $handoffsText.Replace('current_matching_red', 'none') }
                 'early-completion' { $handoffsText = $handoffsText.Replace('completes_build: false', 'completes_build: true') }

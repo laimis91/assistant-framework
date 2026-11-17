@@ -69,7 +69,10 @@ work alone adds no lifecycle loading or gate.
 Load [change-impact.md](references/change-impact.md) when diagnosis/repair
 consumer impact matters. Record compact applicability; shared, materially
 unresolved, or explicitly carried expanded repairs retain the common artifact
-and pre-Build/completion checks. Resolve the checker from the active installation.
+and pre-Build/completion checklist results from assistant-review's expanded-work
+checklist; no script or runtime is needed. Debugging 4.0 replaced the checker
+receipt (`validator_result_ref`) with `checklist_result_ref`; older packets stay
+readable as described in that reference.
 
 ## Result and stop rules
 

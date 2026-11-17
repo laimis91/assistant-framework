@@ -8,7 +8,7 @@
 # Fields are extracted from the user's request. If a required field cannot be inferred,
 # follow the on_missing action.
 
-schema_version: "16.0"
+schema_version: "17.0"
 contract: input
 skill: assistant-workflow
 
@@ -143,7 +143,7 @@ fields:
     type: object
     required: false
     description: "Refs."
-    validation: "Valid carries identity, refs, validator result; pre-build/completion assessment; completion resolves review projection."
+    validation: "Valid carries identity, refs, checklist result; pre-build/completion assessment; completion resolves review projection."
     object_fields:
       - {name: artifact_identity, type: string, required: true}
       - {name: status, type: enum, required: true, enum_values: [valid, gaps_reported, blocked, invalid]}
@@ -152,7 +152,7 @@ fields:
       - {name: expected_context_ref, type: string, required: conditional, condition: "status == valid"}
       - {name: assessment_ref, type: string, required: conditional, condition: "status == valid and phase in [pre_build, completion]"}
       - {name: review_projection_ref, type: string, required: conditional, condition: "status == valid and phase == completion"}
-      - {name: validator_result_ref, type: string, required: conditional, condition: "status == valid"}
+      - {name: checklist_result_ref, type: string, required: conditional, condition: "status == valid", description: "Recorded change-impact checklist result: each expanded-work checklist item with pass, fail or not_applicable and its evidence ref (assistant-review references/change-impact.md)", on_missing: fail}
       - {name: gap_or_blocker_ref, type: string, required: conditional, condition: "status in [gaps_reported, blocked, invalid]"}
     default: null
     on_missing: infer
@@ -849,7 +849,7 @@ fields:
     required: conditional
     condition: "A plan review is required at dispatch, verification or completion, or completion resolves an independent_review or qa terminal gate"
     description: "Canonical review ref to the retained Review v10 (or historical v9 acceptance) projection"
-    validation: "Each entry has the same canonical_review_ref as its key. Current entries have producer_version 10.0, result CLEAN or ISSUES_FIXED, coverage_complete true and a fresh_dispatch_evidence_ref. A plan entry binds reviewed_plan_identity (never approved_plan_identity), is delegated, validated and completed, and its actor_id is not a writer, Builder or execution actor (including the main binding). An acceptance entry binds the current approved_plan_identity; its actor_id is likewise outside the reviewed work unless it is a completed historical 9.0 direct_fallback source under an attested unchanged approval. Each current 10.0 entry consumed at completion differs from every other consumed review authority (plan review, final review, QA) in actor_id, native_invocation_id and fresh_dispatch_evidence_ref. Plan and final acceptance entries carry request_plan_reconciliation whose required and observed requirement IDs both equal the accepted requirement IDs, with explicit empty unresolved_requirement_ids and unresolved_finding_ids; a missing unresolved list is unknown and blocks. Only acceptance also requires explicit empty unfinished_task_wide_work; a pre-Build plan review does not gate it. QA entries use covered_acceptance_criteria instead."
+    validation: "Each entry has the same canonical_review_ref as its key. Current entries have producer_version 10.0 or 11.0, result CLEAN or ISSUES_FIXED, coverage_complete true and a fresh_dispatch_evidence_ref. A plan entry binds reviewed_plan_identity (never approved_plan_identity), is delegated, validated and completed, and its actor_id is not a writer, Builder or execution actor (including the main binding). An acceptance entry binds the current approved_plan_identity; its actor_id is likewise outside the reviewed work unless it is a completed historical 9.0 direct_fallback source under an attested unchanged approval. Each current 10.0 entry consumed at completion differs from every other consumed review authority (plan review, final review, QA) in actor_id, native_invocation_id and fresh_dispatch_evidence_ref. Plan and final acceptance entries carry request_plan_reconciliation whose required and observed requirement IDs both equal the accepted requirement IDs, with explicit empty unresolved_requirement_ids and unresolved_finding_ids; a missing unresolved list is unknown and blocks. Only acceptance also requires explicit empty unfinished_task_wide_work; a pre-Build plan review does not gate it. QA entries use covered_acceptance_criteria instead."
     on_missing: fail
     object_fields:
       - name: review_subject
@@ -860,7 +860,7 @@ fields:
       - name: producer_version
         type: enum
         required: true
-        enum_values: ["10.0", "9.0"]
+        enum_values: ["11.0", "10.0", "9.0"]
         validation: "9.0 is readable only for completed historical acceptance under its attested original approval."
         on_missing: fail
       - name: result
@@ -906,21 +906,21 @@ fields:
       - name: fresh_dispatch_evidence_ref
         type: string
         required: conditional
-        condition: "producer_version == 10.0"
+        condition: "producer_version in [10.0, 11.0]"
         description: "Ref to Review's retained fresh_dispatch / fresh_context_evidence"
-        validation: "A current 10.0 entry consumed at completion differs from every other consumed review authority."
+        validation: "A current 10.0 or 11.0 entry consumed at completion differs from every other consumed review authority."
         on_missing: fail
       - name: subagent_execution_mode
         type: enum
         required: conditional
         condition: "review_subject == plan, or the entry is a completion terminal-gate source"
         enum_values: [delegated, direct_fallback]
-        validation: "Plan and current 10.0 acceptance require delegated. direct_fallback is readable only as the original label of a completed historical 9.0 acceptance source."
+        validation: "Plan and current 10.0 or 11.0 acceptance require delegated. direct_fallback is readable only as the original label of a completed historical 9.0 acceptance source."
         on_missing: fail
       - name: validation_status
         type: enum
         required: conditional
-        condition: "review_subject == plan, or producer_version == 10.0 and the entry is a completion terminal-gate source"
+        condition: "review_subject == plan, or producer_version in [10.0, 11.0] and the entry is a completion terminal-gate source"
         enum_values: [validated, invalid]
         validation: "Must be validated; invalid blocks with review_authority."
         on_missing: fail
@@ -997,7 +997,7 @@ fields:
       - name: request_plan_reconciliation
         type: object
         required: conditional
-        condition: "producer_version == 10.0 and the entry is a plan review or the final independent_review gate"
+        condition: "producer_version in [10.0, 11.0] and the entry is a plan review or the final independent_review gate"
         on_missing: fail
         object_fields:
           - name: original_request_ref
