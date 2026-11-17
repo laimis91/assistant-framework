@@ -404,9 +404,15 @@ harness adds `-Ku` to `RUBYOPT` so Ruby checks read and parse UTF-8 framework te
 under a non-UTF-8 locale such as `C`; it leaves the shell locale unchanged.
 
 Pull requests and pushes to `main` also run
-`.github/workflows/framework-validation.yml`, which executes the fast aggregate
-contracts and four long-running contract suites as parallel shards, then runs
-skill and plugin checks on hosted Linux runners.
+`.github/workflows/framework-validation.yml`, which checks the response fixture
+entrypoints, runs the whole contract aggregate in one job, then runs skill and
+plugin checks on hosted Linux runners.
+
+A contract check earns its place by failing for a defect a user or maintainer
+would notice: broken plugin, skill or CI structure, a lost safety safeguard,
+inconsistent contracts, an eval case that stops rejecting a wrong response, or
+eval tooling that grades wrongly. Checks that only pin skill wording are not
+added; see [contract test cleanup](docs/specs/contract-test-cleanup.md).
 
 The end-to-end fixture checks the observable order: implementation, focused
 test pass, an exact trusted review invocation finding the seeded defect, repair,

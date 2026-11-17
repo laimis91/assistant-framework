@@ -171,10 +171,9 @@ assertions or a semantic validator. It checks completeness and JSON syntax; the 
 suites still verify semantics and mutation rejection. `--fixtures-only` is for
 direct suite invocation and does not skip checks in the aggregate runner.
 
-The aggregate runs the small preflight unit controls. Each of the two owning CI
-shards separately runs its real-entrypoint probe before long semantic grading,
-so excluded shards do not trigger full response-builder traversals in the
-aggregate job. The probe checks both valid fixtures and an injected unhandled
+The aggregate runs the small preflight unit controls. CI runs the
+real-entrypoint probe for both owning suites in the contract job, before the
+aggregate and its semantic grading. The probe checks both valid fixtures and an injected unhandled
 case, and asserts that neither probe invokes the semantic grader. To run one:
 
 ```bash
