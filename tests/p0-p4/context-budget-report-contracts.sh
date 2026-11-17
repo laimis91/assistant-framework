@@ -92,7 +92,7 @@ claude_report_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-claude-error.XXXXX
 no_index_report_home="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-no-index-home.XXXXXX")"
 no_index_report_output="$(mktemp "${TMPDIR:-/tmp}/context-budget-no-index-report.XXXXXX")"
 no_index_report_error="$(mktemp "${TMPDIR:-/tmp}/context-budget-no-index-error.XXXXXX")"
-bash_interceptor_dir="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-bash-interceptor.XXXXXX")"
+missing_plugin_repo="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-missing-plugin.XXXXXX")"
 wc_interceptor_dir="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-wc-interceptor.XXXXXX")"
 wc_interceptor_marker="$wc_interceptor_dir/word-count-called"
 wc_interceptor_report="$(mktemp "${TMPDIR:-/tmp}/context-budget-wc-report.XXXXXX")"
@@ -112,7 +112,7 @@ p0p4_register_cleanup \
     "$no_index_report_home" \
     "$no_index_report_output" \
     "$no_index_report_error" \
-    "$bash_interceptor_dir" \
+    "$missing_plugin_repo" \
     "$wc_interceptor_dir" \
     "$wc_interceptor_report" \
     "$overlay_skill" \
@@ -126,22 +126,6 @@ description: "Overlay fixture"
 # Small overlay
 Use canonical contracts.
 EOF
-
-cat >"$bash_interceptor_dir/bash" <<'EOF'
-#!/bin/bash
-
-case "${CONTEXT_BUDGET_TEST_BASH_MODE:-}" in
-    install-failure)
-        if [[ "${1:-}" == */install.sh ]]; then
-            echo "induced install.sh failure" >&2
-            exit 97
-        fi
-        ;;
-esac
-
-exec /bin/bash "$@"
-EOF
-chmod +x "$bash_interceptor_dir/bash"
 
 cat >"$wc_interceptor_dir/wc" <<'EOF'
 #!/bin/bash
@@ -168,7 +152,7 @@ if HOME="$report_home" \
         .schema_version == "3.0"
         and .agent == "codex"
         and .skill == "assistant-workflow"
-        and (.inventory_mode == "isolated_install" or .inventory_mode == "source_equivalent")
+        and .inventory_mode == "plugin_copy"
         and (has("hook_profile") | not)
         and (.components | has("framework_hooks") | not)
     ' "$report_output" >/dev/null; then
@@ -229,7 +213,7 @@ if HOME="$no_index_report_home" \
         .schema_version == "3.0"
         and .agent == "codex"
         and .skill == "assistant-clarify"
-        and .inventory_mode == "isolated_install"
+        and .inventory_mode == "plugin_copy"
         and (has("hook_profile") | not)
         and (.components | has("framework_hooks") | not)
         and (.components | has("generated_memory_protocol") | not)
@@ -311,7 +295,7 @@ else
     fail "context report initial/entry totals do not equal their component sums"
 fi
 
-test_start "context report measures the installed common operating guidance"
+test_start "context report measures the common operating guidance from the plugin copy"
 common_guide_source_bytes="$(wc -c <"$FRAMEWORK_DIR/tools/progress/operating-guidance.md" | tr -d '[:space:]')"
 if jq -e --argjson source_bytes "$common_guide_source_bytes" '
     .components.common_operating_guidance.bytes == $source_bytes
@@ -325,7 +309,7 @@ if jq -e --argjson source_bytes "$common_guide_source_bytes" '
   ' "$report_output" >/dev/null; then
     pass
 else
-    fail "context report does not measure the installed common operating guidance or omits it from totals"
+    fail "context report does not measure the plugin copy of the common operating guidance or omits it from totals"
 fi
 
 test_start "context reporter rejects a baseline from another report schema"
@@ -363,21 +347,24 @@ else
     fail "retired --hook-profile option was not rejected clearly"
 fi
 
-test_start "isolated install failure exits nonzero instead of emitting source-equivalent JSON"
-if PATH="$bash_interceptor_dir:$PATH" \
-    CONTEXT_BUDGET_TEST_BASH_MODE="install-failure" \
-    HOME="$report_home" \
-    "$context_report" \
+test_start "missing plugin copy exits nonzero instead of emitting a source-only inventory"
+mkdir -p "$missing_plugin_repo/tools" "$missing_plugin_repo/docs"
+cp "$context_report" "$missing_plugin_repo/tools/"
+cp -R "$FRAMEWORK_DIR/skills" "$missing_plugin_repo/"
+cp "$FRAMEWORK_DIR/AGENTS.md" "$missing_plugin_repo/"
+cp "$FRAMEWORK_DIR/docs/instruction-block.md" "$missing_plugin_repo/docs/"
+if HOME="$report_home" \
+    "$missing_plugin_repo/tools/context-budget-report.sh" \
         --agent codex \
         --skill assistant-workflow \
         --format json \
         >"$failure_output" 2>"$failure_error"; then
-    fail "context report accepted an induced install.sh failure"
-elif grep -Eqi 'install.*fail|fail.*install' "$failure_error" \
-    && ! jq -e '.inventory_mode == "source_equivalent"' "$failure_output" >/dev/null 2>&1; then
+    fail "context report emitted an inventory without the plugin copy"
+elif [[ ! -s "$failure_output" ]] \
+    && grep -Fq -- "Plugin copy of assistant-workflow lacks references/operating-guidance.md" "$failure_error"; then
     pass
 else
-    fail "install.sh failure did not exit nonzero with a clear error and without source-equivalent JSON"
+    fail "missing plugin copy did not exit nonzero with a clear error and without JSON"
 fi
 
 test_start "context report baseline comparison emits absolute and percentage deltas"

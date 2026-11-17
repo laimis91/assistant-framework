@@ -2,6 +2,8 @@
 
 Status: **implemented for `deepseek-flash`, candidate c1 adopted; see [Current state](#current-state).** Date: 2026-11-03, updated 2026-11-14. Rationale and sources: [skill activation research](../research/skill-activation-research-2026-11-02.md). Measured benefit applies only to the model and host stated in Current state.
 
+Update 2026-11-17: [plugin marketplace packaging](plugin-marketplace-packaging.md) Slice E removed the installers and the `assistant-cleanup` skill. Trial plugins are now built from `plugins/assistant-framework/` and the Skills section of `docs/instruction-block.md`. The `cleanup` routing row, the development case `d-cleanup` and the `h-cleanup-*` held-out cases still expect `assistant-cleanup`, which trial plugins no longer contain; they fail live trials by construction until the held-out set is changed with the user's authorization.
+
 Owners: skill descriptions and `activation_cases` stay in each `skills/assistant-*/`; authoring rules stay in the [contract design guide](../skill-contract-design-guide.md); eval commands stay in the [per-skill fixtures guide](../evals/skill-fixtures.md). Exact serialized formats belong with the runner that consumes them, not in this document.
 
 ## Problem
@@ -41,7 +43,7 @@ These limit the design and any implementation must respect them.
 
 - **"explicit" is deliberate.** PR #40 "Tighten skill activation" replaced broad trigger lists with the current wording, including "explicit", to stop over-triggering. The research note's advice to drop the word therefore reverses an earlier decision and cannot be applied as a blanket edit.
 - **Contract tests pin descriptions in both directions.** `tests/p0-p4/skill-activation-precision-contracts.sh` forbids phrases such as "what is" and "improve this", fails if a description shares two or more words of five or more letters with certain near-miss prompts, and requires two such shared words with seven named prompts. So both adding and removing words can break it. `tests/p0-p4/skill-instruction-quality-contracts.sh` requires the workflow description to contain plan, build and implement, and not brainstorm.
-- **The "matches the request" wording is pinned.** Several contract tests check that exact phrase, including `installer-contracts.sh` and `workflow-basics-contracts.sh`. `install.sh` and `install.ps1` must stay in parity.
+- **The "matches the request" wording is pinned.** Several contract tests check that exact phrase, including `workflow-basics-contracts.sh` and `qa-evaluator-contracts.sh`, against `docs/instruction-block.md` (formerly `install.sh` and `install.ps1`).
 - **`activation_cases` has a closed format.** The validator requires exactly `user_request` and `should_activate`, so stateful cases cannot be added to it.
 - **The runner never calls a model.** `run-skill-evals.sh --activation-results` only grades supplied observations, and it requires exactly one result per selected case.
 - **Model calls need authorization.** The Codex trial guide requires fresh explicit authorization for each exact call count. It also forbids raw prompts and responses in results.
@@ -153,7 +155,7 @@ This table is the expected behavior the evals grade. "Required" means activated 
 ### Collection and safety
 
 - **R-RUN-1.** Grading stays separate from model execution and makes no model calls, following the existing runner design. Collection is a separate command that needs explicit opt-in.
-- **R-RUN-2. Containment.** A trial runs in a disposable repository and a temporary home. Its skills come from a plugin generated in ignored local state from the installer's output for the version under test, plus any crowded-condition stubs. No real-home content is copied in. The only credential is model authentication. The run also requires:
+- **R-RUN-2. Containment.** A trial runs in a disposable repository and a temporary home. Its skills come from a plugin generated in ignored local state from `plugins/assistant-framework/` and `docs/instruction-block.md` for the version under test (from the installer's output before 2026-11-17), plus any crowded-condition stubs. No real-home content is copied in. The only credential is model authentication. The run also requires:
   - an environment scrubbed of other tokens and agent sockets, such as `GH_TOKEN` and `SSH_AUTH_SOCK`;
   - for runs that grant Bash, an OS sandbox confining writes and reads to the workspace and temporary home; for runs without Bash, the host's permission layer, shown by a refused write outside the workspace, because the eval documentation promises OS confinement only for Bash. The user accepted this for runs without Bash on 2026-11-03;
   - no git remote, no `gh` authentication and no MCP servers;
@@ -276,7 +278,7 @@ The user accepted these on 2026-11-03.
 
 | Item | State |
 |---|---|
-| Installer Skills bullet ("Direct implementation means no delegation, not no skill") | Implemented in `install.sh` and `install.ps1`; effect unmeasured |
+| Installer Skills bullet ("Direct implementation means no delegation, not no skill") | Implemented in `install.sh` and `install.ps1`, now in `docs/instruction-block.md`; effect unmeasured |
 | Existing `activation_cases` and `--activation-results` grading | Implemented; do not cover this failure |
 | Use-case ledger | Built locally. Candidate c1's rationale maps the existing clauses and positive cases of the seven skills it changes |
 | Feasibility probe | Run; see [Feasibility results](#feasibility-results) |

@@ -178,75 +178,57 @@ else
     fail "reviewer must mirror code-reviewer model/effort and both must say 'Review the work, not the author.'"
 fi
 
-test_start "Installer-managed Codex and Claude guidance keeps one adaptive main stance without subagent role configuration"
+test_start "Canonical instruction block keeps one adaptive main stance without subagent role configuration"
 lean_guidance_failures=()
-unix_guidance=""
-windows_guidance=""
-for installer_source in "$FRAMEWORK_DIR/install.sh" "$FRAMEWORK_DIR/install.ps1"; do
-    installer_label="${installer_source#$FRAMEWORK_DIR/}"
-    if grep -Eq 'gpt-5\.6-(luna|terra|sol)|model_reasoning_effort' "$installer_source"; then
-        lean_guidance_failures+=("$installer_label: embeds subagent model/effort guidance")
-    fi
-    if [[ "$(grep -Fc -- '## Operating stance' "$installer_source")" != "1" ]]; then
-        lean_guidance_failures+=("$installer_label: expected exactly one adaptive Operating stance heading")
-    fi
-    for stance_anchor in \
-        "Implement and verify directly when useful, at every size/risk." \
-        "Formal plan, code, finding-closure and acceptance reviews use newly created independent agents" \
-        "Keep orchestration proportional"; do
-        if ! grep -Fq -- "$stance_anchor" "$installer_source"; then
-            lean_guidance_failures+=("$installer_label: missing adaptive stance anchor '$stance_anchor'")
-        fi
-    done
-    if grep -Fq -- 'Review the work, not the author.' "$installer_source"; then
-        lean_guidance_failures+=("$installer_label: embeds subagent-specific personality guidance")
-    fi
-    while IFS= read -r guidance_bullet; do
-        guidance_bullet="${guidance_bullet#- }"
-        guidance_bullet_words="$(wc -w <<<"$guidance_bullet" | tr -d '[:space:]')"
-        if (( guidance_bullet_words > 32 )); then
-            lean_guidance_failures+=("$installer_label: managed guidance bullet exceeds 32 words: $guidance_bullet")
-        fi
-    done < <(
-        awk '
-            /^## Operating stance$/ { in_guidance = 1 }
-            in_guidance && /^<!-- .*AGENTS_MD.*END/ { exit }
-            in_guidance && /^- / { print }
-        ' "$installer_source"
-    )
-    for deferred_detail in \
-        "The orchestrator owns framework state files" \
-        "Do not infer that subagents are unavailable" \
-        "use direct fallback only after"; do
-        if grep -Fq -- "$deferred_detail" "$installer_source"; then
-            lean_guidance_failures+=("$installer_label: global guidance must defer '$deferred_detail' mechanics to assistant-workflow")
-        fi
-    done
-    normalized_guidance="$(
-        awk '
-            /^# Assistant Framework - .* Instructions$/ { in_guidance = 1 }
-            in_guidance && /^<!-- .*AGENTS_MD.*END/ { exit }
-            in_guidance {
-                gsub(/\\`/, "`")
-                gsub(/\$AGENTS_MD_AGENT_NAME|\{\{AGENT_NAME\}\}/, "AGENT_NAME")
-                gsub(/\$AGENTS_MD_GUIDANCE_HOME|\{\{GUIDANCE_HOME\}\}/, "GUIDANCE_HOME")
-                print
-            }
-        ' "$installer_source"
-    )"
-    if [[ "$installer_label" == "install.sh" ]]; then
-        unix_guidance="$normalized_guidance"
-    else
-        windows_guidance="$normalized_guidance"
+guidance_label="docs/instruction-block.md"
+guidance_source="$(mktemp)"
+p0p4_register_cleanup "$guidance_source"
+sed -n '/<!-- instruction-block:start -->/,/<!-- instruction-block:end -->/p' "$FRAMEWORK_DIR/$guidance_label" >"$guidance_source" 2>/dev/null || true
+if [[ ! -s "$guidance_source" ]]; then
+    lean_guidance_failures+=("$guidance_label: missing the marked instruction block")
+fi
+if grep -Eq 'gpt-5\.6-(luna|terra|sol)|model_reasoning_effort' "$guidance_source"; then
+    lean_guidance_failures+=("$guidance_label: embeds subagent model/effort guidance")
+fi
+if [[ "$(grep -Fc -- '## Operating stance' "$guidance_source")" != "1" ]]; then
+    lean_guidance_failures+=("$guidance_label: expected exactly one adaptive Operating stance heading")
+fi
+for stance_anchor in \
+    "Implement and verify directly when useful, at every size/risk." \
+    "Formal plan, code, finding-closure and acceptance reviews use newly created independent agents" \
+    "Keep orchestration proportional"; do
+    if ! grep -Fq -- "$stance_anchor" "$guidance_source"; then
+        lean_guidance_failures+=("$guidance_label: missing adaptive stance anchor '$stance_anchor'")
     fi
 done
-if [[ "$unix_guidance" != "$windows_guidance" ]]; then
-    lean_guidance_failures+=("install.sh and install.ps1 managed guidance differ")
+if grep -Fq -- 'Review the work, not the author.' "$guidance_source"; then
+    lean_guidance_failures+=("$guidance_label: embeds subagent-specific personality guidance")
 fi
+while IFS= read -r guidance_bullet; do
+    guidance_bullet="${guidance_bullet#- }"
+    guidance_bullet_words="$(wc -w <<<"$guidance_bullet" | tr -d '[:space:]')"
+    if (( guidance_bullet_words > 32 )); then
+        lean_guidance_failures+=("$guidance_label: guidance bullet exceeds 32 words: $guidance_bullet")
+    fi
+done < <(
+    awk '
+        /^## Operating stance$/ { in_guidance = 1 }
+        in_guidance && /^<!-- .*AGENTS_MD.*END/ { exit }
+        in_guidance && /^- / { print }
+    ' "$guidance_source"
+)
+for deferred_detail in \
+    "The orchestrator owns framework state files" \
+    "Do not infer that subagents are unavailable" \
+    "use direct fallback only after"; do
+    if grep -Fq -- "$deferred_detail" "$guidance_source"; then
+        lean_guidance_failures+=("$guidance_label: global guidance must defer '$deferred_detail' mechanics to assistant-workflow")
+    fi
+done
 if [[ "${#lean_guidance_failures[@]}" -eq 0 ]]; then
     pass
 else
-    fail "Codex AGENTS installer source must keep only the compact main stance: ${lean_guidance_failures[*]}"
+    fail "Canonical instruction block must keep only the compact main stance: ${lean_guidance_failures[*]}"
 fi
 
 test_start "Project AGENTS guidance stays repository-specific instead of repeating global workflow policy"

@@ -4,8 +4,8 @@
 Rule 1: every relative Markdown link in a skill resolves to an existing file
 inside that skill or inside a skill it declares in `requires`.
 Rule 2: no runtime-instruction path reaches outside the skill folder (into
-framework `tools/`, `docs/`, `agents/`, `hooks/`, `codex-rules/` or the
-installed tools directory), unless the exact file and path are allowlisted
+framework `tools/`, `docs/`, `agents/`, `hooks/` or an agent home's
+tools directory), unless the exact file and path are allowlisted
 below with a reason.
 
 See docs/specs/self-contained-skills.md (R-SC-4).
@@ -22,13 +22,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 RUNTIME_PATH = re.compile(
-    r"(?:\.\./)+(?:tools|docs|agents|hooks|codex-rules)/[^\s`)\"']*"
+    r"(?:\.\./)+(?:tools|docs|agents|hooks)/[^\s`)\"']*"
     r"|<framework-tools>/[^\s`)\"']*"
     r"|\{agent_state_dir\}/tools[^\s`)\"']*"
     r"|parents\[\d+\]\s*/\s*\"tools/[^\"]*\""
     r"|(?<![\w./-])(?:tools|docs)/[\w.-]+/[^\s`)\"']*"
     r"|(?:~|\$\{?HOME\}?|\$\{?CODEX_HOME\}?)/(?:\.[\w-]+/)?tools/[^\s`)\"']*"
-    r"|(?<![\w~}$./-])(?:/[\w.@-]+)*/\.(?:claude|codex|gemini|agents)/tools/[^\s`)\"']*"
+    r"|(?<![\w~}$./-])(?:/[\w.@-]+)*/\.(?:claude|codex|agents)/tools/[^\s`)\"']*"
 )
 TEXT_SUFFIXES = {".md", ".yaml", ".yml", ".json", ".py", ".sh", ".ps1", ".toml", ".txt"}
 
@@ -54,12 +54,6 @@ MAINTAINER_PREFIXES = {
 # are removed by that slice of docs/specs/self-contained-skills.md. An entry that
 # no longer matches its file is reported, so stale entries cannot hide a path.
 ALLOWED_PATHS = {
-    ("assistant-cleanup/SKILL.md", "tools/framework-ownership/"):
-        "installer-only skill; runs the installed ownership helper (R-SC-6)",
-    ("assistant-cleanup/SKILL.md", "tools/framework-ownership/ownership.py"):
-        "installer-only skill; runs the installed ownership helper (R-SC-6)",
-    ("assistant-cleanup/SKILL.md", "tools/framework-ownership/ownership.ps1"):
-        "installer-only skill; runs the installed ownership helper (R-SC-6)",
     ("assistant-workflow/references/design-pattern-retrieval.md", "<framework-tools>/patterns/pattern-library.sh"):
         "optional, used only if configured (P-1)",
     ("assistant-docs/api-docs.md", "docs/api/"):

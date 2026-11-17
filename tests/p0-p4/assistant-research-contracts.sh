@@ -560,7 +560,7 @@ research_official_response_mutation_is_rejected() {
         policy_block_allows_delegated_peer) mutation_filter='
             .five_lens_process_evidence.peer_review_execution_mode = "delegated"
             | .five_lens_process_evidence.subagent_policy_state = "policy_disallowed"
-            | .five_lens_process_evidence.policy_blocking_source = "codex-rules/no-subagents"
+            | .five_lens_process_evidence.policy_blocking_source = "process-policy/no-subagents"
             | .five_lens_process_evidence.lens_fallback_evidence = {basis:"exact_policy_block",detail:"Exact process-wide policy prohibits subagent delegation.",evidence_ref:"policy-record-1"}
             | del(.five_lens_process_evidence.peer_review_fallback_pass_id,.five_lens_process_evidence.peer_review_fallback_evidence)
             | .five_lens_process_evidence.peer_review_assignment_id = "peer-assignment-1"

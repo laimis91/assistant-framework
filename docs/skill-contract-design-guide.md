@@ -196,8 +196,8 @@ tools/evals/run-skill-evals.sh --validate-fixture
 
 Source checks cover metadata, dependencies, contract headers, required-field
 recovery, enum declarations, field types, passive YAML, and indexes. They do not
-prove execution adherence, host activation, or model quality. Installed path
-substitution remains covered by installer tests.
+prove execution adherence, host activation, or model quality. Plugin-copy
+parity is covered by `tools/skills/sync-plugin.py --check`.
 
 Keep structural validation, explicit invocation, implicit native selection, and
 post-activation behavior separate. Native activation observations must bind to
@@ -209,11 +209,10 @@ shapes using the eval runner's fixed operators, never arbitrary fixture code.
 Before authoring `machine_expectations.structured_json_assertions`, read
 `../../docs/evals/README.md#per-skill-eval-fixtures`, resolved from the directory
 containing the active creator `SKILL.md`, for the exact operator list, bounds,
-and null/absence rules. Accepted declaration keys are defined by installed
+and null/absence rules. Accepted declaration keys are defined by
 `../../tools/evals/lib/skill-eval-fixtures.sh`; validate authored fixtures with
-`run-skill-evals.sh --validate-fixture`. For Windows Codex shared skills, resolve
-these docs/tools under configured `CODEX_HOME` (default `~/.codex`), not `.agents`;
-the installer reports the actual tools location.
+`run-skill-evals.sh --validate-fixture`. These docs and tools exist only in a
+repository checkout; a plugin install does not ship them.
 Creator semantic fixtures bind operation claims to independent run capture and
 actual artifact bytes; see `references/behavioral-evaluation.md`. They preserve
 canonical producer envelopes for that consumer without making them a requirement

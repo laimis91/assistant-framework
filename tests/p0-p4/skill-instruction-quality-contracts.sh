@@ -3,7 +3,6 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-# Installed Codex path substitution is covered by installer-contracts.sh.
 # This suite stays focused on source skill instruction quality.
 
 p0p4_root_skill_files() {

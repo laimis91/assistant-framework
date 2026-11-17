@@ -5886,7 +5886,6 @@ p0p4_register_cleanup "$custom_fixture_dir"
 p0p4_write_skill_eval_fixture "$custom_fixture_dir"
 if local_only_list_output="$("$skill_eval_runner" --list)" \
     && grep -Fq "assistant-clarify" <<<"$local_only_list_output" \
-    && grep -Fq "assistant-cleanup" <<<"$local_only_list_output" \
     && grep -Fq "assistant-debugging" <<<"$local_only_list_output" \
     && grep -Fq "assistant-docs" <<<"$local_only_list_output" \
     && grep -Fq "assistant-research" <<<"$local_only_list_output" \
@@ -5918,11 +5917,12 @@ p0p4_assert_retired_skill_fixtures_absent() {
     local list_output="$1"
     local retired_skill
     local failures=()
-    for retired_skill in assistant-telos assistant-diagrams assistant-ideate; do
+    # assistant-cleanup stays named in the README's retirement note on purpose.
+    for retired_skill in assistant-telos assistant-diagrams assistant-ideate assistant-cleanup; do
         if grep -Fq "$retired_skill" <<<"$list_output"; then
             failures+=("$retired_skill fixture still listed")
         fi
-        if grep -Fq "$retired_skill" "$FRAMEWORK_DIR/README.md"; then
+        if [[ "$retired_skill" != assistant-cleanup ]] && grep -Fq "$retired_skill" "$FRAMEWORK_DIR/README.md"; then
             failures+=("$retired_skill still documented in README.md")
         fi
         if grep -Fq "skills/$retired_skill/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md"; then
@@ -5951,7 +5951,6 @@ test_start "skill eval docs describe complete first-class coverage"
 documented_skill_count="$(p0p4_skill_eval_default_fixtures | wc -l | tr -d '[:space:]')"
 if grep -Fq "default eval inventory is $documented_skill_count first-class \`assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-debugging" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-cleanup" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-docs" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-skill-creator" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq "assistant-research" "$FRAMEWORK_DIR/README.md" \
@@ -5974,7 +5973,6 @@ if grep -Fq "default eval inventory is $documented_skill_count first-class \`ass
     && p0p4_contains_text "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" '../../docs/evals/README.md#per-skill-eval-fixtures' \
     && cmp -s "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
     && grep -Fq "skills/assistant-debugging/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq "skills/assistant-cleanup/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
     && grep -Fq "skills/assistant-docs/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
     && grep -Fq "skills/assistant-skill-creator/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
     && grep -Fq "skills/assistant-research/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
@@ -6035,7 +6033,7 @@ contract_guide_operator_route_is_current() {
     p0p4_contains_text "$guide" '`../../docs/evals/README.md#per-skill-eval-fixtures`' \
         && p0p4_contains_text "$guide" 'containing the active creator `SKILL.md`' \
         && p0p4_contains_text "$guide" '`../../tools/evals/lib/skill-eval-fixtures.sh`' \
-        && p0p4_contains_text "$guide" 'For Windows Codex shared skills, resolve these docs/tools under configured `CODEX_HOME`' \
+        && p0p4_contains_text "$guide" 'These docs and tools exist only in a repository checkout; a plugin install does not ship them.' \
         && [[ -f "$skill_dir/../../tools/evals/lib/skill-eval-fixtures.sh" ]] \
         && p0p4_contains_text "$skill_dir/../../docs/evals/README.md" "skill-fixtures.md#per-skill-eval-fixtures" \
         && structured_operator_list_is_exact "$skill_dir/../../docs/evals/skill-fixtures.md" evals-readme

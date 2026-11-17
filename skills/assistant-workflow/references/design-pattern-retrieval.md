@@ -17,7 +17,9 @@ explicit config path. Do not search home or project directories for one.
    another specific pressure.
 3. If configured, run metadata-only search through
    `<framework-tools>/patterns/pattern-library.sh`, where `<framework-tools>` is
-   the installed agent tools directory; load at most 1-3 selected examples.
+   the `tools/` directory of an Assistant Framework repository checkout; the
+   plugin does not ship it, so a missing tool is `not_configured`; load at most
+   1-3 selected examples.
 4. For each selected example, record applicability, contraindications, and a
    `use` or `reject` decision.
 5. Adapt the smallest relevant idea to current repository conventions. Never
@@ -33,8 +35,8 @@ explicit config path. Do not search home or project directories for one.
 - Use library id plus relative path in evidence.
 - Reject stale language/style, hidden dependencies, unsafe caching/lifecycle,
   and examples whose tradeoffs do not fit the current force.
-- Configuration and indexes remain user-owned outside installed `tools/` so a
-  reinstall cannot delete them.
+- Configuration and indexes remain user-owned outside the framework `tools/`
+  directory so an update cannot delete them.
 
 The final pattern note records repository searches, optional library metadata
 results, selected examples, contraindications, and the use/reject decision.

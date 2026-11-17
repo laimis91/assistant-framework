@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Focused P0-P4 regression checks for installer idempotence and instruction contracts.
+# Focused P0-P4 regression checks for packaging and instruction contracts.
 
 set -euo pipefail
 
@@ -18,14 +18,9 @@ p0p4_suite_is_excluded() {
 
 source "$P0P4_SUITE_DIR/repo-guard-contracts.sh"
 source "$P0P4_SUITE_DIR/harness-controller-contracts.sh"
-source "$P0P4_SUITE_DIR/installer-contracts.sh"
 source "$P0P4_SUITE_DIR/change-impact-contracts.sh"
-source "$P0P4_SUITE_DIR/windows-installer-contracts.sh"
-source "$P0P4_SUITE_DIR/hook-retirement-contracts.sh"
-source "$P0P4_SUITE_DIR/framework-ownership-contracts.sh"
 source "$P0P4_SUITE_DIR/sol-native-overhead-contracts.sh"
 source "$P0P4_SUITE_DIR/review-round1-regressions.sh"
-source "$P0P4_SUITE_DIR/skill-install-path-substitution-contracts.sh"
 source "$P0P4_SUITE_DIR/skill-instruction-quality-contracts.sh"
 source "$P0P4_SUITE_DIR/skill-activation-precision-contracts.sh"
 source "$P0P4_SUITE_DIR/progressive-specialist-contracts.sh"

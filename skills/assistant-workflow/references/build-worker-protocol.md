@@ -114,7 +114,7 @@ compatibility semantics. New Claude and Codex dispatch defaults to intelligent-w
 with framework definitions installed, missing named definitions are a deployment
 mismatch, never silent generic fallback; with none installed (a plugin install), the
 main agent builds hands-on and records that reason.
-Claude uses the same intelligent/mechanical roles with native Opus/Sonnet aliases and explicit deprecated code-writer intelligent compatibility. Gemini retains native/default tiers and shared writer ownership; do not invent custom roles. Eligibility covers BOTH tests and implementation, including approved cases, expected values/oracles, negative cases and assertion/fixture patterns.
+Claude uses the same intelligent/mechanical roles with native Opus/Sonnet aliases and explicit deprecated code-writer intelligent compatibility. Eligibility covers BOTH tests and implementation, including approved cases, expected values/oracles, negative cases and assertion/fixture patterns.
 
 When mechanical evidence becomes stale, stop dependent mutations and return all
 actual partial changes, observed evidence, truthful status and blocker fields.

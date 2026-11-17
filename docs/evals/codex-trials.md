@@ -437,8 +437,7 @@ without reapplying the admission-time freshness window.
 ### Source-only context budget
 
 The promotion evaluator, finalizer, evidence helper, and context reporter are
-source-repository-only and are deliberately excluded from agent installs;
-installed copies retain only the legacy offline eval runner and fixtures.
+source-repository-only; the plugin does not ship them.
 Generate the reproducible native Codex inventory from the source repository.
 The reporter is intentionally Codex-only until equivalent installed-context
 semantics are defined and tested for other agents:
@@ -447,14 +446,13 @@ semantics are defined and tested for other agents:
 tools/context-budget-report.sh --agent codex --skill assistant-workflow --format json
 ```
 
-The reporter requires a successful isolated temporary install and emits counts,
-not instruction text. Installation failures stop the report instead of emitting
-partial or zero-filled inventory. `project_agents` measures the repository
+The reporter reads the generated plugin copy (`inventory_mode: plugin_copy`)
+and emits counts, not instruction text. A missing plugin copy stops the report
+instead of emitting partial or zero-filled inventory. `project_agents` measures the repository
 `AGENTS.md`.
-`generated_global_agents` measures its installer-owned marker block.
-`common_operating_guidance` measures the installed
-`tools/progress/operating-guidance.md`, which the managed block and every skill
-root load.
+`generated_global_agents` measures the marked block in `docs/instruction-block.md`.
+`common_operating_guidance` measures the plugin copy of
+`references/operating-guidance.md`, which every skill root loads.
 `native_skill_catalog_descriptions`
 measures the first-class `assistant-*` description catalog. These four standing
 components count toward both totals. The selected

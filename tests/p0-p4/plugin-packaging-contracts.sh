@@ -18,7 +18,7 @@ else
     fail "plugin drifted from skills/; run tools/skills/sync-plugin.py --apply"
 fi
 
-test_start "plugin sync check fails closed on drift, a shipped cleanup skill, a stale version and a changed marketplace"
+test_start "plugin sync check fails closed on drift, a skill with no source, a stale version and a changed marketplace"
 plugin_fixture="$(mktemp -d)"
 p0p4_register_cleanup "$plugin_fixture"
 plugin_failures=()
@@ -33,8 +33,8 @@ plugin_check || plugin_failures+=("check failed right after apply")
 printf 'drift\n' >>"$plugin_fixture/plugins/assistant-framework/skills/assistant-review/SKILL.md"
 plugin_check && plugin_failures+=("accepted a drifted skill copy")
 reset_plugin_fixture
-cp -R "$plugin_fixture/skills/assistant-cleanup" "$plugin_fixture/plugins/assistant-framework/skills/"
-plugin_check && plugin_failures+=("accepted assistant-cleanup inside the plugin")
+cp -R "$plugin_fixture/skills/assistant-review" "$plugin_fixture/plugins/assistant-framework/skills/assistant-orphan"
+plugin_check && plugin_failures+=("accepted a plugin skill with no source in skills/")
 reset_plugin_fixture
 printf '9.9.9\n' >"$plugin_fixture/version.txt"
 plugin_check && plugin_failures+=("accepted manifests behind version.txt")

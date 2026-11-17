@@ -162,14 +162,12 @@ if ruby -e '
   end
   roles = File.read(File.join(root, "skills/assistant-workflow/references/subagent-roles.md"))
   fallback_valid = lambda do |text|
-    rows = text.lines.select { |line| line.start_with?("| Code Writer (") }
-    rows.length == 1 && rows.first.include?("Gemini supported fallback only") &&
-      rows.first.include?("general-purpose") && !rows.first.match?(/Claude|Codex/) &&
+    text.lines.none? { |line| line.start_with?("| Code Writer") } &&
       text.include?("For missing new Claude or Codex writer definitions, report a deployment mismatch and stop")
   end
-  abort "fallback table still authorizes generic Claude/Codex writers despite deployment stop" unless fallback_valid.call(roles)
-  stale = roles.sub("Code Writer (Gemini supported fallback only)", "Code Writer (Claude/Gemini supported fallback only)")
-  abort "old Claude fallback row accepted beneath correct stop rule" if fallback_valid.call(stale)
+  abort "fallback table authorizes a generic writer despite deployment stop" unless fallback_valid.call(roles)
+  stale = roles.sub("| Builder/Tester |", "| Code Writer (Claude/Codex supported fallback) | `general-purpose` or nearest coding agent | Strongest / deep reasoning |\n| Builder/Tester |")
+  abort "generic writer fallback row accepted beneath correct stop rule" if stale == roles || fallback_valid.call(stale)
 ' "$FRAMEWORK_DIR"; then pass; else fail "provider writer ownership or compatibility differs"; fi
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ownership-response-fixtures.sh"

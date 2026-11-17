@@ -379,12 +379,14 @@ class MalformedTraces(unittest.TestCase):
         self.assertEqual(score(load_events(lines), {"required": ["assistant-docs"]}, ROOT)["verdict"], "fail")
 
 
-def fake_install(home):
-    (home / ".claude" / "skills" / "assistant-x").mkdir(parents=True)
-    (home / ".claude" / "skills" / "assistant-x" / "SKILL.md").write_text("---\nname: assistant-x\ndescription: Does x.\n---\n\nBody\n")
-    (home / ".claude" / "tools" / "progress").mkdir(parents=True)
-    (home / ".claude" / "tools" / "progress" / "operating-guidance.md").write_text("Guidance\n")
-    (home / ".claude" / "CLAUDE.md").write_text("# T\n\n## Skills\n\n- Use skills.\n\n## Other\n\nNo.\n")
+def fake_source(base):
+    skills = base / "plugin-skills"
+    (skills / "assistant-x" / "references").mkdir(parents=True)
+    (skills / "assistant-x" / "SKILL.md").write_text("---\nname: assistant-x\ndescription: Does x.\n---\n\nBody\n")
+    (skills / "assistant-x" / "references" / "operating-guidance.md").write_text("Guidance\n")
+    block = base / "instruction-block.md"
+    block.write_text("# T\n\n## Skills\n\n- Use skills.\n\n## Other\n\nNo.\n")
+    return skills, block
 
 
 class Generator(unittest.TestCase):
@@ -393,7 +395,8 @@ class Generator(unittest.TestCase):
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name).resolve() / "plugins"
         self.root.mkdir()
-        for name, replacement in (("install_into", fake_install), ("source_state", lambda: ("abc123", True))):
+        skills, block = fake_source(Path(directory.name).resolve())
+        for name, replacement in (("SOURCE_SKILLS", skills), ("INSTRUCTION_BLOCK", block), ("source_state", lambda: ("abc123", True))):
             patcher = mock.patch.object(generate_plugin, name, replacement)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -451,7 +454,8 @@ class Generator(unittest.TestCase):
         output = self.root / "a"
         self.assertEqual(json.loads((output / ".claude-plugin" / "plugin.json").read_text())["name"], "af")
         self.assertTrue((output / "skills" / "assistant-x" / "SKILL.md").is_file())
-        self.assertTrue((output / "tools" / "progress" / "operating-guidance.md").is_file())
+        self.assertTrue((output / "skills" / "assistant-x" / "references" / "operating-guidance.md").is_file())
+        self.assertFalse((output / "tools").exists())
         context = json.loads((output / "hooks" / "session-context.json").read_text())["hookSpecificOutput"]
         self.assertEqual((context["hookEventName"], context["additionalContext"]), ("SessionStart", "- Use skills."))
         hook = json.loads((output / "hooks" / "hooks.json").read_text())["hooks"]["SessionStart"][0]["hooks"][0]
@@ -496,23 +500,20 @@ class Generator(unittest.TestCase):
             skills_guidance("# T\n\n## Other\n\nNo.\n")
 
 
-class InstallerEnvironment(unittest.TestCase):
-    def test_installer_gets_a_minimal_environment(self):
-        secrets = {"ANTHROPIC_API_KEY": "x", "GH_TOKEN": "x", "CODEX_HOME": "/real", "SSH_AUTH_SOCK": "/s", "CLAUDE_CONFIG_DIR": "/real"}
-        with mock.patch.dict(os.environ, secrets), mock.patch.object(generate_plugin.subprocess, "run") as run:
-            generate_plugin.install_into(Path("/tmp/home"))
-        environment = run.call_args.kwargs["env"]
-        self.assertEqual(set(environment), {"HOME", "PATH", "TMPDIR"})
-        self.assertEqual(environment["HOME"], "/tmp/home")
+class GeneratorSources(unittest.TestCase):
+    def test_default_sources_are_the_plugin_copy_and_the_instruction_block(self):
+        self.assertEqual(generate_plugin.SOURCE_SKILLS, generate_plugin.REPO / "plugins" / "assistant-framework" / "skills")
+        self.assertEqual(generate_plugin.INSTRUCTION_BLOCK, generate_plugin.REPO / "docs" / "instruction-block.md")
+        self.assertTrue(skills_guidance(generate_plugin.INSTRUCTION_BLOCK.read_text(encoding="utf-8")))
 
 
 class CommandLine(unittest.TestCase):
     def test_main_applies_the_output_guard(self):
         with mock.patch.object(sys, "argv", ["generate_plugin.py", "--output", "/tmp/not-allowed"]), \
-                mock.patch.object(generate_plugin, "install_into") as install:
+                mock.patch.object(generate_plugin, "_build") as build:
             with self.assertRaises(ValueError):
                 generate_plugin.main()
-        install.assert_not_called()
+        build.assert_not_called()
 
 
 class Suite(unittest.TestCase):
@@ -752,9 +753,9 @@ class ExistingActivationCases(unittest.TestCase):
 
     def test_all_activation_cases_load_with_unique_ids(self):
         cases = activation.load_cases()
-        self.assertEqual(len(cases), 76)
-        self.assertEqual(len({case["id"] for case in cases}), 76)
-        self.assertEqual(sum(case["should_activate"] for case in cases), 46)
+        self.assertEqual(len(cases), 73)
+        self.assertEqual(len({case["id"] for case in cases}), 73)
+        self.assertEqual(sum(case["should_activate"] for case in cases), 44)
         self.assertEqual(sum(case["run_only"] for case in cases), 2)
 
     def test_positive_counts_every_activation_so_order_does_not_matter(self):
@@ -869,7 +870,7 @@ class ExistingActivationCases(unittest.TestCase):
         code, text = self.report_output(rows, "--baselines", "b1,b2", "--candidate", "c", "--json")
         printed = json.loads(text)
         self.assertEqual(code, 0)
-        self.assertEqual((printed["compared_cases"], printed["total_cases"]), (2, 76))
+        self.assertEqual((printed["compared_cases"], printed["total_cases"]), (2, 73))
         self.assertEqual(printed["regressions"], [["m", "x"], ["m", "y"]])
         self.assertEqual(printed["activation_cases"]["c / m"]["fail"], 2)
         self.assertEqual(printed["groups"], {})
@@ -896,7 +897,7 @@ class ExistingActivationCases(unittest.TestCase):
             base = Path(name).resolve()
             plugin = make_plugin(base, "arm")
             manifest = json.loads((plugin / "generation.json").read_text())
-            arguments = ["run_trials.py", "--batch", "b", "--arm", "arm", "--set", "activation", "--repeats", "1", "--max-cost-usd", "2", "--authorized-calls", "76"]
+            arguments = ["run_trials.py", "--batch", "b", "--arm", "arm", "--set", "activation", "--repeats", "1", "--max-cost-usd", "2", "--authorized-calls", "73"]
             crowded = dict(manifest, listing_condition="crowded")
             with mock.patch.object(run_trials, "PLUGINS", base), mock.patch.object(run_trials, "load_manifest", return_value=(plugin, crowded)), \
                     mock.patch.object(sys, "stderr", io.StringIO()) as err, mock.patch.object(sys, "stdout", io.StringIO()), mock.patch.object(sys, "argv", arguments):
@@ -1240,65 +1241,65 @@ class EmptyRunsAndFill(unittest.TestCase):
 
     def test_empty_runs_are_not_observed_and_keep_the_host_error(self):
         self.empty_when = lambda index, repeat: index >= 100
-        self.assertEqual(self.main("half", 228), 4)
+        self.assertEqual(self.main("half", 219), 4)
         rows, summary = self.read("half")
         self.assertFalse(summary["valid"])
-        self.assertEqual((summary["observed_runs"], summary["empty_runs"]), (100, 128))
-        self.assertEqual(summary["host_errors"], [{"error": "API error 402: insufficient balance", "runs": 128}])
+        self.assertEqual((summary["observed_runs"], summary["empty_runs"]), (100, 119))
+        self.assertEqual(summary["host_errors"], [{"error": "API error 402: insufficient balance", "runs": 119}])
         self.assertEqual(summary["cases_reason"], "Error: request rejected")
-        self.assertEqual(sum(row["stop"] == "empty_run" for row in rows), 128)
+        self.assertEqual(sum(row["stop"] == "empty_run" for row in rows), 119)
         self.assertEqual({row.get("host_error") for row in rows if row["stop"] == "empty_run"}, {"API error 402: insufficient balance"})
         self.assertFalse(any(row["batch_valid"] for row in rows))
         self.assertEqual(run_trials.host_error({"error": "bad k-secret " + "x" * 500}, "k-secret")[:12], "bad [key] xx")
         self.assertEqual(len(run_trials.host_error({"error": "x" * 500}, "k")), 200)
 
     def test_a_clean_batch_keeps_no_host_reason(self):
-        self.assertEqual(self.main("full", 228), 0)
+        self.assertEqual(self.main("full", 219), 0)
         self.assertIsNone(self.read("full")[1]["cases_reason"])
 
     def test_fill_runs_only_the_missing_trials_and_writes_the_merged_arm(self):
         self.empty_when = lambda index, repeat: index >= 117
-        self.main("half", 228)
+        self.main("half", 219)
         self.empty_when = None
         self.calls.clear()
-        self.assertEqual(self.main("filled", 228, fill="half"), 2)
+        self.assertEqual(self.main("filled", 219, fill="half"), 2)
         self.assertEqual(self.calls, [])
-        self.assertEqual(self.main("filled", 111, fill="half"), 0)
+        self.assertEqual(self.main("filled", 102, fill="half"), 0)
         missing = sorted(case["id"] for case in self.cases)[39:]
         self.assertEqual(self.calls[0]["names"], missing)
         self.assertEqual((self.calls[0]["repeats"], set(self.calls[0]["runs"].values())), (3, {3}))
         rows, summary = self.read("filled")
         self.assertTrue(summary["valid"])
-        self.assertEqual((summary["fill_from"], summary["kept_trials"], summary["filled_trials"], summary["calls"]), ("half", 117, 111, 111))
-        self.assertEqual(len(rows), 228)
+        self.assertEqual((summary["fill_from"], summary["kept_trials"], summary["filled_trials"], summary["calls"]), ("half", 117, 102, 102))
+        self.assertEqual(len(rows), 219)
         self.assertEqual(Counter((row["case"], row["repeat"]) for row in rows), Counter({(case["id"], index): 1 for case in self.cases for index in range(3)}))
-        self.assertEqual(Counter(row["trial_batch"] for row in rows), Counter({"half": 117, "filled": 111}))
+        self.assertEqual(Counter(row["trial_batch"] for row in rows), Counter({"half": 117, "filled": 102}))
         self.assertTrue(all(row["batch"] == "filled" and row["batch_valid"] for row in rows))
         self.assertEqual(list((self.base / "tmp").iterdir()), [])
 
     def test_fill_refuses_a_different_host_or_tree_and_uneven_gaps(self):
         self.empty_when = lambda index, repeat: index >= 118
-        self.main("half", 228)
+        self.main("half", 219)
         self.empty_when = None
-        self.assertEqual(self.main("filled", 110, fill="half"), 2)
+        self.assertEqual(self.main("filled", 101, fill="half"), 2)
         self.assertIn("different numbers of repeats", sys.stderr.getvalue())
         shutil.rmtree(self.base / "results" / "half")
         self.empty_when = lambda index, repeat: index >= 117
-        self.main("half", 228)
+        self.main("half", 219)
         self.empty_when = None
-        self.assertEqual(self.main("filled", 111, fill="half", host="10.0"), 2)
+        self.assertEqual(self.main("filled", 102, fill="half", host="10.0"), 2)
         self.assertIn("host_version differs", sys.stderr.getvalue())
         manifest = self.plugin / "generation.json"
         manifest.write_text(json.dumps({**json.loads(manifest.read_text()), "description_sha256": "other"}))
-        self.assertEqual(self.main("filled", 111, fill="half"), 2)
+        self.assertEqual(self.main("filled", 102, fill="half"), 2)
         self.assertIn("description_sha256 differs", sys.stderr.getvalue())
         self.assertEqual(len(self.calls), 2)
 
     def test_fill_that_fails_again_is_invalid(self):
         self.empty_when = lambda index, repeat: index >= 117
-        self.main("half", 228)
+        self.main("half", 219)
         self.empty_when = lambda index, repeat: index >= 0
-        self.assertEqual(self.main("filled", 111, fill="half"), 4)
+        self.assertEqual(self.main("filled", 102, fill="half"), 4)
         rows, summary = self.read("filled")
         self.assertFalse(summary["valid"])
         self.assertFalse(any(row["batch_valid"] for row in rows))
@@ -1310,7 +1311,7 @@ class EmptyRunsAndFill(unittest.TestCase):
 
     def test_old_no_trace_rows_are_filled_and_reported_invalid(self):
         self.empty_when = lambda index, repeat: index >= 117
-        self.main("half", 228)
+        self.main("half", 219)
         rows, _ = self.read("half")
         # Batches from before this change wrote empty runs as no_trace with no turns and no cost, and called themselves valid.
         self.write_source([dict(row, stop="no_trace", turns=0, cost_usd=0, batch_valid=True) if row["stop"] == "empty_run" else dict(row, batch_valid=True)
@@ -1319,40 +1320,40 @@ class EmptyRunsAndFill(unittest.TestCase):
             report.main()
         self.assertIn("Invalid batches, left out above: half", sys.stdout.getvalue())
         self.empty_when = None
-        self.assertEqual(self.main("filled", 111, fill="half"), 0)
+        self.assertEqual(self.main("filled", 102, fill="half"), 0)
         self.assertTrue(self.read("filled")[1]["valid"])
 
     def test_a_gap_in_one_repeat_lands_on_that_repeat_and_keeps_the_arm_shape(self):
         self.empty_when = lambda index, repeat: repeat == 2
-        self.main("half", 228)
+        self.main("half", 219)
         self.empty_when = None
         self.calls.clear()
-        self.assertEqual(self.main("filled", 76, fill="half"), 0)
-        self.assertEqual((self.calls[0]["repeats"], set(self.calls[0]["runs"].values()), len(self.calls[0]["names"])), (1, {1}, 76))
+        self.assertEqual(self.main("filled", 73, fill="half"), 0)
+        self.assertEqual((self.calls[0]["repeats"], set(self.calls[0]["runs"].values()), len(self.calls[0]["names"])), (1, {1}, 73))
         rows, summary = self.read("filled")
         self.assertTrue(summary["valid"])
-        self.assertEqual((summary["cases"], summary["repeats"], summary["filled_cases"], summary["filled_repeats"]), (76, 3, 76, 1))
+        self.assertEqual((summary["cases"], summary["repeats"], summary["filled_cases"], summary["filled_repeats"]), (73, 3, 73, 1))
         self.assertEqual({row["repeat"] for row in rows if row["trial_batch"] == "filled"}, {2})
         self.assertEqual(Counter((row["case"], row["repeat"]) for row in rows), Counter({(case["id"], index): 1 for case in self.cases for index in range(3)}))
 
     def test_a_fill_of_a_fill_keeps_where_each_trial_came_from(self):
         self.empty_when = lambda index, repeat: repeat == 2
-        self.main("half", 228)
+        self.main("half", 219)
         self.empty_when = lambda index, repeat: index >= 38
-        self.assertEqual(self.main("filled", 76, fill="half"), 4)
+        self.assertEqual(self.main("filled", 73, fill="half"), 4)
         self.empty_when = None
-        self.assertEqual(self.main("again", 38, fill="filled"), 0)
+        self.assertEqual(self.main("again", 35, fill="filled"), 0)
         rows, summary = self.read("again")
         self.assertTrue(summary["valid"])
-        self.assertEqual(Counter(row["trial_batch"] for row in rows), Counter({"half": 152, "filled": 38, "again": 38}))
+        self.assertEqual(Counter(row["trial_batch"] for row in rows), Counter({"half": 146, "filled": 38, "again": 35}))
 
     def test_fill_refuses_a_source_without_every_case(self):
         self.empty_when = lambda index, repeat: index >= 117
-        self.main("half", 228)
+        self.main("half", 219)
         rows, _ = self.read("half")
         self.write_source([row for row in rows if row["case"] != rows[0]["case"]])
         self.empty_when = None
-        self.assertEqual(self.main("filled", 111, fill="half"), 2)
+        self.assertEqual(self.main("filled", 102, fill="half"), 2)
         self.assertIn("does not hold every activation case", sys.stderr.getvalue())
 
     def test_an_extra_empty_run_invalidates_the_batch(self):

@@ -1,6 +1,6 @@
 # Plugin marketplace packaging
 
-Status: **Draft**, 2026-11-17, awaiting user acceptance. Open questions Q1–Q4 answered by the user the same day (D-MP-4, D-MP-6, D-MP-8, D-MP-9). Revised the same day after an independent review (4 major, 8 minor, 2 nit findings), a second review (5 major, 3 minor, 1 nit) and a delta review (2 major, 3 minor, 1 nit); all addressed below. Baseline: main ae48ee1, after [self-contained skills](self-contained-skills.md) slices A–D merged.
+Status: **Implemented**, 2026-11-17, slices A–E in one PR at the user's request; see [Implementation notes](#implementation-notes) for deviations and checks still owed. Drafted the same day. Open questions Q1–Q4 answered by the user the same day (D-MP-4, D-MP-6, D-MP-8, D-MP-9). Revised the same day after an independent review (4 major, 8 minor, 2 nit findings), a second review (5 major, 3 minor, 1 nit) and a delta review (2 major, 3 minor, 1 nit); all addressed below. Baseline: main ae48ee1, after [self-contained skills](self-contained-skills.md) slices A–D merged.
 Source: user decisions of 2026-11-12 (package the skills as Claude Code and Codex plugins once they are self-contained), 2026-11-16 (this specification owns the installer-managed instruction block; the removal decisions in Slice E) and 2026-11-17 (serve the marketplaces from this repository; reach Claude chat and mobile by uploading skill ZIPs, not through a marketplace).
 
 ## Problem and intended outcome
@@ -49,7 +49,7 @@ Not confirmed from vendor documentation and checked first in Slice B: that the d
 ### Plugin and marketplaces (Slice B)
 
 - **R-MP-4. One plugin.** All skills except `assistant-cleanup` ship in one plugin named `assistant-framework`. The five skills that declare `requires` (`assistant-workflow`, `assistant-debugging`, `assistant-ui-qa`, `assistant-security`, `assistant-skill-creator`) and their targets (`assistant-review`, `assistant-verification`, `assistant-tdd`, `assistant-workflow`) then sit as sibling folders in the same cached plugin, so every cross-skill link resolves (D-MP-1).
-- **R-MP-5. Generated plugin folder.** `plugins/assistant-framework/` holds the plugin: `.claude-plugin/plugin.json`, a root `plugin.json` for Codex, and `skills/` with a copy of each shipped skill. A sync script, `tools/skills/sync-plugin.sh` (following `sync-operating-guidance.sh`), writes the copy from `skills/` and the manifest versions from `version.txt`. `tools/evals/skill-activation/generate_plugin.py:143` already writes a `.claude-plugin/plugin.json`; the two share one manifest writer instead of keeping two. The editable source stays `skills/` until Slice E (D-MP-2). No other component folder (`agents/`, `hooks/`, `commands/`) is created (D-MP-8).
+- **R-MP-5. Generated plugin folder.** `plugins/assistant-framework/` holds the plugin: `.claude-plugin/plugin.json`, a root `plugin.json` for Codex, and `skills/` with a copy of each shipped skill. A sync script, `tools/skills/sync-plugin.py`, writes the copy from `skills/` (without `evals/`) and the manifest versions from `version.txt`. `tools/evals/skill-activation/generate_plugin.py:143` already writes a `.claude-plugin/plugin.json`; the two share one manifest writer instead of keeping two. The editable source stays `skills/` until Slice E (D-MP-2). No other component folder (`agents/`, `hooks/`, `commands/`) is created (D-MP-8).
 - **R-MP-6. Marketplace files.** The repository root carries `.claude-plugin/marketplace.json` and `.agents/plugins/marketplace.json`, each listing the one plugin with source `./plugins/assistant-framework`. The Codex entry has `policy.installation` `AVAILABLE`, `policy.authentication` `ON_INSTALL` and a `category`. Both marketplaces are named `assistant-framework`.
 - **R-MP-7. Versioning.** The plugin version comes from `version.txt` and is set only in the manifests, never in the marketplace entries. Releasing means bumping `version.txt` and resyncing (D-MP-3).
 - **R-MP-8. Drift and validity check.** A contract suite run by `tests/test-p0-p4-contracts.sh` fails when:
@@ -67,7 +67,7 @@ Not confirmed from vendor documentation and checked first in Slice B: that the d
   - research: single-agent source research is direct-capable (`assistant-research/SKILL.md:16-28`, :75), and five-lens research without isolation ends incomplete (:70-74);
   - thinking: an independent high-risk challenge needs a fresh reviewer (`assistant-thinking/SKILL.md:32-36`), and the skill reports a gap when its method cannot be applied with the available context (:28); the Slice C check confirms this in chat;
   - clarify: no subagent path.
-- **R-MP-11. ZIP build.** `tools/skills/build-chat-zips.sh` writes `dist/chat-skills/<skill>.zip`, each holding one top-level `<skill>/` folder copied from `skills/`. `dist/` is Git-ignored. The script fails on:
+- **R-MP-11. ZIP build.** `tools/skills/build-chat-zips.py` writes `dist/chat-skills/<skill>.zip`, each holding one top-level `<skill>/` folder copied from `skills/`. `dist/` is Git-ignored. The script fails on:
   - a skill outside the set, or one with a `requires` entry;
   - a link leaving the folder;
   - a frontmatter `name` over 64 characters or outside lowercase letters, digits and hyphens;
@@ -81,7 +81,7 @@ Not confirmed from vendor documentation and checked first in Slice B: that the d
 
 The [self-contained skills](self-contained-skills.md) specification assigned four items to this one: one canonical block file, self-contained pointer wording, an opt-in setup step and a copy-paste snippet.
 
-- **R-MP-14. One canonical, agent-neutral block.** The block text lives in one file, `docs/instruction-block.md`. It has no placeholders: the guidance-home placeholder goes away with R-MP-15, and the title becomes "Assistant Framework instructions" for both `CLAUDE.md` and `AGENTS.md`. Both installers read it until Slice E, and the README snippet quotes it.
+- **R-MP-14. One canonical, agent-neutral block.** The block text lives in one file, `docs/instruction-block.md`. It has no placeholders: the guidance-home placeholder goes away with R-MP-15, and the title becomes "Assistant Framework instructions" for both `CLAUDE.md` and `AGENTS.md`. The README links to it rather than quoting it, so there is one copy; the installers never read it, because Slice E removed them in the same change.
 - **R-MP-15. Self-contained wording.** The block names no installed path. It keeps the four current sections, Skills, Involving the user, Operating stance and Boundaries (install.sh:1567-1601), and replaces the "read `tools/progress/operating-guidance.md` for every activity" line with the rule chosen in D-MP-6. This is a behavior change for work where no skill matches; the check in Verification covers it.
 - **R-MP-16. Opt-in setup.** Setup is a README copy-paste snippet for global or project `CLAUDE.md` and `AGENTS.md`. No skill or hook writes it (D-MP-9).
 - **R-MP-17. Skills work without it.** No skill depends on the block. A test fails when any file under `skills/` contains the block marker `ASSISTANT_FRAMEWORK_AGENTS_MD_START`, `docs/instruction-block.md`, or the heading "Assistant Framework instructions".
@@ -102,7 +102,7 @@ Planned after Slice B has been in use. These are the user's decisions of 2026-11
 
   `gemini` stays a readable historical label in released workflow contracts (for example the v13 `producer.runtime` enum in `plan-template.md:397-398` and its generated copies `plans/medium.md:370-371` and `plans/large.md:370-371`, `task-packet-admission.py:316` and :347, and every occurrence of the "Gemini native fallback" condition text, such as `handoffs.yaml:873` and `output.yaml:2467`). Removing it from current contracts would be a versioned workflow contract change with an eval rerun, and is not part of this slice (D-MP-7).
 - **R-MP-19. Agents stay in the repository.** `agents/claude` and `agents/codex` stay as files users copy by hand, and docs say how. Workflow works without them (R-MP-3).
-- **R-MP-20. Source of truth moves.** `skills/` moves to `plugins/assistant-framework/skills/` and `sync-plugin.sh` is deleted. Every script, test, eval runner (including `tools/evals/run-codex-framework-evals.sh`) and doc path that names `skills/` is updated in the same change.
+- **R-MP-20. Source of truth moves.** *Not implemented; see [Implementation notes](#implementation-notes).* `skills/` moves to `plugins/assistant-framework/skills/` and `sync-plugin.sh` is deleted. Every script, test, eval runner (including `tools/evals/run-codex-framework-evals.sh`) and doc path that names `skills/` is updated in the same change.
 - **R-MP-21. Manual migration.** Docs give exact removal steps for an existing manual install, in this order:
   1. Remove Assistant Framework hook registrations from `~/.claude/settings.json` and `~/.codex/hooks.json`.
   2. Delete the framework skills, tools and hook shims from `~/.claude/` and `~/.codex/`.
@@ -154,9 +154,32 @@ One branch and PR per slice, in order A, B, C, D, E. B needs A, because plugin i
   - a fresh Claude Code and a fresh Codex session with only the plugin and no block activate a skill that loads its operating guidance;
   - a session with the block and a request no skill matches follows the D-MP-6 rule.
 - **Slice E:**
-  - no file outside an allowlist names `install.sh`, `install.ps1`, `uninstall.sh`, `uninstall.ps1` or `codex-rules`; the allowlist covers historical specs, `docs/evals/`, `docs/research/`, dated documents, eval fixtures in `skills/*/evals/cases.json`, and `assistant-security` findings marked historical under R-MP-18;
+  - no file outside an allowlist names `install.sh`, `install.ps1`, `uninstall.sh`, `uninstall.ps1` or `codex-rules`; the allowlist covers historical specs, `docs/evals/`, `docs/research/`, dated documents, eval fixtures in `skills/*/evals/cases.json`, the README's "Moving from a manual install" section, and `assistant-security` findings marked historical under R-MP-18;
   - Gemini mentions remain only in that allowlist and in the released contract labels of R-MP-18;
   - the Slice B install checks still pass.
+
+## Implementation notes
+
+Implemented 2026-11-17 on branch `specs/plugin-marketplace-packaging`, all five slices in one PR at the user's request instead of one PR per slice.
+
+| Item | What happened |
+|---|---|
+| R-MP-20 | Not done. `skills/` stays the editable source and `plugins/assistant-framework/` stays generated by `sync-plugin.py`, which the contract suite checks for drift. Moving the folder would touch about 1,440 path references in 113 files for no user-visible gain. D-MP-2 and D-MP-5 therefore keep their pre-Slice E form. |
+| Script names | `sync-plugin.py` and `build-chat-zips.py` are Python, not shell. |
+| Evals | The plugin copy and the chat ZIPs leave out every `evals/` folder; they are repository test data. |
+| R-MP-14 | The README links to `docs/instruction-block.md` instead of quoting the block. |
+| Role prompts | `tools/skills/sync-role-prompts.sh` copies reconciled `agents/claude` bodies into `references/roles/` and checks them against the Codex `developer_instructions`. |
+
+| Verification | Result |
+|---|---|
+| `claude plugin validate .` | Passes (Claude Code 2.1.323). |
+| Claude install in a disposable `HOME` | Passes: 16 skills, no `assistant-cleanup`, 0 agents, 0 hooks; containment passes on the cache; the assistant-workflow → assistant-review sibling link resolves; `{agent_state_dir}` ships as written. |
+| Codex install | **Not verified**: no Codex CLI on the build machine. The user runs it. |
+| Cowork, install from GitHub after merge | Not yet run; owed after merge. |
+| Chat upload on desktop and mobile, duplicate behavior (R-MP-12) | Not yet run; the user uploads one ZIP and records the result here. |
+| Live session checks (Slice A dispatch, Slice D block) | Not run; they need model sessions. |
+| Eval reruns (workflow, review, research, security, framework instruction) | Not run; each needs fresh user authorization. |
+| Skill-activation suite | The `cleanup` routing row, the development case `d-cleanup` and the `h-cleanup-*` held-out cases still expect the removed `assistant-cleanup`; changing the frozen held-out set needs the user's authorization. |
 
 ## Decisions
 

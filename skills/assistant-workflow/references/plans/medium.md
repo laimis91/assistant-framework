@@ -149,7 +149,7 @@ integration/independent-review/conditional-QA/harness/final-snapshot gate.
 
 At Plan acceptance/resume/dispatch/verification/completion, invoke installed
 `scripts/task-packet-admission.py` with Python 3.9+.
-Unix: `python3 scripts/task-packet-admission.py`; PowerShell follows the installer,
+Unix: `python3 scripts/task-packet-admission.py`; PowerShell uses an available Python 3 launcher,
 e.g. `py -3 scripts/task-packet-admission.py` or
 `& 'C:\Path With Spaces\python.exe' scripts/task-packet-admission.py`, never `.py`
 association. Missing/unsupported Python, including manual installs or removal,

@@ -4,7 +4,7 @@ Reference for dispatching subagents through the active runtime's agent mechanism
 
 ## Model selection guidance
 
-Use **capability tiers**, not provider-specific model names, when deciding which model a role should use. Different runtimes name models differently, and some (for example Gemini CLI today) may not support custom per-role model files yet.
+Use **capability tiers**, not provider-specific model names, when deciding which model a role should use. Different runtimes name models differently, and some may not support custom per-role model files.
 
 | Tier | Use for | Selection rule |
 |---|---|---|
@@ -16,7 +16,6 @@ Provider examples are only examples, not requirements:
 
 - Claude: fast ≈ Haiku, balanced ≈ Sonnet, strongest ≈ Opus.
 - Codex/OpenAI: fast ≈ the configured lightweight coding model, balanced ≈ the default coding model, strongest ≈ the highest-reasoning coding model available in the environment.
-- Gemini: fast ≈ Flash-class, balanced ≈ Pro-class/default coding model, strongest ≈ highest-reasoning Pro/Ultra-class model available.
 
 If the runtime does not expose model overrides for subagents, keep the role separation and tool-access constraints; use the default model and include the tier as guidance in the dispatch prompt.
 
@@ -118,7 +117,6 @@ When no framework agent definitions are installed, the normal case for a plugin 
 | Code Mapper | `Explore` or nearest read-only explorer | Fast / economical |
 | Explorer | `Explore` or nearest read-only explorer | Balanced / standard |
 | Architect | `general-purpose` or nearest planning agent | Strongest / deep reasoning |
-| Code Writer (Gemini supported fallback only) | `general-purpose` or nearest coding agent | Strongest / deep reasoning |
 | Builder/Tester | `general-purpose` or nearest coding agent with shell/test access | Balanced / standard |
 | Code Reviewer | `general-purpose` or nearest read-only reviewer | Strongest / deep reasoning |
 | Reviewer compatibility | `general-purpose` or nearest read-only reviewer | Strongest / deep reasoning |

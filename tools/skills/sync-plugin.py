@@ -3,10 +3,10 @@
 
 Usage: sync-plugin.py --apply|--check
 
-The editable source stays skills/. --apply copies every shipped skill (all but
-assistant-cleanup, without its evals/ folder) into the plugin and writes both
-manifests with the version from version.txt. --check fails on any drift, on a
-marketplace file that disagrees, or on assistant-cleanup inside the plugin.
+The editable source stays skills/. --apply copies every skill (without its
+evals/ folder) into the plugin and writes both manifests with the version from
+version.txt. --check fails on any drift, on a marketplace file that disagrees,
+on a plugin skill with no source, or on an agents/, hooks/ or commands/ folder.
 """
 import filecmp
 import json
@@ -26,7 +26,6 @@ DESCRIPTION = (
     "Assistant Framework skills: workflow, review, verification, TDD, debugging, "
     "research, security and more, for Claude Code and Codex."
 )
-EXCLUDED_SKILLS = {"assistant-cleanup"}
 EXCLUDED_NAMES = {"evals", ".DS_Store", "__pycache__"}
 
 SKILLS = REPO / "skills"
@@ -40,7 +39,7 @@ def version():
 
 
 def shipped_skills():
-    return sorted(p.parent.name for p in SKILLS.glob("*/SKILL.md") if p.parent.name not in EXCLUDED_SKILLS)
+    return sorted(p.parent.name for p in SKILLS.glob("*/SKILL.md"))
 
 
 def ignore(_directory, names):
@@ -106,9 +105,7 @@ def check():
     problems = []
     plugin_skills = PLUGIN / "skills"
     present = sorted(p.name for p in plugin_skills.iterdir() if p.is_dir()) if plugin_skills.is_dir() else []
-    for skill in sorted(set(present) & EXCLUDED_SKILLS):
-        problems.append(f"{skill} must not ship in the plugin")
-    for skill in sorted(set(present) - set(shipped_skills()) - EXCLUDED_SKILLS):
+    for skill in sorted(set(present) - set(shipped_skills())):
         problems.append(f"plugin has a skill with no source: {skill}")
     for skill in shipped_skills():
         target = plugin_skills / skill

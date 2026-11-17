@@ -131,7 +131,7 @@ User budgets, host restrictions, subprocess deadlines, fetch bounds, API
 backoff/rate limits and application/product-loop policies keep their own owners
 and accurate exit reasons. This policy changes framework correction controls.
 
-Source tests and installer parity prove bounded structural behavior only.
+Source tests and plugin-copy parity prove bounded structural behavior only.
 Native activation, reduced friction, outcome quality, time or cost claims need a
 bounded matched observation with frozen outcome oracles, current source/host
 identity, calls/time, avoidable interruptions and explicit limits. Do not claim

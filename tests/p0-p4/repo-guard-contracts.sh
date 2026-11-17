@@ -252,7 +252,6 @@ fi
 
 test_start "retired plugin distribution paths stay absent"
 retired_plugin_paths=(
-    "$FRAMEWORK_DIR/plugins"
     "$FRAMEWORK_DIR/docs/plugin-architecture.md"
     "$FRAMEWORK_DIR/tools/plugins/sync-plugin-skills.sh"
     "$FRAMEWORK_DIR/tests/p0-p4/plugin-boundary-contracts.sh"
@@ -269,7 +268,7 @@ else
     fail "retired plugin distribution paths remain: ${remaining_retired_plugin_paths[*]}"
 fi
 
-test_start "general CI covers framework contracts and installs without retired runtime jobs"
+test_start "general CI covers framework contracts without retired runtime or installer jobs"
 framework_validation_workflow="$FRAMEWORK_DIR/.github/workflows/framework-validation.yml"
 framework_validation_failures=()
 if [[ ! -f "$framework_validation_workflow" ]]; then
@@ -281,10 +280,7 @@ else
         "contents: read" \
         "persist-credentials: false" \
         "timeout-minutes: 30" \
-        "tools/skills/validate-skills.sh" \
-        "./install.sh --agent codex --dry-run" \
-        "./install.sh --agent claude --dry-run" \
-        "./install.sh --agent gemini --dry-run"; do
+        "tools/skills/validate-skills.sh"; do
         if ! grep -Fq -- "$term" "$framework_validation_workflow"; then
             framework_validation_failures+=("framework-validation.yml: $term")
         fi
@@ -314,6 +310,9 @@ RUBY
     fi
     if rg -n -i -e 'memory graph' -e 'tools/memory-graph' -e 'MemoryGraph\.Tests' "$framework_validation_workflow" >/tmp/p0p4-framework-validation-retired-runtime.out; then
         framework_validation_failures+=("framework-validation.yml: retired Memory Graph job or invocation remains")
+    fi
+    if rg -n -i -e 'install\.sh' -e 'install\.ps1' -e 'gemini' "$framework_validation_workflow" >/tmp/p0p4-framework-validation-retired-installer.out; then
+        framework_validation_failures+=("framework-validation.yml: retired installer or Gemini step remains")
     fi
 fi
 if [[ "${#framework_validation_failures[@]}" -eq 0 ]]; then
@@ -424,7 +423,7 @@ trap -p EXIT >"$state_dir/cleanup-trap"
 if [[ -n "${CODEX_HOME+x}" ]]; then printf "set:%s\\n" "$CODEX_HOME" >"$state_dir/ordinary-state"; else printf "unset\\n" >"$state_dir/ordinary-state"; fi
 
 mkdir -p "$install_home" "$explicit_home"
-p0p4_install_codex_fixture "$install_home" "$state_dir/ordinary.out" "$state_dir/ordinary.err" --no-hooks
+p0p4_install_codex_fixture "$install_home" "$state_dir/ordinary.out" "$state_dir/ordinary.err"
 if [[ -n "${CODEX_HOME+x}" ]]; then printf "set:%s\\n" "$CODEX_HOME" >"$state_dir/after-ordinary-state"; else printf "unset\\n" >"$state_dir/after-ordinary-state"; fi
 
 p0p4_capture_command_scoped_codex_home() {

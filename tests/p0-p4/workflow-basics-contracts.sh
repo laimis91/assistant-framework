@@ -5,7 +5,7 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 test_start "canonical workflow phase lists do not inject standalone TEST/VERIFY phases"
 if rg -n "TRIAGE -> DISCOVER -> PLAN -> BUILD -> TEST|BUILD -> TEST -> VERIFY|TEST -> VERIFY" \
-    "$FRAMEWORK_DIR/install.sh" \
+    "$FRAMEWORK_DIR/docs/instruction-block.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md" \
     "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml" >/tmp/p0p4-stale-phases.out; then
@@ -14,18 +14,18 @@ else
     pass
 fi
 
-test_start "Codex AGENTS delegates phase detail to native skill routing"
-if grep -Fq 'When a skill'"'"'s description matches the request, read its \`SKILL.md\` and follow it through to its handoff' \
-    "$FRAMEWORK_DIR/install.sh" \
+test_start "canonical instruction block delegates phase detail to native skill routing"
+if grep -Fq 'When a skill'"'"'s description matches the request, read its `SKILL.md` and follow it through to its handoff' \
+    "$FRAMEWORK_DIR/docs/instruction-block.md" \
     && grep -Fq "approve a plan before medium+ or elevated-risk development edits" \
-    "$FRAMEWORK_DIR/install.sh" \
-    && ! grep -Fq "The orchestrator owns framework state files" "$FRAMEWORK_DIR/install.sh" \
-    && ! grep -Fq "use direct fallback only after" "$FRAMEWORK_DIR/install.sh" \
+    "$FRAMEWORK_DIR/docs/instruction-block.md" \
+    && ! grep -Fq "The orchestrator owns framework state files" "$FRAMEWORK_DIR/docs/instruction-block.md" \
+    && ! grep -Fq "use direct fallback only after" "$FRAMEWORK_DIR/docs/instruction-block.md" \
     && ! grep -Fq "TRIAGE -> DISCOVER -> DECOMPOSE when needed -> PLAN -> DESIGN when needed -> BUILD -> REVIEW -> DOCUMENT" \
-    "$FRAMEWORK_DIR/install.sh"; then
+    "$FRAMEWORK_DIR/docs/instruction-block.md"; then
     pass
 else
-    fail "generated Codex AGENTS guidance must stay lean and defer phase mechanics to the matched skill"
+    fail "canonical instruction block must stay lean and defer phase mechanics to the matched skill"
 fi
 
 test_start "review contracts support review_material_snapshot without diff-only gates"

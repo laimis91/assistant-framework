@@ -19,7 +19,7 @@ Name the lower-trust author of the content, the boundary, the affected principal
 
 ## Instructed versus enforced
 
-Keep "instructed" distinct from "enforced". Text in a prompt, skill or system message that tells a model not to do something is instructed: it guides behaviour but stops nothing. An enforced control is a check outside the model that its output cannot override. In this repository, `codex-rules/workflow.rules` `decision` values (`prompt`, `forbidden`) are enforced for the command prefixes they match (an alternate spelling, such as a shell wrapper, may not match), and the `tools:` lines in `agents/claude/*.md` are enforced; the prose in skills and agent bodies is instructed. Never count an instruction-only guardrail as the control that blocks an attack path.
+Keep "instructed" distinct from "enforced". Text in a prompt, skill or system message that tells a model not to do something is instructed: it guides behaviour but stops nothing. An enforced control is a check outside the model that its output cannot override. For example, Codex execution-policy rules (`.rules` files whose `decision` values are `prompt` or `forbidden`) are enforced for the command prefixes they match (an alternate spelling, such as a shell wrapper, may not match), and the `tools:` line of a Claude agent definition is enforced; the prose in skills and agent bodies is instructed. Never count an instruction-only guardrail as the control that blocks an attack path.
 
 ## Delegated authority
 

@@ -66,10 +66,11 @@ fi
 test_start "containment check rejects framework paths, undeclared cross-skill links and stale allowlist entries"
 bad_root="$(mktemp -d)"
 p0p4_register_cleanup "$bad_root"
-mkdir -p "$bad_root/skills/needs-tools" "$bad_root/skills/other-skill/references" "$bad_root/skills/assistant-cleanup"
+mkdir -p "$bad_root/skills/needs-tools" "$bad_root/skills/other-skill/references" "$bad_root/skills/assistant-docs"
 printf -- '---\nname: other-skill\n---\n' >"$bad_root/skills/other-skill/SKILL.md"
 printf 'other\n' >"$bad_root/skills/other-skill/references/note.md"
-printf -- '---\nname: assistant-cleanup\n---\nNo ownership helper here.\n' >"$bad_root/skills/assistant-cleanup/SKILL.md"
+printf -- '---\nname: assistant-docs\n---\n' >"$bad_root/skills/assistant-docs/SKILL.md"
+printf 'No API docs directory here.\n' >"$bad_root/skills/assistant-docs/api-docs.md"
 cat >"$bad_root/skills/needs-tools/SKILL.md" <<'FIXTURE'
 ---
 name: needs-tools
@@ -80,8 +81,8 @@ Run `<framework-tools>/example/run.sh`.
 Run `{agent_state_dir}/tools/example/run.sh`.
 Run `tools/example/run.sh` and read `docs/example/guide.md`.
 Run `~/.codex/tools/example/run.sh`.
-Run `/home/alice/.claude/tools/example/run.sh` and `${HOME}/.gemini/tools/example/run.sh`.
-Run `tools/framework-ownership/ownership.py`.
+Run `/home/alice/.claude/tools/example/run.sh` and `${HOME}/.agents/tools/example/run.sh`.
+Write the reference under `docs/api/`.
 Edit `tools/skills/sync-example.sh` as a maintainer.
 FIXTURE
 printf 'helper = Path(__file__).parents[3] / "tools/example/helper.py"\n' >"$bad_root/skills/needs-tools/helper.py"
@@ -99,10 +100,10 @@ for expected in \
     "runtime path leaves the skill folder: docs/example/guide.md" \
     "runtime path leaves the skill folder: ~/.codex/tools/example/run.sh" \
     "runtime path leaves the skill folder: /home/alice/.claude/tools/example/run.sh" \
-    "runtime path leaves the skill folder: \${HOME}/.gemini/tools/example/run.sh" \
-    "runtime path leaves the skill folder: tools/framework-ownership/ownership.py" \
+    "runtime path leaves the skill folder: \${HOME}/.agents/tools/example/run.sh" \
+    "runtime path leaves the skill folder: docs/api/" \
     'runtime path leaves the skill folder: parents[3] / "tools/example/helper.py"' \
-    "allowlist entry no longer matches; remove it: tools/framework-ownership/ownership.py"; do
+    "allowlist entry no longer matches; remove it: docs/api/"; do
     grep -Fq -- "$expected" "$bad_out" || containment_failures+=("missing report: $expected")
 done
 if grep -Fq "tools/skills/sync-example.sh" "$bad_out"; then
@@ -110,7 +111,7 @@ if grep -Fq "tools/skills/sync-example.sh" "$bad_out"; then
 fi
 printf -- '---\nname: needs-tools\nrequires:\n  - other-skill\n---\nSee [note](../other-skill/references/note.md).\n' \
     >"$bad_root/skills/needs-tools/SKILL.md"
-rm -f "$bad_root/skills/needs-tools/helper.py" "$bad_root/skills/assistant-cleanup/SKILL.md"
+rm -f "$bad_root/skills/needs-tools/helper.py" "$bad_root/skills/assistant-docs/api-docs.md"
 if ! python3 -I "$containment_tool" --skills-dir "$bad_root/skills" >"$bad_out" 2>&1; then
     containment_failures+=("rejected a link into a declared requires skill")
 fi
