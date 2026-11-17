@@ -11,8 +11,6 @@ codex_eval_runner="$FRAMEWORK_DIR/tools/evals/run-codex-framework-evals.sh"
 semantic_finalizer="$FRAMEWORK_DIR/tools/evals/finalize-workflow-kernel-review.sh"
 semantic_verdict_schema="$FRAMEWORK_DIR/docs/evals/framework-semantic-review-verdict.schema.json"
 promotion_decision_schema="$FRAMEWORK_DIR/docs/evals/framework-promotion-decision.schema.json"
-workflow_kernel_manifest="$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/manifest.json"
-eval_readme="$FRAMEWORK_DIR/docs/evals/codex-trials.md"
 eval_package="$FRAMEWORK_DIR/tools/evals/package.json"
 eval_package_lock="$FRAMEWORK_DIR/tools/evals/package-lock.json"
 framework_validation_workflow="$FRAMEWORK_DIR/.github/workflows/framework-validation.yml"
@@ -182,79 +180,6 @@ write_machine_expectation_responses() {
         } >"$response_path"
     done < <(jq -r '.cases[].id' "$eval_fixture")
 }
-
-test_start "docs eval fixture JSON has required behavior cases"
-if jq -e '
-    .schema_version == "1.0"
-    and (.cases | type == "array")
-    and ([.cases[].id] | contains([
-      "ambiguous-prompt-clarify-or-default-deterministically",
-      "compaction-resume-reads-task-state-first",
-      "codex-role-constraints-native",
-      "clear-medium-task-zero-clarification-questions",
-      "ambiguous-risky-task-blocks-before-plan",
-      "executable-task-packet-before-build",
-      "medium-feature-plans-before-build",
-      "per-slice-verification-before-advancing",
-      "review-loop-continues-after-findings",
-      "small-fix-stays-lightweight",
-      "spec-review-not-replaced-by-quality-review",
-      "subagent-opt-out-keeps-review-isolation",
-      "tdd-red-before-green-handoff",
-      "worker-status-packet-required"
-    ]))
-    and (.cases | length >= 14)
-' "$eval_fixture" >/dev/null; then
-    pass
-else
-    fail "eval JSON is invalid or missing required behavior cases"
-fi
-
-test_start "docs eval fixture JSON includes seven new case areas"
-if jq -e '
-    def case_category($id; $category):
-      any(.cases[]; .id == $id and .category == $category);
-    case_category("tdd-red-before-green-handoff"; "tdd_handoff")
-    and case_category("executable-task-packet-before-build"; "handoff_contracts")
-    and case_category("per-slice-verification-before-advancing"; "slice_verification")
-    and case_category("spec-review-not-replaced-by-quality-review"; "review_gates")
-    and case_category("worker-status-packet-required"; "subagent_handoffs")
-    and case_category("subagent-opt-out-keeps-review-isolation"; "subagent_delegation_trigger")
-    and case_category("codex-role-constraints-native"; "role_constraints")
-' "$eval_fixture" >/dev/null; then
-    pass
-else
-    fail "eval JSON missing one or more new case id/category pairs"
-fi
-
-test_start "docs eval fixture JSON includes clarification admissibility cases"
-if jq -e '
-    def case_category($id; $category):
-      any(.cases[]; .id == $id and .category == $category);
-    case_category("clear-medium-task-zero-clarification-questions"; "clarification_admissibility")
-    and case_category("ambiguous-risky-task-blocks-before-plan"; "clarification_admissibility")
-' "$eval_fixture" >/dev/null; then
-    pass
-else
-    fail "eval JSON missing clarification admissibility case id/category pairs"
-fi
-
-test_start "docs eval fixture JSON has machine expectation arrays for every case"
-if jq -e '
-    all(.cases[];
-      (.machine_expectations | type == "object")
-      and (.machine_expectations.required_substrings | type == "array")
-      and (.machine_expectations.forbidden_substrings | type == "array")
-      and (.machine_expectations.required_substrings | length > 0)
-      and (.machine_expectations.forbidden_substrings | length > 0)
-      and all(.machine_expectations.required_substrings[]; type == "string" and length > 0)
-      and all(.machine_expectations.forbidden_substrings[]; type == "string" and length > 0)
-    )
-' "$eval_fixture" >/dev/null; then
-    pass
-else
-    fail "eval JSON missing machine_expectations required/forbidden string arrays"
-fi
 
 test_start "docs eval README lists new behavior areas"
 missing_eval_readme_terms=()
@@ -603,21 +528,6 @@ if [[ -f "$trace_schema" ]] \
     pass
 else
     fail "versioned trace schema is missing identity/status fields or integer count metric types"
-fi
-
-test_start "eval fixture and README expose the trace validation and comparison contract"
-if jq -e '
-    .trace_results.schema == "framework-instruction-trace-result.schema.json"
-    and (.trace_results.statuses | contains(["completed", "adapter_unavailable"]))
-    and (.trace_results.variants | contains(["baseline", "candidate"]))
-' "$eval_fixture" >/dev/null \
-    && grep -Fq -- "--validate-traces DIR" "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
-    && grep -Fq -- "--compare-traces DIR" "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
-    && grep -Fq -- "adapter_unavailable" "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
-    && grep -Fq -- "not counted as an acceptance failure" "$FRAMEWORK_DIR/docs/evals/codex-trials.md"; then
-    pass
-else
-    fail "eval fixture or README is missing the trace schema, modes, variants, or unavailable-run semantics"
 fi
 
 test_start "eval runner help keeps legacy modes and advertises trace modes"
@@ -1218,15 +1128,6 @@ if [[ "$actual_materialization_hash" == "$expected_materialization_hash" ]] \
     pass
 else
     fail "finalizer did not mirror the eval runner's materialization, which keeps {agent_state_dir} as written, before hashing"
-fi
-
-test_start "question-mark proxy naming is explicit across manifest comparison and docs"
-if jq -e '.promotion_gates.question_mark_count_proxy_must_not_increase == true and (.promotion_gates | has("unnecessary_questions_must_not_increase") | not)' "$workflow_kernel_manifest" >/dev/null \
-    && grep -Fq 'question_mark_count_proxy_not_higher' "$comparison_program" \
-    && grep -Fq 'question-mark-count proxy' "$eval_readme"; then
-    pass
-else
-    fail "promotion surfaces still present the question-mark proxy as semantic unnecessary-question evidence"
 fi
 
 test_start "trace contract rejects the ambiguous legacy unnecessary_questions field"

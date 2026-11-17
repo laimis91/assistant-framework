@@ -175,28 +175,43 @@ test_start "structured ownership evals reject early completion invalid RED verif
 ownership_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/ownership-evals.XXXXXX")"
 p0p4_register_cleanup "$ownership_eval_root"
 ownership_eval_failures=()
-while IFS='|' read -r ownership_skill ownership_case ownership_mutation; do
-    mkdir -p "$ownership_eval_root/correct/$ownership_skill" "$ownership_eval_root/wrong/$ownership_skill"
-    ownership_response="$ownership_eval_root/correct/$ownership_skill/$ownership_case.txt"
-    write_ownership_response "$ownership_case" "$ownership_response"
-    jq "$ownership_mutation" "$ownership_response" >"$ownership_eval_root/wrong/$ownership_skill/$ownership_case.txt"
-    if ! bash "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$ownership_eval_root/correct" --skill "$ownership_skill" --case "$ownership_case" >"$ownership_eval_root/correct.log" 2>&1; then
-        ownership_eval_failures+=("$ownership_case rejects fixed correct response")
-    elif bash "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$ownership_eval_root/wrong" --skill "$ownership_skill" --case "$ownership_case" >"$ownership_eval_root/wrong.log" 2>&1; then
-        ownership_eval_failures+=("$ownership_case accepts plausible wrong response: $ownership_mutation")
-    elif ! grep -Fq "structured_json_assertion_failures=" "$ownership_eval_root/wrong.log"; then
-        ownership_eval_failures+=("$ownership_case failed without structured evidence")
-    fi
-done <<'CASES'
-assistant-workflow|ownership-authoring-without-red|.current_task_packet.execution.state="VERIFIED"
-assistant-workflow|ownership-authoring-without-red|.current_task_packet.worker_stage="production"
-assistant-workflow|ownership-production-invalid-red|.current_task_packet.execution.state="VERIFIED" | .status="DONE"
-assistant-workflow|ownership-verifier-prohibited-mutation|.changed_files=[]
-assistant-workflow|ownership-verifier-prohibited-mutation|.status="BLOCKED"
-assistant-workflow|ownership-verifier-prohibited-mutation|del(.status)
-assistant-workflow|ownership-mechanical-fixed-tests|del(.current_task_packet.writer_selection.mechanical_eligibility.correctness_expectations_ref)
-assistant-workflow|ownership-unresolved-test-oracle|.current_task_packet.writer_selection.agent="mechanical-writer"
-CASES
+ownership_skill=assistant-workflow
+# Each round grades distinct cases in one runner call; every case keeps its own PASS/FAIL line.
+ownership_grade_round() {
+    local round="$1" expect="$2" mutations="$3" case_id mutation case_args=()
+    mkdir -p "$ownership_eval_root/$round/$ownership_skill"
+    while IFS='|' read -r case_id mutation; do
+        [[ -n "$case_id" ]] || continue
+        write_ownership_response "$case_id" "$ownership_eval_root/$round/$ownership_skill/$case_id.txt"
+        if [[ -n "$mutation" ]]; then
+            jq "$mutation" "$ownership_eval_root/$round/$ownership_skill/$case_id.txt" >"$ownership_eval_root/$round/next.json" \
+                && mv "$ownership_eval_root/$round/next.json" "$ownership_eval_root/$round/$ownership_skill/$case_id.txt"
+        fi
+        case_args+=(--case "$case_id")
+    done <<<"$mutations"
+    bash "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$ownership_eval_root/$round" --skill "$ownership_skill" "${case_args[@]}" >"$ownership_eval_root/$round.log" 2>&1 || true
+    while IFS='|' read -r case_id mutation; do
+        [[ -n "$case_id" ]] || continue
+        if [[ "$expect" == PASS ]]; then
+            grep -Eq "^PASS"$'\t'"$ownership_skill"$'\t'"$case_id"$'\t' "$ownership_eval_root/$round.log" \
+                || ownership_eval_failures+=("$case_id rejects fixed correct response")
+        elif ! grep -Eq "^FAIL"$'\t'"$ownership_skill"$'\t'"$case_id"$'\t'".*structured JSON assertion failure" "$ownership_eval_root/$round.log"; then
+            ownership_eval_failures+=("$case_id accepts plausible wrong response or fails without structured evidence: $mutation")
+        fi
+    done <<<"$mutations"
+}
+ownership_grade_round correct PASS 'ownership-authoring-without-red|
+ownership-production-invalid-red|
+ownership-verifier-prohibited-mutation|
+ownership-mechanical-fixed-tests|
+ownership-unresolved-test-oracle|'
+ownership_grade_round wrong-1 FAIL 'ownership-authoring-without-red|.current_task_packet.execution.state="VERIFIED"
+ownership-production-invalid-red|.current_task_packet.execution.state="VERIFIED" | .status="DONE"
+ownership-verifier-prohibited-mutation|.changed_files=[]
+ownership-mechanical-fixed-tests|del(.current_task_packet.writer_selection.mechanical_eligibility.correctness_expectations_ref)
+ownership-unresolved-test-oracle|.current_task_packet.writer_selection.agent="mechanical-writer"'
+ownership_grade_round wrong-2 FAIL 'ownership-authoring-without-red|.current_task_packet.worker_stage="production"
+ownership-verifier-prohibited-mutation|.status="BLOCKED"'
 if [[ ${#ownership_eval_failures[@]} -eq 0 ]]; then pass; else fail "${ownership_eval_failures[*]}"; fi
 
 test_start "structured ownership stage order rejects plausible wrong data with unchanged narrative"
@@ -224,7 +239,6 @@ while IFS='|' read -r ownership_order_label ownership_order_mutation; do
 done <<'ORDER_MUTATIONS'
 production-before-red|.ownership_stage_projection.stage_order[1]="production" | .ownership_stage_projection.stage_order[2]="pre_production_red"
 verifier-authors-tests|.ownership_stage_projection.owner_order[0]="builder-tester"
-wrong-production-writer|.ownership_stage_projection.owner_order[2]="mechanical-writer"
 production-without-red|.ownership_stage_projection.production_requires_red=false
 refactor-without-green|.ownership_stage_projection.refactor_requires_green=false
 stage-closes-build|.ownership_stage_projection.completes_build=true

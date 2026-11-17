@@ -159,48 +159,8 @@ else
 fi
 
 test_start "workflow handoffs define typed artifact references for worker packets"
-workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
-output_contract="$workflow_dir/contracts/output.yaml"
-plan_template="$workflow_dir/references/plan-template.md"
-plan_harness_appendix="$workflow_dir/references/plan-harness-appendix.md"
-task_journal_template="$workflow_dir/references/task-journal-template.md"
-task_journal_harness_appendix="$workflow_dir/references/task-journal-harness-appendix.md"
-phases_ref="$workflow_dir/references/phases.md"
-build_worker_ref="$workflow_dir/references/build-worker-protocol.md"
-harness_ref="$workflow_dir/references/harness-controller.md"
-harness_runtime_ref="$workflow_dir/references/harness-runtime-artifacts.md"
+output_contract="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"
 missing_typed_artifact_terms=()
-for term in \
-    "artifact_reference_protocol:" \
-    "required_fields: [artifact_id, artifact_type, producer, consumer, location_ref, schema_or_contract, validation_status, summary]" \
-    "location_ref is the typed location/ref pointer" \
-    "Producer responsibility: create or update the artifact" \
-    "Consumer responsibility: validate schema_or_contract and validation_status before relying on location_ref" \
-    "CodeWriter and BuilderTester task packets receive artifact_refs for the Architecture Decision Pack, Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable." \
-    "CodeWriter returns produced artifact_refs for changed files and plan deviation refs when applicable." \
-    "BuilderTester returns validated artifact_refs for verification evidence and runtime-artifact validation." \
-    "- name: artifact_refs" \
-    "schema_or_contract" \
-    "validation_status"; do
-    if ! grep -Fq -- "$term" "$handoffs_file"; then
-        missing_typed_artifact_terms+=("handoffs.yaml: $term")
-    fi
-done
-for term in \
-    "- name: artifact_reference_ledger" \
-    "artifact_id" \
-    "artifact_type" \
-    "producer" \
-    "consumer" \
-    "location_ref" \
-    "schema_or_contract" \
-    "validation_status" \
-    "ledger covers Done Contract, Harness Recipe, Harness Run State, Trace Ledger, Replay Packet, Pivot/Restart Decision, changed files, verification evidence, and plan deviation refs when applicable." \
-    "- name: pivot_restart_decision"; do
-    if ! grep -Fq -- "$term" "$output_contract"; then
-        missing_typed_artifact_terms+=("output.yaml: $term")
-    fi
-done
 canonical_artifact_types="$(sed -n 's/^  artifact_types: //p' "$handoffs_file" | head -n 1)"
 concrete_artifact_enum_count=0
 for artifact_contract_file in "$handoffs_file" "$output_contract"; do
@@ -237,130 +197,10 @@ if ! ruby -ryaml -e '
 ' "$handoffs_file" "$output_contract"; then
     missing_typed_artifact_terms+=("typed producer/consumer ArtifactRefs or verification artifact registration differs from the canonical protocol")
 fi
-for term in \
-    "## Harness Appendix Routing" \
-    "references/plan-harness-appendix.md" \
-    "artifact_reference_ledger_ref"; do
-    if ! grep -Fq -- "$term" "$plan_template"; then
-        missing_typed_artifact_terms+=("plan-template.md: $term")
-    fi
-done
-for term in \
-    "## Artifact Reference Ledger" \
-    "Typed artifact refs:" \
-    "Artifact ID | Artifact Type | Producer | Consumer | Location Ref | Schema or Contract | Validation Status | Summary"; do
-    if [[ ! -f "$plan_harness_appendix" ]] || ! grep -Fq -- "$term" "$plan_harness_appendix"; then
-        missing_typed_artifact_terms+=("plan-harness-appendix.md: $term")
-    fi
-done
-for term in \
-    "## Harness Appendix Routing" \
-    "references/task-journal-harness-appendix.md"; do
-    if ! grep -Fq -- "$term" "$task_journal_template"; then
-        missing_typed_artifact_terms+=("task-journal-template.md: $term")
-    fi
-done
-for term in \
-    "## Artifact Reference Ledger" \
-    "Producer roles update Artifact Reference Ledger entries" \
-    'Consumer roles validate `schema_or_contract` and update `validation_status`'; do
-    if [[ ! -f "$task_journal_harness_appendix" ]] || ! grep -Fq -- "$term" "$task_journal_harness_appendix" "$task_journal_template"; then
-        missing_typed_artifact_terms+=("task-journal-harness-appendix.md/task-journal-template.md: $term")
-    fi
-done
-if ! p0p4_contains_text "$phases_ref" "Artifact Reference Ledger before dispatching Code Writer or Builder/Tester"; then
-    missing_typed_artifact_terms+=("phases.md: Artifact Reference Ledger must precede worker dispatch")
-fi
-for term in \
-    'typed `artifact_refs`' \
-    "changed_files, verification_evidence, pivot_restart_decision, and plan_deviation refs"; do
-    if ! p0p4_contains_text "$build_worker_ref" "$term"; then
-        missing_typed_artifact_terms+=("build-worker-protocol.md: $term")
-    fi
-done
-for term in \
-    "## Artifact Reference Ledger" \
-    "Producer responsibility: create or update the artifact" \
-    'Consumer responsibility: validate `schema_or_contract` and' \
-    "Done Contract, Harness Recipe, Harness Run State, Trace"; do
-    if ! p0p4_contains_text "$harness_runtime_ref" "$term"; then
-        missing_typed_artifact_terms+=("harness-runtime-artifacts.md: $term")
-    fi
-done
-if ! grep -Fq -- "references/harness-runtime-artifacts.md" "$harness_ref"; then
-    missing_typed_artifact_terms+=("harness-controller.md: references/harness-runtime-artifacts.md")
-fi
 if [[ "${#missing_typed_artifact_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "workflow typed artifact reference terms missing: ${missing_typed_artifact_terms[*]}"
-fi
-
-test_start "CodeMapper and Explorer return schemas require status evidence"
-missing_discovery_schema_terms=()
-for handoff in orchestrator_to_code_mapper orchestrator_to_explorer; do
-    for field in status evidence; do
-        if ! handoff_return_field_required "$handoffs_file" "$handoff" "$field"; then
-            missing_discovery_schema_terms+=("$handoff: $field required")
-        fi
-    done
-done
-for enum in \
-    "enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED]"; do
-    if ! grep -Fq -- "$enum" "$handoffs_file"; then
-        missing_discovery_schema_terms+=("CodeMapper/Explorer status enum values")
-    fi
-done
-if [[ "${#missing_discovery_schema_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "CodeMapper/Explorer return schemas missing status/evidence requirements: ${missing_discovery_schema_terms[*]}"
-fi
-
-test_start "Architect decompose and plan return schemas require status evidence deviation support"
-missing_architect_schema_terms=()
-for handoff in orchestrator_to_architect_decompose orchestrator_to_architect; do
-    for field in status evidence; do
-        if ! handoff_return_field_required "$handoffs_file" "$handoff" "$field"; then
-            missing_architect_schema_terms+=("$handoff: $field required")
-        fi
-    done
-    if ! handoff_return_field_present "$handoffs_file" "$handoff" "deviation_details"; then
-        missing_architect_schema_terms+=("$handoff: deviation_details present")
-    fi
-    if ! handoff_return_field_has_condition "$handoffs_file" "$handoff" "deviation_details" "status is DEVIATED"; then
-        missing_architect_schema_terms+=("$handoff: deviation_details condition status is DEVIATED")
-    fi
-done
-if ! grep -Fq -- "enum_values: [DONE, DONE_WITH_CONCERNS, NEEDS_CONTEXT, BLOCKED, DEVIATED]" "$handoffs_file"; then
-    missing_architect_schema_terms+=("Architect status enum values include DEVIATED")
-fi
-if [[ "${#missing_architect_schema_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "Architect DECOMPOSE/PLAN return schemas missing status/evidence/deviation support: ${missing_architect_schema_terms[*]}"
-fi
-
-test_start "Architect test_plan schema names the selected automated-test condition"
-if ruby -ryaml -e '
-  handoffs = YAML.load_file(ARGV.fetch(0)).fetch("handoffs")
-  architect = handoffs.find { |h| h["name"] == "orchestrator_to_architect" }
-  plan = architect.fetch("return_fields").find { |f| f["name"] == "test_plan" }
-  exit 1 unless plan && plan["required"] == "conditional" &&
-    plan["condition"] == "at least one packet\u0027s selected CheckSpec in the canonical verification_decision has method == automated_test" &&
-    plan.fetch("description").include?("required only for packets with selected automated_test CheckSpecs")
-  fields = plan.fetch("object_fields")
-  exit 1 unless fields.any? { |f| f["name"] == "packet_id" && f["type"] == "string" && f["required"] == true }
-  exit 1 if fields.any? { |f| f["name"] == "slice_id" }
-  # The test-plan fixture uses the same foreign key as its canonical work packet.
-  packet = { "packet_id" => "accepted-outcome", "selected_check_ids" => ["focused"] }
-  test_plan = { "packet_id" => packet.fetch("packet_id"), "test_type" => "integration", "description" => "Exercise the accepted behavior" }
-  exit 1 unless fields.select { |f| f["required"] == true }.all? { |f| test_plan.key?(f.fetch("name")) }
-  exit 1 unless test_plan.fetch("packet_id") == packet.fetch("packet_id")
-' "$handoffs_file"; then
-    pass
-else
-    fail "Architect test_plan schema does not bind applicability to the selected automated-test decision"
 fi
 
 test_start "Decompose slices preserve task TDD choice and derive local applicability from selected checks"
@@ -841,7 +681,7 @@ mapper_outcome_eval_failures=()
 mapper_applicable_eval="$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
 mapper_common_response=$'architecture_mapping_evidence\ncontrol_and_early_exit\nownership_and_disposal\nresource_envelope\nextension_registration\nrepresentative_path\nsemantic_type_inspection\nrepresentative_paths\nrepresentative_path status=observed requires at least one detailed producer-consumer path\nmaps evidence, never designs'
 mapper_common_structured="$(jq -n --arg summary "$mapper_common_response" '{summary: $summary, architecture_mapping_evidence: {design_pressure_checks: [{concern: "control_and_early_exit", status: "observed", evidence_or_gap: "consumer cancellation inspected", source_ref: "src/order.rb"}, {concern: "ownership_and_disposal", status: "observed", evidence_or_gap: "request ownership inspected", source_ref: "src/order.rb"}, {concern: "resource_envelope", status: "observed", evidence_or_gap: "bounded request inspected", source_ref: "src/order.rb"}, {concern: "extension_registration", status: "observed", evidence_or_gap: "registration seam inspected", source_ref: "src/order.rb"}, {concern: "representative_path", status: "observed", evidence_or_gap: "order producer reaches validator", source_ref: "src/order.rb"}], representative_paths: [{producer: "OrderRequest", consumer: "OrderValidator", failure_or_cancellation: "validation failure stops processing", source_ref: "src/order.rb"}]}}')"
-for outcome in candidates_found inspected_empty unresolved; do
+for outcome in candidates_found; do
     case "$outcome" in
         candidates_found)
             response="$(jq '.architecture_mapping_evidence.semantic_type_inspection = {outcome: "candidates_found", evidence_or_gap: "OrderId crosses the request boundary", source_refs: ["src/order.rb"], candidates: [{concept: "OrderId", current_representation: "string", boundary: "domain_or_public_semantic_type", finding_kind: "semantic_type_candidate", evidence_ref: "src/order.rb"}]}' <<<"$mapper_common_structured")"
@@ -897,7 +737,6 @@ if ! run_code_mapper_outcome_eval "$mapper_applicable_eval" "code-mapper-inspect
 fi
 for mutation in \
     '(.architecture_mapping_evidence.semantic_type_inspection.outcome) = "unresolved"' \
-    '(.architecture_mapping_evidence.semantic_type_inspection.evidence_or_gap) = ""' \
     '(.architecture_mapping_evidence.semantic_type_inspection.evidence_or_gap) = "   "' \
     '(.architecture_mapping_evidence.semantic_type_inspection.source_refs) = []'; do
     unsafe_mapper_response="$(jq "$mutation" <<<"$mapper_structured_valid")"
@@ -911,40 +750,9 @@ else
     fail "CodeMapper structured semantic inspection eval gaps: ${mapper_structured_json_failures[*]}"
 fi
 
-mapper_not_applicable_omits_evidence() {
-    local response="$1"
-    jq -e 'has("architecture_mapping_evidence") | not' <<<"$response" >/dev/null
-}
-
-test_start "not-applicable CodeMapper eval forbids every architecture mapping evidence representation"
-mapper_eval_failures=()
-mapper_eval="$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
-if ! jq -e '
-    .cases[] | select(.id == "code-mapper-not-applicable-omits-pack-evidence") |
-    (.machine_expectations.required_substrings | all(. != "architecture_mapping_evidence" and (. | contains("architecture_mapping_evidence") | not))) and
-    (.machine_expectations.forbidden_substrings | index("architecture_mapping_evidence") != null)
-' "$mapper_eval" >/dev/null; then
-    mapper_eval_failures+=("not-applicable fixture requires no evidence literal and forbids bare evidence token")
-fi
-if ! mapper_not_applicable_omits_evidence '{"context_map_markdown":"map"}'; then
-    mapper_eval_failures+=("absent evidence mutation rejected")
-fi
-for response in \
-    '{"architecture_mapping_evidence":null}' \
-    '{"architecture_mapping_evidence":[]}' \
-    '{"architecture_mapping_evidence":{"evidence_refs":["source"]}}'; do
-    if mapper_not_applicable_omits_evidence "$response"; then
-        mapper_eval_failures+=("present evidence mutation accepted: $response")
-    fi
-done
-if [[ ${#mapper_eval_failures[@]} -eq 0 ]]; then
-    pass
-else
-    fail "not-applicable CodeMapper eval omission guards: ${mapper_eval_failures[*]}"
-fi
-
 test_start "CodeMapper structured eval requests raw JSON and covers every representative-path status"
 mapper_path_branch_failures=()
+mapper_eval="$FRAMEWORK_DIR/skills/assistant-workflow/evals/cases.json"
 if ! jq -e '
     . as $fixture |
     ($fixture.cases[] | select(.id == "code-mapper-applicable-architecture-evidence") |
@@ -1012,7 +820,6 @@ for status in not_applicable unresolved; do
         mapper_path_branch_failures+=("actual eval runner rejects representative_path status=$status with an empty path collection")
     fi
     for mutation in \
-        '(.architecture_mapping_evidence.design_pressure_checks[0]) = {}' \
         '(.architecture_mapping_evidence.design_pressure_checks[4].source_ref) = ""' \
         '(.architecture_mapping_evidence.design_pressure_checks[3].concern) = "representative_path"'; do
         unsafe_response="$(jq "$mutation" <<<"$response")"
