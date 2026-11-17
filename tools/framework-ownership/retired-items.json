@@ -1637,6 +1637,43 @@
       "retired_in": "32c90bef1641048f14c9d67e6fe6f48b58b48de2",
       "content_proof": "managed_tool/progress/stagnation.py",
       "note": "install.ps1 mirrored it into ~/.agents/tools/progress for Codex until slice C moved it into the workflow skill."
+    },
+    {
+      "id": "managed_tool/change-impact",
+      "root": "agent_home",
+      "path": "tools/change-impact",
+      "agents": [
+        "claude",
+        "codex",
+        "gemini"
+      ],
+      "layouts": [
+        "unix",
+        "windows"
+      ],
+      "kind": "managed_tool",
+      "node_type": "directory",
+      "source_path": "tools/change-impact",
+      "retired_in": "32c90bef1641048f14c9d67e6fe6f48b58b48de2",
+      "content_proof": "managed_tool/change-impact",
+      "note": "Both installers synced the Node change-impact checker into <agent home>/tools until slice D of docs/specs/self-contained-skills.md replaced it with assistant-review's expanded-work checklist. No installer removes it; cleanup and uninstall prove it by content."
+    },
+    {
+      "id": "managed_tool/change-impact@agents-tools",
+      "root": "agents_tools",
+      "path": "change-impact",
+      "agents": [
+        "codex"
+      ],
+      "layouts": [
+        "windows"
+      ],
+      "kind": "managed_tool",
+      "node_type": "directory",
+      "source_path": "tools/change-impact",
+      "retired_in": "32c90bef1641048f14c9d67e6fe6f48b58b48de2",
+      "content_proof": "managed_tool/change-impact",
+      "note": "install.ps1 mirrored the checker into ~/.agents/tools/change-impact for Codex until slice D removed it."
     }
   ]
 }
