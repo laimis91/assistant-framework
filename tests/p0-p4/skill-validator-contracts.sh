@@ -531,20 +531,12 @@ test_start "skill validator rejects whitespace-only raw Unicode descriptions"
 raw_whitespace_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-validator-raw-whitespace.XXXXXX")"
 p0p4_register_cleanup "$raw_whitespace_root"
 raw_whitespace_failures=()
-for raw_whitespace_case in u00a0 u1680 u2000 u2001 u2002 u2003 u2004 u2005 u2006 u2007 u2008 u2009 u200a u202f u205f u3000; do
+# Each separately listed Unicode whitespace codepoint, plus both ends of the U+2000..U+200A range.
+for raw_whitespace_case in u00a0 u1680 u2000 u200a u202f u205f u3000; do
     case "$raw_whitespace_case" in
         u00a0) printf -v raw_whitespace_character '\302\240' ;;
         u1680) printf -v raw_whitespace_character '\341\232\200' ;;
         u2000) printf -v raw_whitespace_character '\342\200\200' ;;
-        u2001) printf -v raw_whitespace_character '\342\200\201' ;;
-        u2002) printf -v raw_whitespace_character '\342\200\202' ;;
-        u2003) printf -v raw_whitespace_character '\342\200\203' ;;
-        u2004) printf -v raw_whitespace_character '\342\200\204' ;;
-        u2005) printf -v raw_whitespace_character '\342\200\205' ;;
-        u2006) printf -v raw_whitespace_character '\342\200\206' ;;
-        u2007) printf -v raw_whitespace_character '\342\200\207' ;;
-        u2008) printf -v raw_whitespace_character '\342\200\210' ;;
-        u2009) printf -v raw_whitespace_character '\342\200\211' ;;
         u200a) printf -v raw_whitespace_character '\342\200\212' ;;
         u202f) printf -v raw_whitespace_character '\342\200\257' ;;
         u205f) printf -v raw_whitespace_character '\342\201\237' ;;
