@@ -10,7 +10,7 @@ Start repository work at [docs/README.md](docs/README.md), then load the task-sp
 
 ## Project Overview
 
-Assistant Framework v0.2.0 (see `version.txt`) — a personal AI assistant framework providing composable skills, agents, rules, and tools for Claude Code, Codex, and Gemini CLI. This is a **framework repo**, not an application — it installs into agent home directories (`~/.claude/`, `~/.codex/`, `~/.gemini/`).
+Assistant Framework v0.2.0 (see `version.txt`) — a personal AI assistant framework providing composable skills, agents, rules, and tools for Claude Code and Codex. This is a **framework repo**, not an application — it ships as a plugin marketplace (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) serving the generated plugin in `plugins/assistant-framework/`.
 
 Root `skills/assistant-*` directories are the editable source of truth. Keep behavior-driving skill prose, contracts, evals, tests, and documentation aligned.
 
@@ -23,15 +23,13 @@ tools/skills/validate-skills.sh          # Skill frontmatter and structure
 ./tests/test-p0-p4-contracts.sh          # Contract suites
 tools/skills/sync-operating-guidance.sh --apply   # After editing tools/progress/*.md: resync skill copies
 python3 tools/skills/check-skill-containment.py   # Skill folders stay self-contained
+tools/skills/sync-role-prompts.sh --apply         # After editing agents/: resync skills' references/roles/
+python3 tools/skills/sync-plugin.py --apply       # After any skills/ change: regenerate the plugin
 ```
 
-### Installation
+### Packaging
 
-```bash
-./install.sh --agent claude              # Install all skills
-./install.sh --agent claude --skill assistant-workflow  # Single skill
-./install.sh --agent claude --dry-run    # Preview
-```
+`skills/` stays the source of truth; never edit `plugins/assistant-framework/` by hand. Bump `version.txt` when shipped skills change, or plugin users get no update. `python3 tools/skills/build-chat-zips.py` builds Claude chat upload ZIPs into `dist/chat-skills/`. See [docs/specs/plugin-marketplace-packaging.md](docs/specs/plugin-marketplace-packaging.md).
 
 ## Architecture
 
@@ -41,7 +39,7 @@ assistant-research is a Process skill; research contracts and evidence methods r
 
 1. **Skills** (`skills/`) — Markdown-based prompt modules. Each skill has a `SKILL.md` entry point with required YAML frontmatter (`name` and `description`) and optional repository `requires` for validated hard dependencies. Sub-files load on demand (progressive loading). Skills are agent-agnostic.
 
-2. **Tools** (`tools/`) — Script utilities used for repository validation and installation. Skills do not need them at run time, apart from the optional pattern library and the installer-only cleanup helper.
+2. **Tools** (`tools/`) — Script utilities used for repository validation, plugin generation and evals. Skills do not need them at run time, apart from the optional pattern library in a checkout.
    - `progress/` — Canonical shared operating guidance and wire boundary; each skill carries a synced copy.
    - `skills/` — Skill validator and contract-guide/workflow-reference sync scripts.
    - `evals/` — Skill and framework instruction eval runners.
@@ -62,12 +60,7 @@ Each supported agent discovers installed skills natively from required names and
 
 ### Agent configurations
 
-`agents/` contains agent-specific definitions (architect, builder-tester, code-mapper, code-reviewer, explorer, intelligent-writer, mechanical-writer, qa-evaluator, lens-researcher, research-peer-reviewer, plus the compatibility `reviewer` and deprecated `code-writer` roles) for multi-agent orchestration. Claude agents are markdown files (`agents/claude/*.md`), Codex agents are TOML files (`agents/codex/*.toml`); Gemini agent definitions are not yet implemented (`agents/gemini/README.md`). These define subagent roles, tool access, and prompts.
-
-### Codex execution policy rules
-
-`codex-rules/` contains Starlark `.rules` files installed to `~/.codex/rules/`. These provide **deterministic** enforcement (system-level, not prompt-level) — they always execute regardless of LLM reasoning. Current rules:
-- `workflow.rules` — Git safety (block force push, confirm commits/pushes), destructive operation guards, build/test allow-listing
+`agents/` contains agent-specific definitions (architect, builder-tester, code-mapper, code-reviewer, explorer, intelligent-writer, mechanical-writer, qa-evaluator, lens-researcher, research-peer-reviewer, plus the compatibility `reviewer` and deprecated `code-writer` roles) for multi-agent orchestration. Claude agents are markdown files (`agents/claude/*.md`), Codex agents are TOML files (`agents/codex/*.toml`). These define subagent roles, tool access, and prompts. The plugin does not ship them; skills carry the role prompts in `references/roles/` (synced by `tools/skills/sync-role-prompts.sh`) so a fresh general-purpose agent can take a role.
 
 Do not weaken permission prompts or destructive-operation safeguards.
 
@@ -91,6 +84,6 @@ Use the field schema, phase gate schema, and handoff schema formats defined in t
 
 - **Skills are markdown, not code.** They are prompt engineering artifacts. Edit them as structured prose, not programs.
 - **Native skill discovery drives routing.** Adding a new skill requires only a well-described SKILL.md and any actual consumed contracts; no runtime script changes are needed.
-- **install.sh auto-discovers skills** — any subdirectory of `skills/` containing a SKILL.md is installable.
+- **sync-plugin.py auto-discovers skills** — any subdirectory of `skills/` containing a SKILL.md ships in the plugin.
 - **Contracts** (`contracts/` dirs) define structured input/output schemas in YAML. Instruction-only skills are valid; see the canonical guide.
 - **C# code** targets modern .NET and follows the existing Clean Architecture style. Tests use descriptive names and Arrange-Act-Assert where applicable.

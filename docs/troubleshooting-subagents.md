@@ -1,9 +1,12 @@
 # Troubleshooting: Subagents Not Being Used
 
 Assistant Framework relies on each supported agent's native subagent system.
-Verify the workflow skill and agent definitions are installed, then look for a
-real native dispatch/thread and result rather than framework-generated runtime
-messages.
+The plugin ships skills only. Framework agent definitions are optional: copy
+`agents/claude/*.md` into `~/.claude/agents/` or `agents/codex/*.toml` into
+`~/.codex/agents/` to use them. Without them, skills give a fresh
+general-purpose agent the role prompt from their `references/roles/` folder.
+Look for a real native dispatch/thread and result rather than
+framework-generated runtime messages.
 
 Subagent use is triggered by a direct user request or by applicable project or
 skill instructions. The agent should not ask for separate spawn consent after a
@@ -15,45 +18,12 @@ scope.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | Preparation completes without spawning | No applicable instruction requires a subagent for the current step, or the work is small enough for direct execution | If you want delegation beyond the skill's requirements, ask for it directly. |
-| A required spawn is never attempted | Installed workflow guidance is stale, the matching skill was not loaded, or an explicit opt-out is active | Rerun the installer, confirm the relevant installed `SKILL.md`, and remove any unintended opt-out. |
-| Codex says "unknown agent" | TOML definitions are missing or names do not match | Check `~/.codex/agents/*.toml` and each file's `name` field, then reinstall if needed. |
+| A required spawn is never attempted | The plugin is out of date, the matching skill was not loaded, or an explicit opt-out is active | Update the plugin from its marketplace, confirm the skill loaded, and remove any unintended opt-out. |
+| Codex says "unknown agent" | TOML definitions are missing or names do not match | Check `~/.codex/agents/*.toml` and each file's `name` field, then copy them again from `agents/codex/` if needed. |
 | The agent reports delegation unavailable | Runtime capability or installed configuration has not been verified | Check the active runtime's supported delegation mechanism and configured role, then look for a real dispatch and result. Record `subagents_unavailable` only after a real spawn failure or supported configuration proof of unavailability. |
-| Claude or Gemini uses the wrong role | Skill or agent files are stale | Rerun the installer and inspect the agent's installed workflow skill and agent definitions. |
-| Spawned agents lack role instructions | Agent definition is stale or empty | Inspect the relevant Claude Markdown, Codex TOML, or Gemini definition and reinstall it. |
+| Claude uses the wrong role | Plugin or copied agent files are stale | Update the plugin and copy the agent definitions again from `agents/claude/`. |
+| Spawned agents lack role instructions | Agent definition is stale or empty | Inspect the relevant Claude Markdown or Codex TOML definition and copy it again from `agents/`. |
 | Results are ignored after dispatch | The orchestrator lost or failed to update durable task state | Inspect the project task journal and context map, then resume from the last verified step. |
-
-## Selective upgrades and ownership compatibility
-
-`INCOMPATIBLE_WORKFLOW_ROLE_UPGRADE` means a selective Codex, Claude, or Gemini
-install would refresh shared tools or roles while retaining an incompatible live
-Workflow controller. For any retained controller, the installer requires regular
-`SKILL.md`, `contracts/index.yaml`, and `contracts/handoffs.yaml` files, with both
-contracts declaring matching schema `15.0` and the supported ownership stage
-tuples. It refuses before any write, including in dry-run mode. Required
-writer-source definitions are checked only for Codex and Claude.
-
-Refresh the workflow and its review, verification, and TDD dependencies first,
-then retry the original selection in the same environment:
-
-```bash
-./install.sh --agent codex --skill assistant-workflow
-./install.sh --agent codex --skill assistant-docs
-```
-
-```powershell
-.\install.ps1 -Agent codex -Skill assistant-workflow
-.\install.ps1 -Agent codex -Skill assistant-docs
-```
-
-Use `claude` for Claude installations, and substitute the original selected skill
-for `assistant-docs`. A full install also refreshes the coupled controller and
-profiles. A genuinely absent workflow or a compatible declared controller permits
-the selective install without adding or refreshing the workflow. Gemini retains
-its native profile behavior.
-
-The Bash installer checks workflow under `${CODEX_HOME:-$HOME/.codex}/skills`
-for Codex. The PowerShell installer checks `%USERPROFILE%/.agents/skills` for
-Codex skills independently of `CODEX_HOME`; Claude uses its own native home.
 
 ## Quick verification
 
@@ -61,10 +31,10 @@ Codex skills independently of `CODEX_HOME`; Claude uses its own native home.
 # Validate the source definitions without invoking Codex or requiring auth
 bash tools/smoke-test-codex-agents.sh --check-only
 
-# Refresh Codex skills and agent definitions
-./install.sh --agent codex
+# Copy the Codex agent definitions
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/agents" && cp agents/codex/*.toml "${CODEX_HOME:-$HOME/.codex}/agents/"
 
-# Verify the ten installed definitions exactly match the repository sources
+# Verify the installed definitions exactly match the repository sources
 for file in agents/codex/*.toml; do
   cmp "$file" "${CODEX_HOME:-$HOME/.codex}/agents/${file##*/}"
 done
@@ -114,10 +84,8 @@ agents](https://learn.chatgpt.com/docs/agent-configuration/subagents) and the
 [Codex model families and effort
 levels](https://learn.chatgpt.com/docs/models).
 
-For an older installation, rerun the normal installer and restart the agent.
-During the one-release migration window, the installer removes only retired
-Assistant Framework lifecycle registrations, preserves unrelated custom
-configuration, and neutralizes detected stale framework entrypoints.
+For an older manual installation, follow "Moving from a manual install" in the
+[README](../README.md#moving-from-a-manual-install), then restart the agent.
 
 Direct main execution needs no fallback reason. Direct fallback is an
 execution-only label; never for review, QA or lens isolation (formal plan,
@@ -148,7 +116,6 @@ consequential actions need fixed outcome evaluation and independent review.
 
 Claude uses native intelligent-writer/Opus and mechanical-writer/Sonnet defaults,
 with standalone deprecated code-writer as explicit intelligent compatibility.
-Gemini retains supported native/default tiers without custom definitions. Real installation is a separate authorized action
-and can overwrite managed installed TOMLs. Compatibility removal needs a later
-retirement change and ownership-safe cleanup. Static source checks do not prove
+Copying definitions is a separate authorized action and can overwrite existing
+TOMLs of the same name. Compatibility removal needs a later retirement change. Static source checks do not prove
 native activation, Windows runtime execution, or total workflow savings.

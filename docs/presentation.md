@@ -25,7 +25,7 @@ AI coding sessions can lack the structure needed for dependable delivery.
 - Cover your weaknesses (docs, diagrams, onboarding)
 - Follow a battle-tested development workflow
 - Use focused verification and independent review
-- Work the same way across Claude, Codex, and Gemini
+- Work the same way across Claude Code and Codex
 
 ---
 
@@ -35,7 +35,7 @@ AI coding sessions can lack the structure needed for dependable delivery.
 
 Built from scratch. No imports. No marketplace dependencies.
 
-Works with: **Claude Code** | **OpenAI Codex** | **Google Gemini CLI**
+Works with: **Claude Code** | **OpenAI Codex**
 
 ---
 
@@ -287,16 +287,15 @@ Native capabilities stay native; Assistant Framework adds portable workflow disc
 
 ## Cross-Platform
 
-**One framework. Three agents. Same behavior.**
+**One framework. Two agents. Same behavior.**
 
 ```bash
-./install.sh --agent claude   # Claude Code
-./install.sh --agent codex    # OpenAI Codex
-./install.sh --agent gemini   # Google Gemini CLI
+claude plugin marketplace add laimis91/assistant-framework   # Claude Code
+codex plugin marketplace add laimis91/assistant-framework    # OpenAI Codex
 ```
 
-- Skills auto-adapt paths (`.claude/` → `.codex/` → `.gemini/`)
-- Agent definitions per platform (`.md` for Claude, `.toml` for Codex)
+- Skills name the agent state directory as `{agent_state_dir}` (`.claude` or `.codex`)
+- Optional agent definitions per platform (`.md` for Claude, `.toml` for Codex)
 - Native skill routing discovers installed skills from required name and description; body instructions apply after activation
 
 ---
@@ -324,7 +323,7 @@ Native capabilities stay native; Assistant Framework adds portable workflow disc
 | One-shot review | **Autonomous review loop** (shared stagnation guard) |
 | Generic patterns | **Current repository evidence** informs the task |
 | Single agent | **Multi-agent orchestration** with role separation |
-| One platform | **Three platforms** (Claude, Codex, Gemini) |
+| One platform | **Two platforms** (Claude Code, Codex) |
 | Import from marketplace | **100% built in-house** |
 
 ---
@@ -354,9 +353,8 @@ Native capabilities stay native; Assistant Framework adds portable workflow disc
 ## Getting Started
 
 ```bash
-git clone <repo>
-cd assistant-framework
-./install.sh --agent claude
+claude plugin marketplace add laimis91/assistant-framework
+claude plugin install assistant-framework@assistant-framework
 ```
 
 That's it. Skills route natively. Contracts guide execution and review.

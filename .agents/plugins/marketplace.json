@@ -1,0 +1,20 @@
+{
+  "name": "assistant-framework",
+  "interface": {
+    "displayName": "Assistant Framework"
+  },
+  "plugins": [
+    {
+      "name": "assistant-framework",
+      "source": {
+        "source": "local",
+        "path": "./plugins/assistant-framework"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

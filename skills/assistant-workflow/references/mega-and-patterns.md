@@ -12,7 +12,7 @@ Use the strict slice packet fields from `implementation_steps` for every executa
 
 ## Agent Portability
 
-Claude, Codex, and Gemini all use the same skill format (SKILL.md + directory).
+Claude and Codex use the same skill format (SKILL.md + directory).
 Agent definitions are per-platform: Claude uses `.md` files in `agents/claude/`, Codex uses `.toml` files in `agents/codex/`.
 
 ## Related skills (invoke when applicable)

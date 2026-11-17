@@ -1,0 +1,116 @@
+# Applicability: current v5 structured consumers, persisted packets, handoffs,
+# and the existing five-lens audit/eval fixture. Numeric tier/source-count rules
+# below are compatibility-fixture rules, not ordinary claim-confidence policy.
+# Human-only source research uses claim-specific evidence and concise output.
+# Selected five-lens work still requires five sibling-blind lenses, root
+# synthesis, separate peer review, material follow-ups, and honest limits.
+
+schema_version: "5.0"
+contract: index
+skill: assistant-research
+
+authoritative_contracts:
+  - path: contracts/input.yaml
+    contract: input
+  - path: contracts/output.yaml
+    contract: output
+  - path: contracts/phase-gates.yaml
+    contract: phase-gates
+  - path: contracts/handoffs.yaml
+    contract: handoffs
+
+load_sets:
+  entry:
+    selectors:
+      - id: research-entry-fields
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [question, tier, tool, research_method, user_role_or_goal, output_purpose, known_context, search_resource_budget, subagent_policy_state, subagent_execution_mode, subagent_trigger_scope, policy_blocking_source]
+  current_phase:
+    selectors:
+      - id: research-current-phase
+        path: contracts/phase-gates.yaml
+        section: gates
+        key: phase
+        name_from: active_research_phase
+        allowed_names: [SEARCH, SYNTHESIZE, VERIFY]
+      - id: research-invariants
+        path: contracts/phase-gates.yaml
+        section: invariants
+        key: id
+        names: [INV1, INV2, INV3, INV4, INV5, INV6, INV7, INV8, INV9]
+  source_research:
+    references:
+      - research.md
+      - url-verify.md
+    selectors:
+      - id: research-source-method
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [research_method]
+  five_lens:
+    references:
+      - five-lens-briefing.md
+      - research.md
+      - url-verify.md
+      - source-provenance.md
+    selectors:
+      - id: research-five-lens-method
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [research_method, research_dispatch_authority]
+  selected_handoff:
+    selectors:
+      - id: research-selected-handoff
+        path: contracts/handoffs.yaml
+        section: handoffs
+        key: name
+        name_from: selected_research_handoff
+        allowed_names: [orchestrator_to_lens_researcher, orchestrator_to_research_peer_reviewer]
+      - id: research-common-dispatch-protocol
+        path: contracts/handoffs.yaml
+        section: dispatch_protocol
+        key: name
+        names: [common_research_protocol]
+      - id: research-selected-dispatch-protocol
+        path: contracts/handoffs.yaml
+        section: dispatch_protocol
+        key: name
+        name_from: selected_research_handoff
+        allowed_names: [orchestrator_to_lens_researcher, orchestrator_to_research_peer_reviewer]
+      - id: research-common-return-validation
+        path: contracts/handoffs.yaml
+        section: return_validation
+        key: name
+        names: [common_return_validation]
+      - id: research-selected-return-validation
+        path: contracts/handoffs.yaml
+        section: return_validation
+        key: name
+        name_from: selected_research_handoff
+        allowed_names: [orchestrator_to_lens_researcher, orchestrator_to_research_peer_reviewer]
+  investigate:
+    references:
+      - investigate.md
+      - url-verify.md
+    selectors:
+      - id: research-investigate-tool
+        path: contracts/input.yaml
+        section: fields
+        key: name
+        names: [tool]
+  completion:
+    selectors:
+      - id: research-completion-artifact
+        path: contracts/output.yaml
+        section: artifacts
+        key: name
+        name_from: applicable_completion_artifact
+        allowed_names: [producer_version, findings, candidate_mechanisms, perspective_scan, question_trace, contradiction_map, synthesis_briefing, high_stakes_recommendation_basis, peer_review, five_lens_process_evidence, conflicts, gaps, summary]
+
+fallback:
+  on_missing_selector: load_full_authoritative_file
+  on_invalid_selector: load_full_authoritative_file

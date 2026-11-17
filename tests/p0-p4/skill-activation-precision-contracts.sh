@@ -25,7 +25,6 @@ research_skill="$FRAMEWORK_DIR/skills/assistant-research/SKILL.md"
 thinking_skill="$FRAMEWORK_DIR/skills/assistant-thinking/SKILL.md"
 clarify_skill="$FRAMEWORK_DIR/skills/assistant-clarify/SKILL.md"
 debugging_skill="$FRAMEWORK_DIR/skills/assistant-debugging/SKILL.md"
-cleanup_skill="$FRAMEWORK_DIR/skills/assistant-cleanup/SKILL.md"
 docs_skill="$FRAMEWORK_DIR/skills/assistant-docs/SKILL.md"
 activation_failures=()
 
@@ -37,7 +36,6 @@ for file_and_prompt in \
     "$thinking_skill::stress test this complex architecture decision" \
     "$clarify_skill::clarify this ambiguous request and help me untangle it" \
     "$debugging_skill::diagnose this unknown failure before fixing" \
-    "$cleanup_skill::remove the retired framework skills from my claude install" \
     "$docs_skill::draw a diagram of the existing sync code"; do
     file="${file_and_prompt%%::*}"
     prompt="${file_and_prompt#*::}"
@@ -63,8 +61,6 @@ for file_and_prompt in \
     "$research_skill::what is this function doing" \
     "$research_skill::investigate failure in the payment test" \
     "$thinking_skill::clarify my request" \
-    "$cleanup_skill::clean up this function's dead code" \
-    "$cleanup_skill::uninstall Docker Desktop" \
     "$docs_skill::sketch a diagram of our product idea" \
     "$docs_skill::explain this function"; do
     file="${file_and_prompt%%::*}"

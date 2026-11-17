@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Wrap this repository's installer output as a plugin for `claude plugin eval`.
+"""Wrap this repository's marketplace plugin copy as a plugin for `claude plugin eval`.
 
-The installer runs under a throwaway HOME with a minimal environment, so nothing
-is written to a real agent home. Output must stay in ignored local state.
+Skills come from plugins/assistant-framework/skills (generated from skills/ by
+tools/skills/sync-plugin.py) and the default guidance is the Skills section of
+the canonical instruction block in docs/instruction-block.md. Nothing is written
+to a real agent home. Output must stay in ignored local state.
 
 Usage: generate_plugin.py --output .codex/skill-activation/plugins/NAME
                           [--guidance-file FILE] [--stubs 40] [--descriptions FILE]
@@ -10,7 +12,6 @@ Usage: generate_plugin.py --output .codex/skill-activation/plugins/NAME
 import argparse
 import hashlib
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -19,7 +20,11 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(REPO / "tools" / "skills"))
+import plugin_manifest  # noqa: E402  shared with tools/skills/sync-plugin.py
 ALLOWED_OUTPUT_ROOT = REPO / ".codex" / "skill-activation" / "plugins"
+SOURCE_SKILLS = REPO / "plugins" / "assistant-framework" / "skills"
+INSTRUCTION_BLOCK = REPO / "docs" / "instruction-block.md"
 PLUGIN_NAME = "af"
 MANIFEST = "generation.json"
 MAX_DESCRIPTION = 1024
@@ -46,23 +51,17 @@ def checked_output(path, allowed_root=ALLOWED_OUTPUT_ROOT):
     return output
 
 
-def skills_guidance(claude_md):
-    """Return the installed Skills section, the text R-RUN-12 delivers through a hook."""
-    match = re.search(r"^## Skills\n(.*?)(?=^## |\Z)", claude_md, re.MULTILINE | re.DOTALL)
+def skills_guidance(instructions):
+    """Return the instruction block's Skills section, the text R-RUN-12 delivers through a hook."""
+    match = re.search(r"^## Skills\n(.*?)(?=^## |\Z)", instructions, re.MULTILINE | re.DOTALL)
     if not match or not match.group(1).strip():
-        raise ValueError("installed CLAUDE.md has no Skills section")
+        raise ValueError("instruction block has no Skills section")
     return match.group(1).strip()
 
 
 def stub_skill(index, topic):
     return (f'---\nname: stub-{index:02d}\ndescription: "Formats and summarizes {topic}. Use when the user supplies '
             f'{topic} and asks for a cleaned-up summary or a standard layout."\n---\n\nFormat the {topic} as asked.\n')
-
-
-def install_into(home):
-    environment = {"HOME": str(home), "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "TMPDIR": tempfile.gettempdir()}
-    subprocess.run(["bash", str(REPO / "install.sh"), "--agent", "claude"], cwd=REPO, env=environment, check=True,
-                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
 
 
 def apply_descriptions(skills_dir, descriptions):
@@ -95,7 +94,7 @@ def description_hash(skills_dir):
 
 
 def tree_hash(root):
-    """Hash the packaged files, since the installer copies uncommitted work too."""
+    """Hash the packaged files, since the plugin copy can hold uncommitted work too."""
     digest = hashlib.sha256()
     for path in sorted(item for item in root.rglob("*") if item.is_file() and item != root / MANIFEST and root / "evals" not in item.parents):
         digest.update(f"{path.relative_to(root).as_posix()}\0".encode())
@@ -129,18 +128,15 @@ def generate(output_path, guidance_override=None, stubs=0, allowed_root=ALLOWED_
 
 
 def _build(output, guidance_override, stubs, descriptions):
-    with tempfile.TemporaryDirectory(prefix="skill-activation-home-") as home_name:
-        home = Path(home_name)
-        install_into(home)
-        installed = home / ".claude"
-        guidance = guidance_override if guidance_override is not None else skills_guidance(
-            (installed / "CLAUDE.md").read_text(encoding="utf-8"))
-        (output / ".claude-plugin").mkdir(parents=True)
-        shutil.copytree(installed / "skills", output / "skills", symlinks=False)
-        shutil.copytree(installed / "tools" / "progress", output / "tools" / "progress", symlinks=False)
+    if not SOURCE_SKILLS.is_dir():
+        raise ValueError(f"plugin skills are missing; run tools/skills/sync-plugin.py --apply: {SOURCE_SKILLS}")
+    guidance = guidance_override if guidance_override is not None else skills_guidance(
+        INSTRUCTION_BLOCK.read_text(encoding="utf-8"))
+    (output / ".claude-plugin").mkdir(parents=True)
+    shutil.copytree(SOURCE_SKILLS, output / "skills", symlinks=False)
 
     changed = apply_descriptions(output / "skills", descriptions)
-    (output / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": PLUGIN_NAME, "version": "0.0.0"}))
+    plugin_manifest.write_manifests(output, PLUGIN_NAME, "0.0.0", claude_only=True)
     hooks = output / "hooks"
     hooks.mkdir()
     (hooks / "session-context.json").write_text(json.dumps(

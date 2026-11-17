@@ -77,22 +77,17 @@ else
     fail "QA evaluator agent prompts missing read-only role terms: ${missing_agent_terms[*]}"
 fi
 
-test_start "Codex installer keeps AGENTS lean and installs read-only qa-evaluator"
-INSTALL_HOME_QA="$(mktemp -d)"
-p0p4_register_cleanup "$INSTALL_HOME_QA"
-if HOME="$INSTALL_HOME_QA" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/tmp/p0p4-install-qa-evaluator.out 2>/tmp/p0p4-install-qa-evaluator.err; then
-    agents_file="$INSTALL_HOME_QA/.codex/AGENTS.md"
-    if grep -Fq "When a skill's description matches the request" "$agents_file" \
-        && ! grep -Fq "| qa-evaluator |" "$agents_file" \
-        && ! grep -Fq "independent QA acceptance evaluation by qa-evaluator" "$agents_file" \
-        && [[ -f "$INSTALL_HOME_QA/.codex/agents/qa-evaluator.toml" ]] \
-        && grep -Fq 'sandbox_mode = "read-only"' "$INSTALL_HOME_QA/.codex/agents/qa-evaluator.toml"; then
-        pass
-    else
-        fail "Codex install must keep standing AGENTS guidance lean and install the read-only qa-evaluator config"
-    fi
+test_start "Instruction block stays lean and the Codex qa-evaluator agent is read-only"
+instruction_block="$FRAMEWORK_DIR/docs/instruction-block.md"
+codex_qa_agent="$FRAMEWORK_DIR/agents/codex/qa-evaluator.toml"
+if grep -Fq "When a skill's description matches the request" "$instruction_block" \
+    && ! grep -Fq "| qa-evaluator |" "$instruction_block" \
+    && ! grep -Fq "independent QA acceptance evaluation by qa-evaluator" "$instruction_block" \
+    && [[ -f "$codex_qa_agent" ]] \
+    && grep -Fq 'sandbox_mode = "read-only"' "$codex_qa_agent"; then
+    pass
 else
-    fail "Codex install failed; see /tmp/p0p4-install-qa-evaluator.err"
+    fail "instruction block must stay lean and agents/codex/qa-evaluator.toml must be read-only"
 fi
 
 test_start "assistant-review routes independent QA evaluation with the shared semantic guard"

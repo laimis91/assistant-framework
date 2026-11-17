@@ -11,7 +11,7 @@ Choose the guide for the evidence you need; load fixture payloads only for the s
 | Measure native skill activation before work starts | [Per-skill fixtures](skill-fixtures.md#native-activation-trials) | `tools/evals/skill-activation/` |
 | Maintain research validator protections | [Research obligations](research-semantic-obligations.md) | Research semantic validator and its direct controls |
 
-Commands assume the source repository unless their guide explicitly describes an installed route. The installer copies this directory, including sibling guides and fixtures, to the provider's `docs/evals/`. Source-only helpers retain that limit. For Windows Codex, use configured `CODEX_HOME` for installed docs/tools as described in the skill contract guide.
+Commands assume the source repository unless their guide explicitly describes an installed route. The plugin does not ship this directory; use it from a repository checkout.
 
 Update the owning guide when changing a runner, schema, observable evidence boundary or operator. Keep fixture assets at their consumed paths. Repository navigation starts at `docs/README.md` in the source checkout.
 

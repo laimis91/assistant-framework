@@ -18,7 +18,7 @@ Use this template when decomposing mega tasks into strict slice packets. Each ap
 ## Slice Brief: [name]
 
 ### Agent
-Agent: [Claude or Codex intelligent-writer | Claude or Codex mechanical-writer | explicit deprecated code-writer compatibility | Gemini native/default | architect | code-reviewer | qa-evaluator | reviewer | explorer | builder-tester | code-mapper]
+Agent: [Claude or Codex intelligent-writer | Claude or Codex mechanical-writer | explicit deprecated code-writer compatibility | architect | code-reviewer | qa-evaluator | reviewer | explorer | builder-tester | code-mapper]
 Role: [Implementer | Architect | Code Reviewer | QA Evaluator | Reviewer compatibility | Explorer]
 
 ### Context
@@ -54,7 +54,7 @@ This brief is a deep current_task_packet projection of the authoritative packet;
 - feature_preparation_evidence_ref: [required unchanged evidence artifact ref when feature_preparation_scope=existing_system; otherwise not_applicable]
 - feature_preparation_harness_obligation: [required exact approved object when the preparation result contains future_harness_obligation; include requested_scope, evidence_basis, execution_prerequisite, and exactly one source binding: source_feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable for not_applicable; otherwise not_applicable]
 - feature_preparation_qa_acceptance_obligation: [required exact approved object when the preparation result contains future_qa_acceptance_obligation; include requested_scope, execution_prerequisite, and exactly one source binding: source_feature_preparation_evidence_ref for existing_system or source_preparation_basis=not_applicable for not_applicable; otherwise not_applicable]
-- writer_selection: [new Claude or Codex: Orchestrator selects agent=intelligent-writer by default or mechanical-writer only with rationale and current substantiated recipe_or_example_ref, resolved_decisions_ref, scope_and_dependencies_ref, correctness_expectations_ref covering BOTH tests and implementation; legacy packets may omit with intelligent compatibility semantics; Gemini keeps native/default fallback; packet wins and inline conflict blocks]
+- writer_selection: [new Claude or Codex: Orchestrator selects agent=intelligent-writer by default or mechanical-writer only with rationale and current substantiated recipe_or_example_ref, resolved_decisions_ref, scope_and_dependencies_ref, correctness_expectations_ref covering BOTH tests and implementation; legacy packets may omit with intelligent compatibility semantics; packet wins and inline conflict blocks]
 - worker_stage: [test_authoring | production | refactor; the SAME selected writer owns selected tests and implementation]
 - build_execution_lane: [direct_main | bounded_executor | separated_workers; direct fallback preserves its selected lane and evidence]
 - verification_decision: [canonical assistant-verification/contracts/output.yaml#verification_decision object, unchanged; preserve selected scope, CheckSpec entries, exclusions, rationales, and TddChoice]

@@ -1,6 +1,6 @@
 # Assistant Framework
 
-A Personal AI Assistant framework for developers. 17 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools with option generation, research, disposable feasibility spikes, security analysis, advisory triage, documentation generation, codebase onboarding, CI and test-protection audit, review automation, skill creation, evidence-based verification selection and assessment, exploratory UI QA, and proof-based framework cleanup.
+A Personal AI Assistant framework for developers. 16 first-class `assistant-*` skills: structured workflow, clarification, conditional TDD, debugging, thinking tools with option generation, research, disposable feasibility spikes, security analysis, advisory triage, documentation generation, codebase onboarding, CI and test-protection audit, review automation, skill creation, evidence-based verification selection and assessment, and exploratory UI QA.
 
 ## Documentation
 
@@ -22,150 +22,67 @@ Start with the [documentation map](docs/README.md) for task-specific guides, [du
 12. **Verification** — Selects proportionate checks and techniques, applies TDD only when appropriate, and assesses whether evidence supports the claim.
 13. **Feasibility Spike** — Answers one feasibility question with a small disposable experiment and a control, returning validated, partial or invalidated without authorizing production changes
 14. **Exploratory UI QA** — Explores a running UI through the available browser tools and reports reproducible issues with severity and tested, not tested and blocked coverage; acceptance stays with the QA Evaluator
-15. **Framework Cleanup** — Removes retired Assistant Framework items from an installed agent home only after an ownership helper proves them framework-owned and you confirm the plan's digest; answers uninstall requests with the command to run
 
-## Installation
+## Install from the marketplace
 
-Installations whose selected bundled closure includes `assistant-workflow` require Python 3.9+ for its packet-admission helper and Workflow eval adapter. Both installers probe a usable supported interpreter before writes, including dry-run; closures without Workflow remain Python-independent. Install the runtime yourself, then rerun the installer. Unix probes `python3`; native Windows probes `py -3`, `python3`, then `python` and reports the supported invocation. No runtime is downloaded.
+This repository is a plugin marketplace for Claude Code and Codex. It ships one plugin, `assistant-framework`, with every skill in `skills/`.
 
-Install all skills for any supported agent:
-
-```bash
-./install.sh --agent claude   # → ~/.claude/skills/assistant-*/
-./install.sh --agent codex    # → ~/.codex/skills/assistant-*/
-./install.sh --agent gemini   # → ~/.gemini/skills/assistant-*/
-```
-
-The release inventory is the tracked `skills/assistant-*` set.
-
-Install one root skill with its bundled hard dependencies:
-```bash
-./install.sh --agent claude --skill assistant-thinking
-```
-
-Preview without making changes:
-```bash
-./install.sh --agent claude --dry-run
-```
-
-Claude Code, Codex, and Gemini CLI discover and route installed skills through their native skill systems. Assistant Framework does not install lifecycle scripts or replace provider-native permissions, subagents, or compaction.
+**Claude Code** (CLI and the desktop app's Code tab):
 
 ```bash
-./install.sh --agent claude
-./install.sh --agent codex
-./install.sh --agent gemini
+claude plugin marketplace add laimis91/assistant-framework
 ```
-
-Both installers refuse, before any write and in dry-run, when the framework checkout and the agent home (including a configured `CODEX_HOME`) are the same directory or one contains the other. Keep the checkout outside `~/.claude`, `~/.codex` or `CODEX_HOME`, and `~/.gemini`.
-
-Each install and update also removes retired framework skills and agent files that it can prove it installed: every file must match a released framework version byte for byte. It prints that plan and its digest before removing anything; `--dry-run` prints the same plan and digest and changes nothing. Modified, unknown, linked and other-product copies are always kept and reported. This step needs Python 3.9+ and a Git checkout with full history; without them the installer reports why, keeps every retired skill and agent, and completes the install. Retired framework tools and hook files are removed by exact path on every install, as before. See [Uninstall and legacy cleanup](#uninstall-and-legacy-cleanup) for everything else.
-
-For one compatibility release, a normal install retires only older Assistant Framework lifecycle hook registrations. It removes only commands owned by this framework from the selected agent's existing settings, preserves unrelated custom configuration, and replaces detected stale framework entrypoints with silent exit-zero shims for already-running clients. It does not inspect or alter legacy Memory Graph configuration, runtime, or provider data. The deprecated `--no-hooks` option remains a warning-only no-op during this transition.
-
-### Native Windows installation
-
-Use `install.ps1` from a checked-out copy of this repository. It supports Windows PowerShell 5.1 and PowerShell 7. Workflow requires Python 3.9+ even when previewing with `-DryRun`; merely finding a launcher or app alias is insufficient. Use the interpreter invocation reported by preflight explicitly for `scripts/task-packet-admission.py`, for example `py -3 <skill-directory>\scripts\task-packet-admission.py`, rather than relying on `.py` file association. If Python is removed later or a manual install lacks it, stop at the admission gate, install a supported interpreter, and rerun before continuing.
-
-Close Codex App and any Codex CLI sessions before installing or updating Codex so they release `AGENTS.md` and managed framework files. On Windows, the installer rejects Codex installs (including `-DryRun`) before any writes when a `Codex` process is running; it does not terminate processes. Keep Codex closed until installation finishes. The installer leaves `config.toml` untouched and does not invoke the Codex CLI. If a managed file is locked, close Codex App and rerun the same command. If a file becomes unavailable after preflight, the installer reports a partial installation; resolve the cause and rerun because reinstall is safe.
-
-Install the complete release inventory for one agent:
-
-```powershell
-.\install.ps1 -Agent codex
-.\install.ps1 -Agent claude
-.\install.ps1 -Agent gemini
-```
-
-The same entry point supports one root skill with its bundled hard dependencies and a non-mutating preview:
-
-```powershell
-.\install.ps1 -Agent claude -Skill assistant-thinking
-.\install.ps1 -Agent codex -DryRun
-```
-
-After pulling an update, reinstall by running the selected install command again:
-
-```powershell
-.\install.ps1 -Agent codex
-```
-
-Installer-owned directories are mirrored, while unrelated agent configuration and user-authored instruction content are preserved. Restart the selected agent after updating an older installation.
-
-Windows destinations are:
-
-| Agent | Skills | Configuration and tools |
-|---|---|---|
-| Codex | `%USERPROFILE%\.agents\skills\assistant-*` | `CODEX_HOME` when set; otherwise `%USERPROFILE%\.codex` |
-| Claude Code | `%USERPROFILE%\.claude\skills\assistant-*` | `%USERPROFILE%\.claude` and `%USERPROFILE%\.claude.json` |
-| Gemini CLI | `%USERPROFILE%\.gemini\skills\assistant-*` | `%USERPROFILE%\.gemini` |
-
-The Windows installer itself does not require administrator access, create symlinks, download dependencies, or change PowerShell execution policy. If Windows marks the checked-out script as downloaded and blocks it, review the file and remove only that file's download mark:
-
-```powershell
-Unblock-File -LiteralPath .\install.ps1
-```
-
-Do not work around policy errors with `Set-ExecutionPolicy` or `-ExecutionPolicy Bypass`. The repository's remaining Bash-only maintenance and eval helpers still require Git Bash or WSL.
-
-#### Windows manual verification
-
-1. From a repository path containing spaces, run `Get-Help .\install.ps1 -Detailed` and `.\install.ps1 -Agent codex -DryRun`.
-2. Close Codex App, run `.\install.ps1 -Agent codex`, then confirm that `%USERPROFILE%\.agents\skills\assistant-workflow\SKILL.md` exists.
-3. Resolve the Codex configuration root and confirm its global instructions were installed. Existing `config.toml` content is left unchanged:
-
-   ```powershell
-   $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
-    Test-Path -LiteralPath (Join-Path $codexHome 'AGENTS.md')
-   Select-String -LiteralPath (Join-Path $codexHome 'AGENTS.md') -SimpleMatch 'ASSISTANT_FRAMEWORK_AGENTS_MD_START'
-   ```
-
-4. Run the isolated integration contracts in both Windows PowerShell 5.1 and PowerShell 7: `.\tests\windows\installer-contracts.ps1` and `.\tests\windows\framework-ownership-contracts.ps1`.
-5. Restart the selected agent and verify its installed skills are available.
-
-## Uninstall and legacy cleanup
-
-Both commands prove ownership before they delete. An item is removed only when it is byte-identical to content the framework shipped (after the installer's own path substitution), sits at its exact install location, and is not a link, junction or hard link. Everything else is kept and listed with a reason. Neither command touches a file outside the selected agent home and, on Windows Codex, its `~/.agents` roots.
-
-**Uninstall** removes the framework from one agent home. Run it from your framework checkout; the installed agent home has no copy of it:
 
 ```bash
-cd <path-to-your-framework-checkout>
-./uninstall.sh --agent claude --dry-run
-./uninstall.sh --agent claude
+claude plugin install assistant-framework@assistant-framework
 ```
 
-It prints the full plan and its digest, then asks you to type the agent name. For a non-interactive run, pass the digest from a dry run; a changed home prints the new digest and stops:
+Inside a session the same commands are `/plugin marketplace add laimis91/assistant-framework` and `/plugin install assistant-framework@assistant-framework`. Auto-update is off for third-party marketplaces: turn it on under **Marketplaces** in `/plugin`, or update by hand with `claude plugin update assistant-framework@assistant-framework`. Plugin skills are namespaced, so `assistant-workflow` runs as `/assistant-framework:assistant-workflow`; skills still activate from their descriptions.
+
+**Codex** (CLI and app):
 
 ```bash
-./uninstall.sh --agent codex --yes --plan-digest <digest-from-the-dry-run>
+codex plugin marketplace add laimis91/assistant-framework
 ```
 
-On Windows, close Codex first when uninstalling it:
+Then install `assistant-framework` from the Plugins Directory in the Codex app, or with the CLI. Refresh with `codex plugin marketplace upgrade`.
 
-```powershell
-pwsh -NoProfile -File uninstall.ps1 -Agent codex -DryRun
-pwsh -NoProfile -File uninstall.ps1 -Agent codex
-powershell -NoProfile -File uninstall.ps1 -Agent claude
-```
+**One copy of each skill.** Remove a manual install (below) before installing the plugin, so the same skill is not loaded twice. If you also upload the chat skills to your Claude account, see [Claude chat skills](#claude-chat-skills).
 
-Uninstall removes framework skills, agent files, tools, hook files and their registrations in settings, and the framework's instruction block. For Codex it removes `rules/workflow.rules` only when unmodified and then reminds you that the framework's git and `rm -rf` safeguards are gone; other rule files stay. Exit status: 0 everything owned was removed; 3 finished with items kept; 2 refused and nothing changed.
+**Agents are optional.** The plugin does not ship the subagent definitions in `agents/`. Without them, Workflow builds hands-on and gives each formal reviewer the role prompt shipped in the owning skill (`references/roles/`). You can copy `agents/claude/*.md` into `~/.claude/agents/` or `agents/codex/*.toml` into `~/.codex/agents/`, or use your own subagent setup.
 
-**Legacy cleanup** removes retired items that an update left behind: retired skills, hooks and their registrations, tools and the retired instruction block. Ask your agent to remove the retired framework items (the `assistant-cleanup` skill), or run the installed helper yourself with the agent home as the working directory. The dry run writes a manifest to a new file outside the agent home; apply removes only what that manifest lists, after re-proving each item:
+**Releases.** The plugin version comes from `version.txt`. Users get a new copy only when that version changes, so a release bumps `version.txt` and runs `tools/skills/sync-plugin.py --apply`. The editable source stays `skills/`; the contract suites fail when `plugins/assistant-framework/` drifts from it.
+
+### Claude chat skills
+
+Three skills work in Claude chat on the web, desktop and mobile apps, with no repository and no subagents: `assistant-research`, `assistant-thinking` and `assistant-clarify`. Build their upload ZIPs:
 
 ```bash
-cd ~/.claude
-python3 tools/framework-ownership/ownership.py dry-run --agent claude --manifest-out /tmp/framework-cleanup.json
-python3 tools/framework-ownership/ownership.py apply --agent claude --manifest /tmp/framework-cleanup.json --manifest-digest <digest>
+python3 tools/skills/build-chat-zips.py
 ```
 
-On Windows, from the agent home:
+Upload each ZIP from `dist/chat-skills/` under **Customize → Skills → + → Create skill → Upload a skill**, with code execution turned on. Uploads are manual, so repeat them after each release. Mobile availability is not yet confirmed.
 
-```powershell
-pwsh -NoProfile -File tools/framework-ownership/ownership.ps1 dry-run -Agent claude -ManifestOut $env:TEMP\framework-cleanup.json
-pwsh -NoProfile -File tools/framework-ownership/ownership.ps1 apply -Agent claude -Manifest $env:TEMP\framework-cleanup.json -ManifestDigest <digest>
-```
+Skills on your account also sync into Claude Code (v2.1.273 or later). With the plugin installed too, Claude Code then has two copies of these three skills. Keep one: delete the account copy in Customize → Skills if you use Claude Code mainly, at the cost of losing it in chat.
 
-Codex prompts before each documented uninstall and apply form. [tools/framework-ownership/README.md](tools/framework-ownership/README.md) describes the inventory, the proof rules and how to retire an item.
+### Optional instruction block
+
+The skills work without any instruction file. To apply the framework's routing and working rules before a skill loads, paste the block from [docs/instruction-block.md](docs/instruction-block.md) into `~/.claude/CLAUDE.md` or a project's `CLAUDE.md` (Claude Code), or `~/.codex/AGENTS.md` or a project's `AGENTS.md` (Codex). Nothing writes it for you.
+
+## Moving from a manual install
+
+The manual installers (`install.sh`, `install.ps1`), the uninstallers and the `assistant-cleanup` skill were retired on 2026-11-17; the marketplace is the only supported channel. Gemini CLI and the Codex `codex-rules/` execution rules are no longer supported. Remove an earlier manual install by hand, in this order, before installing the plugin:
+
+1. Remove Assistant Framework hook registrations: entries whose command points into `~/.claude/hooks/assistant/` in `~/.claude/settings.json`, and into `~/.codex/hooks/assistant/` in `~/.codex/hooks.json`.
+2. Delete the framework skills and hook shims, `~/.claude/skills/assistant-*` and `~/.claude/hooks/assistant/`, and the framework's own entries in the shared folders, leaving anything else there in place:
+   - in `~/.claude/tools/`: `evals/`, `patterns/`, `progress/`, `skills/`, `framework-ownership/` and `smoke-test-codex-agents.sh`, plus, from older releases, `change-impact/`, `cognitive-complexity/`, `memory-graph/`, `cleanup-memory-graph.sh`, `cleanup-memory-graph.ps1` and `plugins/sync-plugin-skills.sh`;
+   - in `~/.claude/docs/evals/`: the entries that this repository's `docs/evals/` folder holds.
+
+   Do the same under `~/.codex/`. On Windows Codex, also check `~/.agents/skills/assistant-*` and `~/.agents/tools/change-impact/` and `progress/`.
+3. Remove the block between `<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_START -->` and `<!-- ASSISTANT_FRAMEWORK_AGENTS_MD_END -->` in `~/.claude/CLAUDE.md` and `~/.codex/AGENTS.md`, or replace it with the [optional instruction block](#optional-instruction-block).
+4. Delete installed framework agents (`~/.claude/agents/*.md`, `~/.codex/agents/*.toml` with the names in `agents/`) unless you keep them deliberately, and `~/.codex/rules/workflow.rules`.
+
+For Gemini CLI, delete `~/.gemini/skills/assistant-*` and the same framework entries in `~/.gemini/tools/` as in step 2.
 
 ## Skills
 
@@ -343,11 +260,6 @@ Explores a running web or app UI in a local or named test environment through wh
 
 Triggers on: test this app, dogfood the signup flow, click through the settings page and report bugs, exploratory UI testing
 
-### assistant-cleanup
-Removes retired or legacy Assistant Framework skills, agents, hooks and tools from one installed agent home after an update. It always runs the installed ownership helper's dry run first, shows removable, kept-ambiguous and kept-unrelated items by path with the manifest digest, and applies only in the helper's fixed form after you confirm that exact digest. It never composes deletion commands. A request to uninstall the framework gets the two-step uninstall command with a checkout placeholder, and nothing is run. Not for code cleanup, refactoring, deleting project files or uninstalling other software.
-
-Triggers on: remove the retired framework skills, clean up legacy framework hooks after an update, uninstall the Assistant Framework
-
 ### assistant-verification
 Selects proportional verification scope, methods, and TDD applicability, then assesses observed evidence and limitations. It guides verification without running checks. Workflow consumers retain canonical typed decisions; human-only assessments can use concise prose.
 
@@ -398,7 +310,7 @@ tools/evals/run-skill-evals.sh --responses /tmp/skill-eval-responses
 tools/evals/run-skill-evals.sh --activation-results /tmp/skill-activation-results.json
 ```
 
-The default eval inventory is 17 first-class `assistant-*` skills with fixtures.
+The default eval inventory is 16 first-class `assistant-*` skills with fixtures.
 Canonical first-class fixtures use schema `2.0` and include top-level
 `activation_cases`: exact `{user_request, should_activate}` objects with at
 least two normalized-distinct positive requests and one normalized-disjoint
@@ -451,22 +363,21 @@ To configure it on one workstation:
    `~/.config/assistant-framework/pattern-libraries.json`.
    ```
 
-3. Restrict the private config and validate it with the installed adapter:
+3. Restrict the private config and validate it with the adapter from a checkout of this repository:
 
    ```bash
    chmod 700 ~/.config/assistant-framework
    chmod 600 ~/.config/assistant-framework/pattern-libraries.json
-   ~/.codex/tools/patterns/pattern-library.sh validate-config \
+   tools/patterns/pattern-library.sh validate-config \
      --config ~/.config/assistant-framework/pattern-libraries.json
-   ~/.codex/tools/patterns/pattern-library.sh search \
+   tools/patterns/pattern-library.sh search \
      --config ~/.config/assistant-framework/pattern-libraries.json \
      --query "factory"
    ```
 
    A valid configuration returns `status: configured`; search returns metadata
    only and at most three results by default. No prebuilt index is required.
-   When using another installed agent, use that agent's tools directory instead
-   of `~/.codex/tools/`.
+   The plugin does not ship the adapter, so retrieval needs that checkout.
 
 See `docs/pattern-library.md` for index creation, bounded result limits, and the
 safe explicit `show` command.
@@ -495,7 +406,7 @@ under a non-UTF-8 locale such as `C`; it leaves the shell locale unchanged.
 Pull requests and pushes to `main` also run
 `.github/workflows/framework-validation.yml`, which executes the fast aggregate
 contracts and four long-running contract suites as parallel shards, then runs
-skill checks and all three Unix installer dry-runs on hosted Linux runners.
+skill and plugin checks on hosted Linux runners.
 
 The end-to-end fixture checks the observable order: implementation, focused
 test pass, an exact trusted review invocation finding the seeded defect, repair,
@@ -506,9 +417,7 @@ repair. The runner accepts only exact trusted command forms and inspects
 temporary Codex JSONL events before deleting them.
 
 These deterministic repository checks validate the framework mechanics; they
-do not by themselves prove current model behavior. Hosted Windows PowerShell
-5.1 and PowerShell 7 have both run the committed Windows contracts successfully
-for this architecture; changes to those surfaces must rerun the hosted workflow.
+do not by themselves prove current model behavior.
 The previously recorded Terra snapshot predates the changed fixture and grader
 and remains historical, non-promoting evidence. A new live promotion claim
 requires fresh authorization for the exact four-call smoke and, if it passes,
@@ -519,11 +428,11 @@ separate authorization for the eight-case, three-repeat, two-variant pilot
 ## Structure
 
 ```
-install.sh                         <- Top-level installer (skills + migration cleanup)
-install.ps1                        <- Native Windows PowerShell 5.1/7 installer
-uninstall.sh                       <- Unix uninstall front end (run from the checkout)
-uninstall.ps1                      <- Native Windows uninstall front end (run from the checkout)
-version.txt                        <- Framework version
+version.txt                        <- Framework and plugin version
+.claude-plugin/marketplace.json    <- Claude Code marketplace
+.agents/plugins/marketplace.json   <- Codex marketplace
+plugins/assistant-framework/       <- Generated plugin (tools/skills/sync-plugin.py); edit skills/ instead
+docs/instruction-block.md          <- Optional instruction block for CLAUDE.md / AGENTS.md
 
 skills/
   assistant-workflow/
@@ -597,10 +506,6 @@ skills/
     references/issue-taxonomy.md   <- Severity, category, duplicate and coverage rules
     evals/cases.json               <- Offline behavior and activation fixtures
 
-  assistant-cleanup/
-    SKILL.md                       <- Retired-item cleanup through the ownership helper; uninstall command only
-    evals/cases.json               <- Offline behavior and activation fixtures
-
   assistant-docs/
     SKILL.md                       <- Mode selection and general protocol
     api-docs.md                    <- API surface documentation
@@ -626,24 +531,17 @@ skills/
 tools/
   skills/
     validate-skills.sh             <- Source validator for first-class skill metadata and contracts
+    sync-operating-guidance.sh     <- Copies tools/progress guidance into every skill
+    sync-role-prompts.sh           <- Copies reconciled agent bodies into skills' references/roles/
+    sync-plugin.py                 <- Builds plugins/assistant-framework/ and the marketplace files
+    build-chat-zips.py             <- Builds Claude chat upload ZIPs into dist/chat-skills/
   evals/
     run-skill-evals.sh             <- Provider-neutral per-skill eval fixture helper
     run-framework-instruction-evals.sh <- Provider-neutral framework instruction eval helper
     run-codex-framework-evals.sh   <- Opt-in paired Codex behavioral adapter
-  framework-ownership/
-    retired-items.json             <- Inventory of retired framework items
-    content-proof.json             <- Generated content fingerprints for the inventory
-    installer-exact-removal.tsv    <- Generated retired tool and hook list for Python-less install.sh
-    ownership.py, ownership.ps1    <- Installed cleanup helper (dry-run, apply, list-retired, validate)
-    ownership-core.ps1             <- Windows proof library
-    installer-primitives.ps1       <- Generated from install.ps1 for the Windows helper
-    ownership-checkout.py, .ps1    <- Checkout-only entry points (installer mode, uninstall); never installed
 
 tests/
   test-p0-p4-contracts.sh          <- Framework contract and migration tests
-  framework-ownership/test_ownership.py <- Ownership helper, installer mode and uninstall tests
-  windows/installer-contracts.ps1  <- Isolated native Windows installer contracts
-  windows/framework-ownership-contracts.ps1 <- Native Windows ownership helper and uninstall contracts
 
 ```
 
@@ -735,7 +633,8 @@ representative activation examples in relevant references and positive/negative 
 never in SKILL.md header metadata.
 
 No runtime script changes are needed when adding a skill: add required discovery
-fields, conditional `requires` when applicable, and focused evals, then reinstall.
+fields, conditional `requires` when applicable, and focused evals, then run `tools/skills/sync-plugin.py --apply` and bump
+`version.txt` so plugin users get the update.
 Add contract files only for a named consumer or supported interface; validate
 all supplied or explicitly referenced contracts. See the
 [skill design guide](docs/skill-contract-design-guide.md).
@@ -747,11 +646,9 @@ expected behavior, and actual behavior. Distinguish an inconvenient response
 from a correctness, authority, or compatibility regression. Structural checks
 and shorter instruction files do not establish better model results.
 
-Keep the previous source revision before updating. Reverting the change and
-reinstalling that revision restores framework files; it does not undo project
-work produced during testing. Installation mirrors managed skill directories,
-so preserve any local edits there before updating and retain custom agent
-configuration when reinstalling.
+Plugin installs are cached per version, so updating the plugin replaces its
+skill files; keep local edits in your own skills instead. Reverting a release
+does not undo project work produced during testing.
 
 ## Design principles
 
@@ -767,39 +664,19 @@ configuration when reinstalling.
 ### Common guidance and unmatched activities
 
 The canonical guidance is `tools/progress/operating-guidance.md` with its
-`wire-boundary.md`. Each of the 17 first-class assistant skills carries a
+`wire-boundary.md`. Each of the 16 first-class assistant skills carries a
 byte-identical copy of both in its own `references/` folder and links to that
-copy, so a skill folder works on its own. After editing the canonical files, run
-`tools/skills/sync-operating-guidance.sh --apply`; the contract suites fail on
-drift. The installed instruction block and agent definitions still point at the
-canonical copy. Unix installs put tools beside skills under `~/.claude`,
-configured `CODEX_HOME` (default `~/.codex`), or `~/.gemini`. Windows Codex also
-mirrors progress into `~/.agents/tools/progress` for the shared progress helper,
-with both default and custom `CODEX_HOME`. Existing installer safeguards preserve
-user files; full, single-skill, repeated and dry-run installs use the same route.
-In the shared `tools/` and `docs/evals/` roots both installers replace only the
-framework's own top-level entries and retire only exact obsolete tool paths, so
-files and folders you add beside them survive reinstalls. The Unix installer
-refuses, before any write, when one of those roots or an owned entry is a
-symlink or has the wrong type. It also refuses a linked or wrong-type
-`agents/`, `rules/` or `hooks/assistant/` path, or file in them, and installs
-each agent, rule and retired-hook shim by renaming a new file into place, so an
-existing link is never written through.
+copy, so a skill folder works on its own, including inside the plugin cache.
+After editing the canonical files, run
+`tools/skills/sync-operating-guidance.sh --apply`, then
+`tools/skills/sync-plugin.py --apply`; the contract suites fail on drift. The
+guidance also defines `{agent_state_dir}` (`.claude` on Claude Code, `.codex` on
+Codex), which skill text keeps as written.
 
-The Codex and Claude installers each maintain one marker-managed, ASCII-only
-block (`~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`) that loads the common file
-independently of skill matching, directs agents to follow matched skills to their
-handoff, and limits user interruptions to open decisions, risky or external
-actions, required plan approval, a stagnation stop, and the final report.
-Content outside the markers is preserved. For a Gemini session with no matching
-skill, use:
-
-- Gemini: `Read ~/.gemini/tools/progress/operating-guidance.md as the operating guidance for this chat, then handle: <request>`.
-
-A Gemini user may place the same reference in an existing native instruction
-source for standing coverage. Source references and installation parity do not
-prove native activation; automatic provider coverage is claimed only for observed
-standing-instruction support.
+For requests no skill matches, the [optional instruction block](#optional-instruction-block)
+carries the short working rules: follow matched skills to their handoff, and
+limit user interruptions to open decisions, risky or external actions, required
+plan approval, a stagnation stop, and the final report.
 
 Workflow v16 validates/migrates original v14/v15 authority, retaining original and
 normalized digests, execution, actors, selected TDD and results. Review v10 and

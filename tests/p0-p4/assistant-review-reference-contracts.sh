@@ -153,19 +153,16 @@ for prompt in "${claude_review_prompts[@]}" "${codex_review_prompts[@]}"; do
         fi
     done
 done
-for prompt in "${claude_review_prompts[@]}"; do
+# R-MP-2: Claude and Codex reviewers carry one merged body, so both keep the
+# shared-contract pointer and the selected-evidence rubric projection.
+for prompt in "${claude_review_prompts[@]}" "${codex_review_prompts[@]}"; do
     if ! grep -Fq '0.15' "$FRAMEWORK_DIR/$prompt" \
         || ! grep -Fq 'quality and relevance of evidence from selected verification methods' "$FRAMEWORK_DIR/$prompt" \
         || ! grep -Fq 'test_coverage: 3.0' "$FRAMEWORK_DIR/$prompt"; then
-        review_prompt_failures+=("$prompt missing Claude selected-evidence projection at weight 0.15 with the canonical output key")
+        review_prompt_failures+=("$prompt missing selected-evidence projection at weight 0.15 with the canonical output key")
     fi
-done
-for prompt in "${codex_review_prompts[@]}"; do
     if ! grep -Fq "shared review rubric and canonical return contract" "$FRAMEWORK_DIR/$prompt"; then
         review_prompt_failures+=("$prompt does not point to the shared scoring contract")
-    fi
-    if grep -Eq '^[[:space:]]*(rubric_scores:|test_coverage: [0-9])' "$FRAMEWORK_DIR/$prompt"; then
-        review_prompt_failures+=("$prompt duplicates a Codex-local scoring schema")
     fi
 done
 if [[ "${#review_prompt_failures[@]}" -eq 0 ]]; then

@@ -1,0 +1,62 @@
+# Perspectives (Council)
+
+Get the smallest useful set of independent viewpoints on a genuinely contested decision through structured debate. This is a conditional challenge tool, not a permanent architect role, global memory system, or default phase for every design decision.
+
+## When to use
+- Architecture or design decisions with two viable alternatives, conflicting quality drivers, or a fresh Architecture Decision Pack that needs independent challenge, especially when control/early exit, ownership/disposal, resource envelope, extension registration, or a representative path could invalidate the abstraction
+- You need to see a problem from angles you might miss alone
+- Choosing between competing approaches
+
+## Process
+
+### Setup
+Choose only the perspectives that can change the decision for this question. Possible roles:
+
+| Role | Focus |
+|---|---|
+| **Architect** | System design, scalability, maintainability, coupling |
+| **Pragmatist** | Shipping speed, simplicity, "good enough", cost |
+| **Skeptic** | What breaks? Edge cases, failure modes, hidden costs |
+| **User Advocate** | Developer experience, API ergonomics, learnability |
+
+Swap roles as needed (e.g., Security Expert, Performance Engineer, Domain Expert). Do not retain a role, full council, or its context after the current decision.
+
+When a workflow Architecture Decision Pack applies, each selected perspective first checks its source/revision freshness, facts versus assumptions, ownership/lifecycle and dependency boundary, Type Ledger, and quality scenarios. A memory, performance, or extensibility claim is admissible only with workload, budget, measurement method, and failure condition; otherwise record it as an explicit unknown or measurement task.
+
+### Delegation trigger
+For high-uncertainty or high-stakes debates, follow the [independence and delegation rule](SKILL.md#independence-and-delegation). Do not spawn a council merely because an architecture task exists. Integrated calls and requested structured output use the [canonical contracts](SKILL.md#integrated-and-structured-output).
+
+### Round 1: Independent positions
+Each perspective gives a concise position grounded in decision facts, assumptions, and the stated quality/type boundary. No interaction yet.
+
+### Challenge where useful
+Use another round only when unresolved disagreement could change the decision. Preserve material dissent rather than forcing convergence.
+
+### Synthesis
+Identify:
+- **Convergence**: What do all/most perspectives agree on?
+- **Tensions**: Where do they genuinely disagree? Why?
+- **Recommendation**: Given the tensions, what's the best path forward?
+
+## Output format
+
+```
+DECISION: [What we're deciding]
+
+ROUND 1 — POSITIONS
+[Selected perspective]: [position]
+
+ROUND 2 — RESPONSES
+[Each role responds to 1-2 points from others]
+
+SYNTHESIS
+Agree on: [convergent points]
+Disagree on: [tensions and why]
+Recommendation: [best path given tradeoffs]
+Risk to watch: [the tension most likely to bite us later]
+Delegation path: [delegated, or sequential_fallback for discretionary non-independent perspectives only, + policy state]
+Architecture Pack update: [freshness; facts/assumptions or question; type-ledger implication; quality workload/budget/measurement/failure implication]
+```
+
+## Quick variant
+For lower-stakes decisions: Run one concise pass using only the two perspectives that matter. Skip debate. If there is no real alternative or conflicting driver, do not use Perspectives; update or mark the Architecture Decision Pack instead.

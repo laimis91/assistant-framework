@@ -230,17 +230,13 @@ validate_synthetic_fixture() {
 }
 
 materialize_variant() {
-    local overlay="$1" destination="$2" entry instruction_file
+    local overlay="$1" destination="$2" entry
     mkdir -p "$destination"
     while IFS= read -r entry; do cp -R "$entry" "$destination/"; done \
         < <(find "$REPO_ROOT/skills/assistant-workflow" -mindepth 1 -maxdepth 1 ! -name evals -print | LC_ALL=C sort)
     cp "$overlay" "$destination/SKILL.md"
-    while IFS= read -r instruction_file; do
-        sed -i.bak -e 's|{agent_state_dir}|.codex|g' "$instruction_file"
-        rm -f "${instruction_file}.bak"
-    done < <(find "$destination" -type f \( \
-        -name '*.md' -o -name '*.yaml' -o -name '*.yml' -o -name '*.json' \
-        -o -name '*.conf' -o -name '*.toml' \))
+    # Skill text keeps {agent_state_dir} as written, as plugin installs do;
+    # the synced operating guidance defines it.
 }
 
 materialized_variant_hash() {

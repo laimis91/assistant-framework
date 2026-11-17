@@ -12,7 +12,7 @@ Start here for repository work. Select the relevant topic below and read only it
 | Change harness, review or recovery guidance | [Harness design guide](harness-design-guide.md) | Its documented controls, artifacts and role boundaries |
 | Diagnose missing native delegation | [Subagent troubleshooting](troubleshooting-subagents.md) | Role definitions, dispatch prerequisites and installation verification |
 | Use or change the optional local pattern library | [Pattern library](pattern-library.md) | Its configuration, commands and bounded lookup behavior |
-| Retire a framework item, or change cleanup, uninstall or installer ownership proof | [Framework ownership](../tools/framework-ownership/README.md) | The inventory, proof rules, generated data and helper commands |
+| Change plugin packaging, the marketplaces, chat ZIPs or the instruction block | [Plugin marketplace packaging](specs/plugin-marketplace-packaging.md) | `tools/skills/sync-plugin.py`, `build-chat-zips.py` and [the instruction block](instruction-block.md) |
 | Validate skills, run evals or interpret evidence | [Evaluation documentation](evals/README.md) | The owning topic guide, runner/schema and affected fixture controls |
 | Investigate earlier decisions | [Historical material](#historical-material) | Preserve the original dated claim; place current guidance with its owner above |
 

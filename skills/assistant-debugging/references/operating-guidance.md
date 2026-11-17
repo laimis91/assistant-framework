@@ -108,6 +108,13 @@ evidence remain explicit. Review confidence/severity standards do not depend on
 round ordinal; concrete findings and complete coverage remain mandatory. Audit
 retains its authorized one-batch read-only scope. Scores are diagnostic only.
 
+## Agent state directory
+
+Skill text writes the agent's state directory as `{agent_state_dir}`. It means
+`.claude` on Claude Code and `.codex` on Codex, in the project root unless the
+path starts with `~/`, which means the user's home directory. A plugin install
+leaves the token as written; read it with this meaning.
+
 ## Persisted and executable consumers
 
 Only when parsing, admitting, retaining or certifying persisted/executable progress,
@@ -124,7 +131,7 @@ User budgets, host restrictions, subprocess deadlines, fetch bounds, API
 backoff/rate limits and application/product-loop policies keep their own owners
 and accurate exit reasons. This policy changes framework correction controls.
 
-Source tests and installer parity prove bounded structural behavior only.
+Source tests and plugin-copy parity prove bounded structural behavior only.
 Native activation, reduced friction, outcome quality, time or cost claims need a
 bounded matched observation with frozen outcome oracles, current source/host
 identity, calls/time, avoidable interruptions and explicit limits. Do not claim

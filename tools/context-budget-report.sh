@@ -13,7 +13,7 @@ BASELINE=""
 SKILL_OVERLAY=""
 LOAD_SET=""
 SKILL_TREE=""
-INVENTORY_MODE="isolated_install"
+INVENTORY_MODE="plugin_copy"
 
 usage() {
     cat <<'EOF'
@@ -515,31 +515,17 @@ fi
 
 WORK_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/assistant-context-budget.XXXXXX")"
 trap safe_cleanup EXIT INT TERM
-INSTALL_HOME="$WORK_ROOT/home"
-mkdir -p "$INSTALL_HOME"
 
-# This install supplies only generated global instructions. Selected instructions
-# and catalog descriptions are measured from source below. Root overlays use
-# a Python-independent bootstrap skill for this standing instruction artifact.
-GLOBAL_INSTRUCTIONS_SKILL="$SKILL"
-if [[ -n "$SKILL_OVERLAY" ]]; then
-    GLOBAL_INSTRUCTIONS_SKILL="assistant-clarify"
-fi
-
-if ! HOME="$INSTALL_HOME" CODEX_HOME="$INSTALL_HOME/.codex" \
-    bash "$REPO_ROOT/install.sh" \
-        --agent "$AGENT" \
-        --skill "$GLOBAL_INSTRUCTIONS_SKILL" \
-        >"$WORK_ROOT/install.out" 2>"$WORK_ROOT/install.err"; then
-    die "Isolated framework install failed; context inventory was not emitted."
-fi
-
+# Standing context is read from what users install: the plugin copy of the
+# selected skill supplies the common guide it loads, and the optional canonical
+# instruction block stands in for global instructions. Selected instructions and
+# catalog descriptions are measured from source below.
+PLUGIN_SKILL_DIR="$REPO_ROOT/plugins/assistant-framework/skills/$SKILL"
 PROJECT_AGENTS_FILE="$REPO_ROOT/AGENTS.md"
-GLOBAL_INSTRUCTIONS_FILE="$INSTALL_HOME/.codex/AGENTS.md"
-# The managed block and every skill root load the installed common guide.
-COMMON_GUIDANCE_FILE="$INSTALL_HOME/.codex/tools/progress/operating-guidance.md"
+GLOBAL_INSTRUCTIONS_FILE="$REPO_ROOT/docs/instruction-block.md"
+COMMON_GUIDANCE_FILE="$PLUGIN_SKILL_DIR/references/operating-guidance.md"
 [[ -f "$COMMON_GUIDANCE_FILE" ]] \
-    || die "Isolated install did not provide tools/progress/operating-guidance.md; context inventory was not emitted."
+    || die "Plugin copy of $SKILL lacks references/operating-guidance.md; run tools/skills/sync-plugin.py --apply. Context inventory was not emitted."
 
 GLOBAL_AGENTS_BLOCK="$WORK_ROOT/generated-global-agents.md"
 extract_marker_block "$GLOBAL_INSTRUCTIONS_FILE" \

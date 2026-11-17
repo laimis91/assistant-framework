@@ -126,9 +126,9 @@ else
     fail "root or exact run-plan materialization metadata is incomplete"
 fi
 
-test_start "exact adapter plans bind unmodified manifest bytes while legacy overlays render placeholders"
+test_start "exact adapter plans bind unmodified manifest bytes while legacy overlays keep placeholders as written"
 expected_tree_hash="$(python3 "$helper" source-hash --base-skill-tree "$materialized" | jq -r .base_source_sha256)"
-sed 's|{agent_state_dir}|.codex|g' "$legacy/SKILL.md" >"$fixture_root/legacy-rendered.md"
+cp "$legacy/SKILL.md" "$fixture_root/legacy-rendered.md"
 if jq -e --arg tree "$expected_tree_hash" --arg skill "$(sha256_file "$overlay/SKILL.md")" '
       .baseline_variant.instruction_sha256 == $tree
       and .candidate_variant.instruction_sha256 == $tree

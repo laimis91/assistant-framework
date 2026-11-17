@@ -1,0 +1,14 @@
+{
+  "name": "assistant-framework",
+  "description": "Assistant Framework skills for Claude Code.",
+  "owner": {
+    "name": "laimis91"
+  },
+  "plugins": [
+    {
+      "name": "assistant-framework",
+      "source": "./plugins/assistant-framework",
+      "description": "Assistant Framework skills: workflow, review, verification, TDD, debugging, research, security and more, for Claude Code and Codex."
+    }
+  ]
+}

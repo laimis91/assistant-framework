@@ -64,19 +64,17 @@ else
     fail "pattern library CLI or required help is missing"
 fi
 
-test_start "installed workflow resolves the pattern tool outside the framework repository"
-install_home="$fixture_root/install-home"
+test_start "workflow resolves the pattern tool from a checkout outside the working directory"
 unrelated_cwd="$fixture_root/unrelated-project"
-mkdir -p "$install_home" "$unrelated_cwd"
-installed_tool="$install_home/.codex/tools/patterns/pattern-library.sh"
-if HOME="$install_home" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow >/dev/null \
-    && [[ -x "$installed_tool" ]] \
-    && (cd "$unrelated_cwd" && "$installed_tool" validate-config --config "$missing_config") \
+mkdir -p "$unrelated_cwd"
+if [[ -x "$pattern_tool" ]] \
+    && (cd "$unrelated_cwd" && "$pattern_tool" validate-config --config "$missing_config") \
         | jq -e '.status == "not_configured"' >/dev/null \
-    && p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/design-pattern-retrieval.md" '<framework-tools>/patterns/pattern-library.sh'; then
+    && p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/design-pattern-retrieval.md" '<framework-tools>/patterns/pattern-library.sh' \
+    && p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/references/design-pattern-retrieval.md" 'so a missing tool is `not_configured`'; then
     pass
 else
-    fail "installed pattern retrieval depends on the framework repository working directory"
+    fail "pattern retrieval depends on the framework repository working directory or omits the missing-tool rule"
 fi
 
 test_start "missing configuration is a clean non-interactive no-op"
@@ -192,7 +190,7 @@ if [[ -f "$pattern_docs" ]] \
     && grep -Fq -- '~/.config/assistant-framework/pattern-libraries.json' "$FRAMEWORK_DIR/README.md" \
     && grep -Fq -- "resolved from the configuration file's directory" "$FRAMEWORK_DIR/README.md" \
     && grep -Fq -- "personal or project instructions" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq -- '~/.codex/tools/patterns/pattern-library.sh validate-config' "$FRAMEWORK_DIR/README.md" \
+    && grep -Fq -- 'tools/patterns/pattern-library.sh validate-config' "$FRAMEWORK_DIR/README.md" \
     && ! grep -Eq -- '/Users/|/home/[^/]+/|[A-Za-z]:\\\\Users\\\\' "$pattern_docs" \
     && ! grep -Eq -- '/Users/|/home/[^/]+/|[A-Za-z]:\\\\Users\\\\' "$FRAMEWORK_DIR/README.md"; then
     pass

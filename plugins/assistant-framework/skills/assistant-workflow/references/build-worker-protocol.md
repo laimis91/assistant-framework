@@ -1,0 +1,403 @@
+# Build Worker Protocol
+
+Internal reference for source-changing Build execution. Load when entering
+Build for work that changes project source, tests, docs, config, runtime integrations,
+contracts, or generated artifacts. `references/phases.md` keeps the compact
+Build shell; this file owns worker sequencing, evidence, TDD ownership,
+unexpected blocker routing, and per-slice verification.
+
+## Source-changing execution ownership
+
+Shared fanout alone does not promote this Build lane.
+
+Select `direct_main`, `bounded_executor`, or `separated_workers` for concrete
+execution benefit. The main agent may implement and verify at every size/risk;
+there is no mandatory spawn chain or orchestrator edit prohibition. Direct work
+is an ordinary lane without fallback exemptions, fake children or worker logs.
+Optional delegated bounded execution owns tests/code/checks; separated workers
+retain the same writer and execution-only Builder/Tester. Formal review always
+uses newly created independent agents with fresh context: one pass (plus one
+fresh re-review after a fix) for trivial/small light work, at least two
+sibling-blind passes for medium+.
+Read subagent-dispatch.md for actual actor and isolation bindings. Lane/actor
+stamps are immutable once the packet is RUNNING, BLOCKED or VERIFIED (or
+INVALIDATED from those) under the current stamp, or has old-actor evidence beyond
+the latest `stamp_baseline` history row;
+before then only a newly admitted dispatch may replace them, keeping the replaced
+stamp in `execution.history`. Separated workers with Builder
+evidence declare `builder_actor_ids`, and plan, final and QA reviewers are
+distinct actors. Plan review is re-checked at verification and completion; a
+v14/v15 version label without `historical_plan_attestation` grandfathers nothing.
+
+Direct single-pass work retains only relevant source and verification evidence.
+At a persisted/executable consumer, direct_main uses execution_stage and the real
+ExecutionActorBinding and execution_actor_id; no worker-only current_task_packet,
+worker_role, worker_stage or builder projection. Shared pre-build, approval,
+dependency/workspace, exact selected checks, meaningful RED and progress gates
+remain controlling. Optional agents cannot bypass any boundary.
+
+## Expanded-impact mutation authorization
+
+Before any source/test mutation, including a regression-test write, or any
+mutation dispatch, record a passing `pre_build` expanded-work checklist result
+(assistant-review `references/change-impact.md`) against the referenced capture,
+independent expected context, and assessment for shared, unresolved, or
+explicitly expanded impact. The result must resolve against the task packet; a
+status or `checklist_result_ref` alone is insufficient. Reuse is
+allowed only for demonstrably current same-input evidence.
+
+After an earlier mutation, refresh this evidence before each subsequent
+mutation dispatch. In particular, Builder/Tester must not reuse a Code Writer
+pre-build result. The same rule applies to light work and direct fallback;
+those paths may remain local without the expanded trigger.
+
+## Standard/Strict Phase Evidence Gates
+
+Before standard/strict Build can complete, the task journal Agent Dispatch Log
+or equivalent carried-forward state contains only the actual selected Build-lane
+evidence, including direct main implementation/current-check evidence without child records:
+
+- `bounded executor dispatch/result` plus selected verification evidence and
+  RED/GREEN evidence only when TDD is active for `build_execution_lane=bounded_executor`, or `Code Writer` and
+  `Builder/Tester` dispatch/results when `separated_workers`
+
+After Build, Review separately adds `Code Reviewer dispatch/result` (or legacy
+Reviewer compatibility), `review_result`, and QA Evaluator evidence when QA is
+required. Direct main execution follows the same phase gates without child dispatch records. Review evidence cannot
+be used to satisfy a Build exit. `subagent_execution_mode=not_applicable` is invalid for
+standard/strict source-changing Build. Silent fallback is invalid; Silent
+fallback cannot complete.
+
+For medium+ delegated work, record per-slice dispatch evidence before a slice is
+marked `VERIFIED`.
+
+### Build and test applicability
+
+Resolve build and test applicability from the current due `CheckSpec`s and
+resolved binding constraints, using each check's claim, oracle, and concrete
+procedure. Do not infer applicability from file type, command presence, method,
+or technique alone; missing or unresolved applicability is a gap. Keep
+`build_result` required: use `not_applicable` only when no due selected or
+binding build check applies and no build was executed, `passed` only for current
+observed or admissibly reused successful build evidence, `failed` for an
+executed failure, and `not_run` when a required build could not run and the
+worker is `NEEDS_CONTEXT` or `BLOCKED`, when `FAILED_VERIFICATION` results from
+a different executed required check, or when the required build is pending
+GREEN during a valid `pre_production_red` stage with
+`verification.result=partial`. Stage-only `not_run` never establishes final
+Build sufficiency. A failed required build blocks completion. Keep
+`test_summary` required; zero counts mean no tests were
+executed, not that selected or binding tests passed. Every due selected or
+binding check still needs a current result. A no-command check may return an
+empty `verification.commands` list only when `verification.evidence` names the
+concrete procedure performed and its observed result.
+
+Resolve every command-based selected check independently by its `check_id` in
+the unchanged `verification_decision`. Use that CheckSpec's literal
+`command.argv` and explicit `command.cwd`; preserve each command separately in
+the packet and result evidence. The legacy singular `verification_command` is
+only a compatibility projection when the selected IDs resolve exactly one
+command-based CheckSpec. Omit it when there are zero or multiple commands. Never
+flatten commands, infer a working directory, reconstruct shell text, or attach a
+result to a different check. Missing or ambiguous command context requires a
+refreshed decision or a blocked result; non-command checks keep their concrete
+procedure.
+
+## Writer identity within the selected lane
+
+Resolve `writer_selection` using `subagent-dispatch.md#concrete-writer-selection`
+before dispatch. The Orchestrator validates all four mechanical evidence refs;
+Architect proposals do not authorize selection. Carry the identical selection
+through the task packet and inline CodeWriter context; packet context is
+authoritative and conflicts block. Old packets remain valid with intelligent
+compatibility semantics. New Claude and Codex dispatch defaults to intelligent-writer;
+with framework definitions installed, missing named definitions are a deployment
+mismatch, never silent generic fallback; with none installed (a plugin install), the
+main agent builds hands-on and records that reason.
+Claude uses the same intelligent/mechanical roles with native Opus/Sonnet aliases and explicit deprecated code-writer intelligent compatibility. Eligibility covers BOTH tests and implementation, including approved cases, expected values/oracles, negative cases and assertion/fixture patterns.
+
+When mechanical evidence becomes stale, stop dependent mutations and return all
+actual partial changes, observed evidence, truthful status and blocker fields.
+Intelligent discretion stays within approved behavior and specialist boundaries.
+The Orchestrator classifies failure from evidence, including baseline, hidden
+dependency, environment and permission failures; no automatic capability
+escalation or mandatory Luna-then-Sol chain. Both writers obey the existing
+lane-specific checks/TDD/status guarantees and never independently review.
+
+## Scope and implementation consumption
+
+Workers and verifiers consume the unchanged source-bound reduced-testing scope,
+CheckSpec rationale/exclusions, omissions and stop rule. Carry the canonical
+assessment alongside the decision in materialized packets. For packetless
+CodeWriter/BuilderTester handoffs, supply the declared sibling
+`evidence_assessment` when an explicit reduced-testing instruction applies.
+With a packet, consume its required assessment without duplicating it inline;
+if both are supplied, require exact equality and block conflicts. Resolve the
+current canonical assessment from selection/task state and instruction
+applicability from newest authoritative instructions/task constraints, never
+from surviving rows. Reconcile before dependent work without reconstructing
+provenance from scope prose. When an explicit
+reduced-testing instruction applies, preserve its exact `scope_and_evidence_refs`
+instruction row even when planned and through results; reconcile missing/stale
+applicable provenance against newest intent before resumed dependent work. With
+no applicable instruction, the sibling may be omitted; any supplied assessment
+remains canonical unchanged, including empty arrays, without fabricating an
+instruction row. Instruction rows claim no execution or check closure; a planned
+assessment is not verification sufficiency. Reuse adequate coverage;
+add or extend tests only for a distinct important uncovered failure with evidence
+that existing protection is inadequate. Surface controlling-check conflicts;
+selected TDD remains independent. Use the reuse-first ordering owned by the Build
+section in `phases.md`, including complete affected consumers and error paths.
+Material expansion returns to selection and approval; generic coverage advice
+cannot authorize it.
+
+## Build Loop
+
+For light work, implement the carried Discover scope/criteria or the inline plan
+when `plan_mode=inline`, run selected checks and binding project checks, and record the
+changed scope plus results in the inline packet. A local self-check may prepare
+the review; Review then dispatches a newly created independent reviewer for formal
+completion. Do not create worker records solely to satisfy the light lane.
+
+For medium+ tasks with slices, execute source-changing slices sequentially in a shared or unknown workspace. Independently executable source-changing slices may overlap only when runtime evidence proves isolated workspaces. Each slice is the unit of implementation and verification.
+
+Before starting a slice:
+
+1. Load the approved task packet for the slice, including packet_id, observable
+    increment, deliverable type, files, acceptance criteria, unchanged verification
+   decision, selected checks, each command's literal argv/cwd bound by its
+   check_id or its concrete non-command procedure, expected
+   success signal, evidence to record, and deviation/rollback rule.
+2. When harness-capable, confirm the task packet carries `done_contract_ref`,
+   `harness_recipe_ref`, `harness_run_state_ref`, `trace_ledger_ref`,
+   `replay_packet_ref`, and typed `artifact_refs`.
+3. Confirm every `depends_on` prerequisite has final status `VERIFIED` before starting a dependent slice. In a shared or unknown workspace, do not start another source-changing slice while the active source-changing slice is unverified.
+4. For concurrent source-changing slices, confirm runtime evidence proves their
+   workspaces are isolated and their packets are independently executable.
+5. Check constraints from the task journal against the slice files and criteria.
+
+For each step, dispatch the selected lane owner for one task packet at a time
+per worker. In active TDD, the bounded executor records actual RED, production,
+GREEN, REFACTOR, and separate phase invocations in one canonical cycle log.
+Active separated TDD dispatches the selected writer `worker_stage=test_authoring` only when tests need creation or repair, without incoming RED. Successful DONE/DONE_WITH_CONCERNS requires at least one actual permitted test-scope mutation from this stage in both `changed_files` and `files_changed`; otherwise do not claim authoring success or fabricate changes. Reused unchanged tests skip authoring and proceed directly to RED. Refactor `none needed` and truthful nonmutating blocker returns may keep empty changes. Stage-only DONE cannot complete Build or permit Review. Dispatch Builder/Tester `pre_production_red` on the selected authored or reused tests, carrying
+its typed RED and `tdd_cycle_log_ref` to the SAME Code Writer `worker_stage=production` for production, then uses
+Builder/Tester `final_verification` for GREEN. Only after GREEN passes does the
+same Code Writer `worker_stage=refactor` own REFACTOR; actual refactor edits require a second `final_verification` with separate
+REFACTOR invocations of the affected checks. A no-change REFACTOR (`none needed`, no edits after GREEN) may instead record validated unchanged GREEN reuse (`verification_disposition=reuse_green`, zero new invocations, empty REFACTOR command results, REFACTOR `invocation_ref` equal to the passing GREEN's) without another Builder/Tester dispatch. Default `reuse_identity_mode=digest` requires `green.reuse_digest` to equal the caller's independently resolved `current_input_identities[packet_id].reuse_digest`, both computed with the canonical recipe in assistant-tdd `contracts/output.yaml` (`green.reuse_digest`); opt-in `detailed` mode instead requires `green.relevant_input_identity` and `verification_reuse_authority`. Failed GREEN is never reused; a missing or unknown current digest requires executed REFACTOR verification. A GREEN-only return is partial with REFACTOR pending, not
+final Build evidence. Inactive TDD runs the selected checks without adding a
+RED step. Direct main execution follows the same selected checks and phase order. Never edit production
+before observed meaningful RED when that packet applies TDD, refactor before
+passing GREEN, or invent unstarted phase evidence.
+
+For `separated_workers`, retain each worker's actual `changed_files` in its
+dispatch result, including designated generated outputs/evidence logs and any prohibited authored mutations even when that worker later returns a failure. Builder/Tester is execution-only: no authored source, tests, fixtures, snapshots, helpers or test/build configuration. Route all fixes to the selected writer. Report prohibited mutations as DEVIATED (other due failures retain precedence), never suppress or silently restore them. Prose and Bash access do not enforce OS-level prevention. Union the actual Builder/Tester and
+Code Writer file mutations into final workflow `changed_files` and the Review
+scope, while keeping each mutation attributed to its producing worker. Omit
+entries only when the work did not change a file; never invent or reassign a
+worker's changes.
+
+If implementation or verification fails and the cause is unclear, return to
+`assistant-debugging` before another patch attempt. If the next fix is clear,
+route verification through the selected build_execution_lane: the bounded
+executor retries and verifies its focused loop; inactive-TDD separated workers
+dispatch Code Writer then Builder/Tester; direct fallback performs the same
+selected-lane responsibilities. For active separated-worker TDD, the selected writer authors or repairs tests in test_authoring before Builder/Tester owns the
+pre_production_red execution stage, the SAME Code Writer worker_stage=production consumes its unchanged typed RED before
+production edits, then Builder/Tester owns final_verification for GREEN. After
+that current GREEN passes, the same Code Writer handles REFACTOR and Builder/
+Tester runs final_verification again for executed REFACTOR verification; a no-change REFACTOR may record validated unchanged GREEN reuse, as defined above, without another Builder/Tester final_verification dispatch.
+
+For every Code Writer return, preserve actual changed implementation or test
+files even when a later `NEEDS_CONTEXT`, `BLOCKED`, `DEVIATED`, or
+`FAILED_VERIFICATION` status ends the attempt. Accumulate the worker's actual
+changes across retries, keep Builder/Tester ownership separate, and omit file
+entries only when that worker changed no file.
+
+### Ordinary Build repair controller
+
+Before repair, compare the failing expectation with accepted behavior and record
+the evidence in the existing failure/progress record: product regression;
+outdated expectation after accepted change; implementation-coupled/duplicate
+assertion; baseline/environment failure; or unresolved cause (including interacting
+causes). Fix real regressions within scope. For brittle/obsolete expectations,
+propose a scoped test correction retaining unique important protection or a
+source-backed obsolete-expectation rationale. Never change production to satisfy
+incidental assertions. Unknown causes go through debugging; baseline failures
+retain their blocking relevance without automatically absorbing or ignoring repair.
+Removal/quarantine needs the existing selection/authorization route. Never weaken
+assertions, suppress errors, increase timeouts or add retries just to get green.
+
+For repeated work, use one task-level ProgressState in the existing journal or
+carried context under [the shared policy](operating-guidance.md);
+persisted/executable progress admission follows [the wire boundary](wire-boundary.md).
+Record the completed correction plus its due/executable verification/review as
+one semantic checkpoint in the journal before next-work blockers, under the
+[common task-level stagnation guard](operating-guidance.md). Retain
+legacy repair counters as historical observations only; missing history is an
+explicit evidence gap. Action-bound material unblock uses the same retained
+count and history, consumes once only after all dispatch gates, and provides no
+new window. Same RUNNING stages retain their action admission. Optional frozen
+coordinator membership joins one admission across independently isolated packets;
+all ordinary dispatch gates remain. The lead closes one complete terminal member-cycle
+barrier, retaining partial results without checkpoints; failed cycles need not
+finish packet verification. See the shared policy for scope/barrier bindings and
+replay protection. Explicit user,
+resource and host bounds remain controlling with accurate exit reasons.
+
+After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review. Do not add an unselected full suite. Integrated selected and binding checks remain due for one or multiple packets before fresh independent Review; packet-local evidence cannot waive them. Single-slice validation still covers the selected integration claim. Per-slice verification does not satisfy a distinct selected integration check.
+
+After each implementation step, apply the relevant SOLID check from
+`references/prompts/solid-principles.md` and fix material violations before
+moving on.
+
+## Conditional TDD Boundary
+
+The canonical `verification_decision.tdd_choice.mode` records the task-wide TDD
+decision independently from verification scope and method. Each packet derives
+`tdd_applies` from the intersection of its due `selected_check_ids` and
+`tdd_choice.applicable_check_ids`. Task type alone never activates TDD. For
+unknown-cause bugfixes, complete debugging first; enter RED only for applicable
+selected checks and when a meaningful assertion can fail for the intended reason.
+
+When TDD is active, establish meaningful RED before production; only packets
+with `tdd_applies=true` require it, otherwise follow the selected checks
+without adding a RED step. Other packets still run their due selected checks
+without manufacturing RED. When task-wide TDD is false, no packet applies TDD.
+
+For an active workflow TDD packet, the selected inline or separated RED owner
+records the observed authorizing invocation in the canonical assistant-tdd
+`cycle_log` and retains a `tdd_cycle_log_ref` that resolves to that in-progress
+entry before Code Writer makes any production edit. The entry must bind the
+sole selected/applicable check ID, exact CheckSpec argv and cwd, test file and
+name, current failed result, and the matching `meaningful_failure` oracle. A
+planned tuple or later passing result cannot substitute for the observed RED;
+the cycle may remain in progress without GREEN or REFACTOR at this gate. Keep
+prior cycle history and every actual invocation. Before Review and workflow
+completion, resolve the same reference to the full canonical completed cycle
+log and validate its GREEN, REFACTOR, and current selected-check evidence.
+
+When the task packet carries an Architecture Decision Pack, carry its typed
+`architecture_test_obligations` into the selected Build owner handoff. The
+selected owner returns `architecture_obligation_coverage` with each stable
+`obligation_id` exactly once; unknown or duplicate ids fail the Build evidence
+gate rather than being inferred from a passing wrapper test.
+
+- `bounded_executor`: when TDD is active, the bounded executor adds or extends
+  one assertion, records the observed intended failure and actual production
+  file, verifies GREEN, then makes refactor edits only after GREEN passes and
+  records executed REFACTOR invocations or validated unchanged GREEN reuse; with false TDD it runs only the
+  selected verification plan.
+- `separated_workers`: when TDD is active, the selected writer first owns test_authoring for tests only without incoming RED; Builder/Tester returns one typed
+  authorizing RED and its current log reference in `pre_production_red`, the SAME Code
+  Writer owns production and records `green.production_file`, then Builder/
+  Tester `final_verification` records actual GREEN invocations. GREEN may return
+  stage-only DONE with aggregate partial and pending REFACTOR rows; after it
+  passes, the same Code Writer owns actual refactor changes or `none needed`,
+  and Builder/Tester records executed REFACTOR verification; validated unchanged
+  GREEN reuse (zero new invocations) may be recorded without another Builder/Tester
+  dispatch under the digest/detailed reuse rule above. Preserve actual history; no
+  phase may be inferred. Inactive TDD stays Code Writer then Builder/Tester.
+  Only the complete current cycle closes Build or Review. Reused checks do not force new tests or authoring stages. Changes to test/target/argv/cwd/oracle invalidate authorizing RED: preserve old history and observe current RED before dependent production. Refactor requires current GREEN and its canonical cycle ref.
+
+For bugfixes, RED traces to the original reproduction/debugging evidence. A
+missing or wrong-reason RED blocks production edits in either lane.
+
+## Code Writer Unexpected Blockers
+
+If Code Writer returns `NEEDS_CONTEXT`, `BLOCKED`, or `DEVIATED` because of a
+legacy code bug, broken baseline, hidden dependency, missing contract, stale
+plan, scope conflict, tool/environment issue, permission/policy issue, missing
+RED evidence, or another unexpected blocker, do not ask Code Writer to improvise
+through it blindly.
+
+Use `references/workflow-controller.md` to decide whether the blocker should
+move the task forward after a local fix, step back to Discover/Decompose/Plan,
+or replan before another implementation attempt.
+
+Require the return to include:
+
+- `blocker_type`: `legacy_code_bug`, `broken_baseline`, `hidden_dependency`,
+  `missing_contract`, `stale_plan`, `scope_conflict`, `tool_environment`,
+  `permission_policy`, `tdd_red_missing`, or `other`
+- `blocker_evidence`: file paths, missing contract fields, baseline failures,
+  tool output summaries, scope conflict details, or task-packet mismatches
+
+Recovery routing:
+
+- `legacy_code_bug` or `broken_baseline` -> dispatch debugging before another
+  implementation attempt
+- `hidden_dependency` -> dispatch Explorer or refresh Code Mapper context
+- `missing_contract` or `stale_plan` -> dispatch Architect or return to Plan
+- `scope_conflict` -> record a plan deviation and seek reapproval when scope,
+  files, behavior, risk, verification, or acceptance criteria change
+- `tool_environment` -> route to Builder/Tester or environment recovery
+- `permission_policy` -> request permission or return BLOCKED
+- `tdd_red_missing` -> obtain valid RED evidence from the selected lane owner
+- `other` -> create a conservative recovery route with evidence
+
+Recovery route labels are: debugging, explorer, architect, candidate_search,
+replan, restart, user_clarification, environment_fix, and permission_request.
+When recovery requires pivot, replan, candidate search, or restart, use
+`references/harness-runtime-artifacts.md` for the pivot/restart artifact update.
+
+## Per-Slice Verification
+
+Per-slice verification is a Build-phase gate. It does not replace the full
+Review phase after Build completes.
+
+After implementation for a slice is done, verify the slice against its
+Decompose criteria before moving on:
+
+1. In `bounded_executor`, the executor executes each due CheckSpec's
+   `command.argv` in its explicit `command.cwd` or follows its concrete
+   non-command procedure, and reuses a completed passing verification only after comparing
+   exact argv and cwd, complete passing result/log, relevant
+   source/test/config/dependency state, toolchain and relevant non-secret
+   environment, and covered acceptance obligations. When executing argv, item 0
+   is the executable and each remaining item is one literal argument; never
+   reconstruct a shell command. Then run relevant focused checks. Record the
+   original run and current comparison in the existing validation evidence, with
+   the decision to reuse; do not claim a newly executed verification. Dispatch
+   Builder/Tester only when `build_execution_lane=separated_workers`; direct
+   fallback performs the same selected-lane verification responsibility.
+2. Check each acceptance criterion from the canonical packet collection independently; mark
+   pass/fail with command, result, or inspection evidence.
+3. Record verification evidence on the same canonical packet execution record; the journal displays those refs,
+   including RED status when TDD was active, implementation status,
+   command/result, criteria checked, self-check result, and final status.
+4. For harness-capable work, update Harness Run State, append Trace Ledger
+   verification/artifact refs, refresh Replay Packet validation_state plus
+   exact_next_action, and update Artifact Reference Ledger entries for
+   changed_files, verification_evidence, pivot_restart_decision, and
+   plan_deviation refs when applicable.
+5. Run a small self-check/local sanity check: compare changed files and behavior
+   against the task packet, constraints, and deviation rule; record the result in
+   the ledger.
+6. If any criterion, command, runtime artifact, or self-check fails, fix before
+   marking the slice `VERIFIED` or starting a dependent slice.
+7. Mark the slice `VERIFIED` only after all criteria pass and evidence is
+   recorded.
+
+Unknown identity, freshness, or coverage requires rerun. Rerun when argv or cwd
+changes; relevant production, test, config, dependency, toolchain, or
+environment input changes; the prior run failed, was partial, or was skipped;
+the user explicitly requests a fresh run; mutable external state is involved;
+new integration coverage is required; or source changes after a fix. A supported
+unrelated-doc change may reuse evidence only with recorded input-boundary
+evidence showing that the change is outside the verification inputs. In a shared
+or unknown workspace, start another source-changing slice only after the active
+source-changing slice is fully verified; start a dependent slice only after all
+its `depends_on` prerequisites are verified.
+
+After all slices are verified and concurrent outputs are integrated, run the
+selected checks and binding project checks over the completed scope before
+fresh Review; do not add an unselected full suite. Integrated selected and binding checks remain due for one or multiple packets before fresh independent Review; packet-local evidence cannot waive them.  per-slice evidence does not satisfy a distinct selected integration
+check.
+If implementation reveals a plan problem, print `>> PLAN DEVIATION DETECTED`,
+record `pivot_restart_decision.reapproval_required=true` when scope/files/
+behavior/risk/verification/acceptance changes, and wait for approval before
+continuing the changed path.
+
+## Canonical packet admission
+
+Use the installed scripts/task-packet-admission.py at dispatch, resume, verification and completion with independently resolved authority described in plan-template.md. Resolve one packet_id in implementation_steps; stored references materialize the full unchanged decision and current assessment. Record coordinator state/evidence on that same packet execution; the journal is a derived display. Unknown/stale identity, projection mutation, incomplete evidence or non-VERIFIED prerequisites block. Relevant changes invalidate affected evidence and result-consuming dependents; preserve spent recovery counters/history. Native attestation remains caller-owned and unavailable telemetry cannot be invented.

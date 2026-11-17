@@ -95,15 +95,15 @@ status. Classify failures from evidence; no mandatory Luna-then-Sol cascade.
 Codex has eleven normal roles and twelve transition TOMLs, including standalone
 deprecated `code-writer` (Sol/high intelligent compatibility). New normal dispatches
 use only the two new names. An explicit legacy request may use `code-writer`.
-A missing new Claude or Codex definition is a deployment mismatch: report it and stop;
-never silently substitute a generic worker or nearest coding agent. A separately
+With framework definitions installed, a missing new Claude or Codex definition is a
+deployment mismatch: report it and stop; never silently substitute a generic worker
+or nearest coding agent. With none installed (a plugin install), Build runs hands-on;
+see [the agents-not-installed fallback](subagent-roles.md#fallback-agents-not-installed). A separately
 authorized bootstrap must record actual runtime role/model/effort and cannot
 claim native activation. Keep compatibility for the transition release; removal
-requires a later retirement decision and ownership-safe installed cleanup.
+requires a later retirement decision.
 
-Claude has the same eleven normal roles and twelve transition definitions: intelligent-writer uses its native Opus alias and fully specified mechanical-writer uses Sonnet. Its standalone deprecated code-writer preserves intelligent compatibility for explicit legacy requests; do not silently alias or redirect. Keep user configuration untouched. Gemini has no custom
-framework definitions: use its supported native/default route and existing tier
-guidance, without inventing names or model preferences. The two-writer choice
+Claude has the same eleven normal roles and twelve transition definitions: intelligent-writer uses its native Opus alias and fully specified mechanical-writer uses Sonnet. Its standalone deprecated code-writer preserves intelligent compatibility for explicit legacy requests; do not silently alias or redirect. Keep user configuration untouched. The two-writer choice
 adds no delegation requirement to otherwise direct lightweight work.
 
 

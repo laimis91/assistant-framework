@@ -4,7 +4,7 @@ Reference for dispatching subagents through the active runtime's agent mechanism
 
 ## Model selection guidance
 
-Use **capability tiers**, not provider-specific model names, when deciding which model a role should use. Different runtimes name models differently, and some (for example Gemini CLI today) may not support custom per-role model files yet.
+Use **capability tiers**, not provider-specific model names, when deciding which model a role should use. Different runtimes name models differently, and some may not support custom per-role model files.
 
 | Tier | Use for | Selection rule |
 |---|---|---|
@@ -16,7 +16,6 @@ Provider examples are only examples, not requirements:
 
 - Claude: fast ≈ Haiku, balanced ≈ Sonnet, strongest ≈ Opus.
 - Codex/OpenAI: fast ≈ the configured lightweight coding model, balanced ≈ the default coding model, strongest ≈ the highest-reasoning coding model available in the environment.
-- Gemini: fast ≈ Flash-class, balanced ≈ Pro-class/default coding model, strongest ≈ highest-reasoning Pro/Ultra-class model available.
 
 If the runtime does not expose model overrides for subagents, keep the role separation and tool-access constraints; use the default model and include the tier as guidance in the dispatch prompt.
 
@@ -111,19 +110,18 @@ standards at every ordinal. Use the shared semantic task guard for correction.
 
 ## Fallback: agents not installed
 
-For missing new Claude or Codex writer definitions, report a deployment mismatch and stop; never silently use a nearest generic worker. Explicit legacy `code-writer` requests and separately authorized bootstrap execution record their real runtime identity. For other supported provider fallbacks, use the nearest available built-in subagent type and choose by capability tier rather than by provider-specific model name:
+When no framework agent definitions are installed, the normal case for a plugin install, the main agent builds hands-on and records `framework agents not installed` as the reason; optional Build delegation never blocks on it. When framework definitions are installed, a partial install stays an error. For missing new Claude or Codex writer definitions, report a deployment mismatch and stop; never silently use a nearest generic worker. Explicit legacy `code-writer` requests and separately authorized bootstrap execution record their real runtime identity. For other supported provider fallbacks, use the nearest available built-in subagent type and choose by capability tier rather than by provider-specific model name:
 
 | Role | Supported fallback role | Recommended tier |
 |---|---|---|
 | Code Mapper | `Explore` or nearest read-only explorer | Fast / economical |
 | Explorer | `Explore` or nearest read-only explorer | Balanced / standard |
 | Architect | `general-purpose` or nearest planning agent | Strongest / deep reasoning |
-| Code Writer (Gemini supported fallback only) | `general-purpose` or nearest coding agent | Strongest / deep reasoning |
 | Builder/Tester | `general-purpose` or nearest coding agent with shell/test access | Balanced / standard |
 | Code Reviewer | `general-purpose` or nearest read-only reviewer | Strongest / deep reasoning |
 | Reviewer compatibility | `general-purpose` or nearest read-only reviewer | Strongest / deep reasoning |
 | QA Evaluator | `general-purpose` or nearest read-only evaluator | Strongest / deep reasoning |
 
-When using fallback types, include the full role instructions in the dispatch prompt (the agent won't have a built-in system prompt for the role). Prefer the matching role definition for the active runtime under the framework's `agents/` directory when available; otherwise adapt the closest provider-neutral role prompt.
+When using fallback types, include the full role instructions in the dispatch prompt (the agent won't have a built-in system prompt for the role). Use the provider-neutral role prompt shipped with the owning skill: assistant-review's `references/roles/` for Code Reviewer, Reviewer compatibility and QA Evaluator; assistant-research's `references/roles/` for the research lens and peer roles; this skill's `references/roles/` for Code Mapper, Explorer, Architect, Builder/Tester and the writers. A user's own subagent setup may take the same role prompt. Formal review, QA and research-lens isolation still need a newly created fresh agent.
 
 Writer selection is owned by the Orchestrator; load `subagent-dispatch.md#concrete-writer-selection` for the four actual-evidence conditions, intelligent default, provider mapping, stale evidence stop, and compatibility rules. CodeWriter remains a logical role; concrete names do not weaken its verification, TDD, status, partial-work or independent-review contract.

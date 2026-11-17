@@ -98,13 +98,19 @@ p0p4_cleanup() {
 
 trap p0p4_cleanup EXIT
 
+# Copies the plugin's assistant-workflow skill into a Codex skills folder, resolving
+# the Codex home as Codex does: CODEX_HOME when set and nonempty, otherwise
+# <install_home>/.codex. The harness unsets CODEX_HOME, so fixtures stay in install_home.
 p0p4_install_codex_fixture() {
     local install_home="$1"
     local install_out="$2"
     local install_err="$3"
-    shift 3
+    local codex_home="${CODEX_HOME:-$install_home/.codex}"
 
-    HOME="$install_home" bash "$FRAMEWORK_DIR/install.sh" --agent codex --skill assistant-workflow "$@" >"$install_out" 2>"$install_err"
+    {
+        mkdir -p "$codex_home/skills" \
+            && cp -R "$FRAMEWORK_DIR/plugins/assistant-framework/skills/assistant-workflow" "$codex_home/skills/"
+    } >"$install_out" 2>"$install_err"
 }
 
 test_start() {

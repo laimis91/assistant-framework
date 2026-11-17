@@ -6,7 +6,7 @@ Start repository work at [docs/README.md](docs/README.md), then load the task gu
 
 ## Repository
 
-Assistant Framework is a framework repository, not an application; it installs skills, agents, rules, and tools for Claude Code, Codex, and Gemini CLI.
+Assistant Framework is a framework repository, not an application; it ships its skills as a plugin marketplace for Claude Code and Codex.
 
 Root `skills/assistant-*` directories are the editable source of truth. See `README.md` for architecture. Subagent roles live in `agents/claude/*.md` and `agents/codex/*.toml`.
 
@@ -25,18 +25,15 @@ Root `skills/assistant-*` directories are the editable source of truth. See `REA
 ## Commands
 
 ```bash
-# Install with native skill routing
-./install.sh --agent codex
-./install.sh --agent codex --skill assistant-workflow
-./install.sh --agent codex --dry-run
-
 # Skills
 tools/skills/validate-skills.sh
 tools/skills/sync-operating-guidance.sh --check   # --apply after editing tools/progress/*.md
+tools/skills/sync-role-prompts.sh --check         # --apply after editing agents/
+python3 tools/skills/sync-plugin.py --check       # --apply after any skills/ change
 python3 tools/skills/check-skill-containment.py
 
 # Contract suites
 ./tests/test-p0-p4-contracts.sh
 ```
 
-Codex execution policies live in `codex-rules/`; do not weaken permission prompts or destructive-operation safeguards. C# code targets modern .NET and follows the existing Clean Architecture style. Tests use descriptive names and Arrange-Act-Assert where applicable.
+Do not weaken permission prompts or destructive-operation safeguards. C# code targets modern .NET and follows the existing Clean Architecture style. Tests use descriptive names and Arrange-Act-Assert where applicable.

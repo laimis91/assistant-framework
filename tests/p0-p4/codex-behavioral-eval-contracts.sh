@@ -444,8 +444,8 @@ capture="$fixture_root/capture"
 mkdir -p "$baseline" "$candidate" "$capture"
 cp "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md" "$baseline/SKILL.md"
 cp "$FRAMEWORK_DIR/docs/evals/variants/workflow-kernel-v1/SKILL.md" "$candidate/SKILL.md"
-export FAKE_BASELINE_SKILL_SHA256="$(sed -e 's|{agent_state_dir}|.codex|g' "$baseline/SKILL.md" | shasum -a 256 | awk '{print $1}')"
-export FAKE_CANDIDATE_SKILL_SHA256="$(sed -e 's|{agent_state_dir}|.codex|g' "$candidate/SKILL.md" | shasum -a 256 | awk '{print $1}')"
+export FAKE_BASELINE_SKILL_SHA256="$(shasum -a 256 <"$baseline/SKILL.md" | awk '{print $1}')"
+export FAKE_CANDIDATE_SKILL_SHA256="$(shasum -a 256 <"$candidate/SKILL.md" | awk '{print $1}')"
 mkdir -p "$baseline/evals" "$candidate/evals"
 printf '%s\n' '{"secret":"baseline grader anchor"}' >"$baseline/evals/cases.json"
 printf '%s\n' '{"secret":"candidate grader anchor"}' >"$candidate/evals/cases.json"
@@ -668,9 +668,9 @@ fi
 if [[ -f "$workspace/.agents/skills/assistant-workflow/contracts/index.yaml" ]] \
     && [[ -f "$workspace/.agents/skills/assistant-workflow/references/phases.md" ]]; then
     printf '%s\n' 'canonical-skill-surfaces-present' >>"$capture_dir/call-$call_id.fixtures"
-    if ! grep -R -Fq '{agent_state_dir}' "$workspace/.agents/skills/assistant-workflow" \
-        && grep -R -Fq '.codex/task.md' "$workspace/.agents/skills/assistant-workflow"; then
-        printf '%s\n' 'codex-state-path-substituted' >>"$capture_dir/call-$call_id.fixtures"
+    if grep -R -Fq '{agent_state_dir}/task.md' "$workspace/.agents/skills/assistant-workflow" \
+        && grep -Fq '## Agent state directory' "$workspace/.agents/skills/assistant-workflow/references/operating-guidance.md"; then
+        printf '%s\n' 'codex-state-path-token-defined' >>"$capture_dir/call-$call_id.fixtures"
     fi
 fi
 if [[ ! -e "$workspace/.agents/skills/assistant-workflow/evals" ]] \
@@ -2329,7 +2329,7 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
     && ! grep -Fq 'Machine Expectations' "$capture/call-0.prompt" \
     && grep -Fxq 'docs-usage-present' "$capture/call-0.fixtures" \
     && [[ "$(grep -lFx 'canonical-skill-surfaces-present' "$capture"/*.fixtures | wc -l | tr -d ' ')" -eq 2 ]] \
-    && [[ "$(grep -lFx 'codex-state-path-substituted' "$capture"/*.fixtures | wc -l | tr -d ' ')" -eq 2 ]] \
+    && [[ "$(grep -lFx 'codex-state-path-token-defined' "$capture"/*.fixtures | wc -l | tr -d ' ')" -eq 2 ]] \
     && [[ "$(grep -lFx 'skill-evals-hidden' "$capture"/*.fixtures | wc -l | tr -d ' ')" -eq 2 ]] \
     && jq -e '
       .mode == "execute"
@@ -4738,8 +4738,8 @@ run_direct_viewing_event_fixture() {
 
     mkdir -p "$workspace/.agents/skills/assistant-workflow" "$direct_capture"
     cp -R "$FRAMEWORK_DIR/docs/evals/fixtures/viewing-route-technical-preparation"/. "$workspace/"
-    sed -e 's|{agent_state_dir}|.codex|g' "$candidate/SKILL.md" \
-        >"$workspace/.agents/skills/assistant-workflow/SKILL.md"
+    cp "$candidate/SKILL.md" \
+        "$workspace/.agents/skills/assistant-workflow/SKILL.md"
     FAKE_CODEX_CAPTURE_DIR="$direct_capture" FAKE_VIEWING_EVENT_MODE="$mode" \
         "$fake_codex" exec --json --ignore-user-config --ephemeral \
         -C "$workspace" --output-last-message "$last_message" -m test-model \
