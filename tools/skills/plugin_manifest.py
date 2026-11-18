@@ -1,13 +1,16 @@
 """Shared plugin manifest writer for the marketplace plugin and eval plugins.
 
 Claude Code reads `.claude-plugin/plugin.json`; Codex reads the portable root
-`plugin.json`. Both carry the same name, version and description.
+`plugin.json`. Both carry the same name, version and description. Codex treats a
+root `plugin.json` as a manifest only when it declares the Agent Plugins
+`$schema`; without it Codex reports the plugin as missing or invalid.
 """
 import json
 from pathlib import Path
 
 CLAUDE_MANIFEST = Path(".claude-plugin") / "plugin.json"
 PORTABLE_MANIFEST = Path("plugin.json")
+AGENT_PLUGIN_SCHEMA = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
 
 
 def manifest_payloads(name, version, description=None, extra=None):
@@ -17,7 +20,7 @@ def manifest_payloads(name, version, description=None, extra=None):
         payload["description"] = description
     if extra:
         payload.update(extra)
-    return {CLAUDE_MANIFEST: dict(payload), PORTABLE_MANIFEST: dict(payload)}
+    return {CLAUDE_MANIFEST: dict(payload), PORTABLE_MANIFEST: {"$schema": AGENT_PLUGIN_SCHEMA, **payload}}
 
 
 def render(payload):

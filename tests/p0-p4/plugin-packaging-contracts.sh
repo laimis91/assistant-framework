@@ -18,6 +18,30 @@ else
     fail "plugin drifted from skills/; run tools/skills/sync-plugin.py --apply"
 fi
 
+test_start "root plugin.json is an Agent Plugins manifest Codex accepts (R-MP-5)"
+# Codex reads a root plugin.json only when $schema names the Agent Plugins 1.0.0 schema
+# (openai/codex codex-rs/utils/plugins/src/plugin_namespace.rs, core-plugins/src/agent_plugin_manifest.rs); without it the add fails as an invalid manifest.
+if python3 - "$plugin_dir/plugin.json" <<'PY'
+import json, re, sys
+data = json.load(open(sys.argv[1]))
+known = {"$schema", "name", "version", "description", "author", "homepage", "repository", "license", "keywords", "extensions"}
+problems = []
+if data.get("$schema") != "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json":
+    problems.append("missing or wrong $schema")
+if not re.fullmatch(r"[a-z0-9.-]+", data.get("name", "")):
+    problems.append("name is not lowercase letters, numbers, dots or hyphens")
+if set(data) - known:
+    problems.append(f"unknown fields {sorted(set(data) - known)}")
+if any(value is None for value in data.values()):
+    problems.append("a field is null")
+sys.exit(f"{'; '.join(problems)}" if problems else 0)
+PY
+then
+    pass
+else
+    fail "plugins/assistant-framework/plugin.json would be rejected by Codex"
+fi
+
 test_start "plugin sync check fails closed on drift, a skill with no source, a stale version and a changed marketplace"
 plugin_fixture="$(mktemp -d)"
 p0p4_register_cleanup "$plugin_fixture"
