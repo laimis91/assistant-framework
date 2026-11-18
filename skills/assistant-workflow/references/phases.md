@@ -231,8 +231,9 @@ Selected research lenses/peer retain their isolation. Load
 
 Load only relevant prompt packs: `references/prompts/refactor-safety.md` for
 refactor/parity risks, `migration.md` for DB/migration work, `test-strategy.md`
-for selected automated checks, and `solid-principles.md` for applicable design
-questions. Unknown causes use assistant-debugging first. Active packet TDD uses
+for selected automated checks. Every plan that changes code loads
+`references/prompts/solid-principles.md` and fills its extension points table.
+Unknown causes use assistant-debugging first. Active packet TDD uses
 assistant-tdd (or its available fallback) without changing task-wide `tdd_mode`.
 
 ### Approval gate
@@ -309,11 +310,19 @@ Before production code, tests, fixtures, config, scripts or helpers, inspect the
 affected flow and callers. Choose the first sufficient option: omit capability
 outside accepted scope; reuse a suitable project component/helper; use a platform
 or standard-library capability; use a suitable installed dependency; then write
-the smallest readable code for the remaining behavior. Sufficiency includes
+the smallest readable code for the remaining behavior that meets
+`references/prompts/solid-principles.md`. Sufficiency includes
 compatibility, necessary error handling, trust validation, accessibility where
 relevant, and affected consumers. Do not scan the whole repository by default,
 add unsafe dependencies, compress unrelated jobs, or break architecture to shrink
 a diff. New abstractions/options need a current purpose; one line is no target.
+
+Before writing or changing code, load `references/prompts/solid-principles.md`.
+Before the first edit to existing code, check its refactor-before-extending
+triggers and the plan's extension points table. When a trigger applies, refactor
+the concept being extended first, without behaviour change, then add the new
+variant. A refactor that changes saved data, a public interface or many files
+needs it in the approved plan.
 
 Carry source-bound reduced-testing scope and the unchanged decision to the Build
 owner and verifier alongside the assessment. When an explicit reduced-testing

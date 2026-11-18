@@ -1,275 +1,247 @@
-# SOLID Principles — Coding Checklist
+# Design Principles — Writing Guide
 
-Mandatory design quality gate for all task sizes. Referenced during Plan (to fill SOLID design notes) and enforced during Build (graduated checklist). Scale enforcement by task size.
+Apply this guide while planning and writing code at every task size. It is the
+framework's default design standard: object-oriented, SOLID and extendable code.
+Explicit project or user instructions take precedence where they differ.
 
-## Graduated Enforcement
+The guide separates two decisions:
 
-| Size | Principles | How |
-|---|---|---|
-| **Small** | SRP | 1 question before completing the step |
-| **Medium** | SRP + OCP + DIP | 3 questions before completing each step |
-| **Large/Mega** | All 5 (SRP, OCP, LSP, ISP, DIP) | Full checklist before completing each step |
+| Decision | Rule |
+|---|---|
+| **Structure** | Always SOLID and extendable. Not optional and not graded by task size. |
+| **Pattern machinery** | Factories, registries, selection config and pattern combinations are added when a second variant exists or is requested. |
 
-## The Principles
+## Structure: always
 
-### S — Single Responsibility Principle (ALL sizes)
+1. **One responsibility per class.** List the reasons the class or method would
+   change. More than one reason means separate classes. A name that needs "And",
+   "Manager" or "Helper" to describe it usually hides several responsibilities.
+2. **Roles behind interfaces.** A collaborator that holds behaviour, and every
+   boundary to I/O, time, randomness, network, storage or engine APIs, is used
+   through an interface. Callers depend on the abstraction and receive it
+   through the constructor.
+3. **No behaviour chosen by type code.** A value that identifies a kind or mode,
+   such as an enum, string code, bool flag or type check, never selects which
+   behaviour runs. Each kind is its own class implementing a shared interface,
+   or data when kinds differ only in values (see
+   [Data or behaviour](#data-or-behaviour)). Ordinary conditions on state, such
+   as `if (order.IsPaid)`, are not type codes. A registry or factory at the
+   composition boundary is the one place a key picks an implementation.
+4. **Substitutable implementations.** Every implementation keeps the caller's
+   expectations: no narrower inputs, weaker results, surprise exceptions or
+   caller type checks.
+5. **Small interfaces.** No implementation throws `NotImplementedException` or
+   leaves a member as a no-op because the interface is too broad. Split the
+   interface by client need.
 
-**Rule:** A class should have only one reason to change.
+Structure does not require:
 
-**Concrete question:** "List the reasons this class/method would need to change. If more than one, separate them into distinct classes."
+- interfaces for data: records, value objects and DTOs hold no behaviour to swap;
+- a class or interface without a role you can name; pass-through wrappers are
+  not structure;
+- converting an enum that is a plain list of values with no behaviour attached,
+  or an external API's enum such as an engine key code.
 
-**Anti-pattern** — Journal with persistence baked in:
+## Pattern machinery: when a second variant exists or is requested
+
+A single variant gets its interface and one implementation, and nothing more.
+Do not add a factory, registry, selection setting, format or kind enum, or empty
+classes for variants nobody has requested. When the second variant arrives, add
+its class and the selection machinery in the same change.
+
+## Choose the pattern
+
+| About to write | Write instead |
+|---|---|
+| Phase or mode checks repeated across commands | State: one class per phase, each deciding which commands it accepts |
+| `if (item.IsX)` branches in several places | One class per kind behind a shared interface |
+| A switch turning result codes into messages | Result objects that carry their own message and data |
+| A switch choosing an algorithm or output format | Strategy behind an interface; a registry or factory picks one once a second exists |
+| One method per combination of criteria | Specification, with combinators for And/Or/Not |
+| Extra behaviour wrapped around existing behaviour | Decorator |
+| Construction that varies by kind or needs many optional parts | Factory or Builder |
+| Checks for "nothing here" before every call | Null Object |
+| Objects polling another object for changes | Observer or events |
+| Incompatible interface from another component | Adapter |
+| Tree of parts treated like a single part | Composite |
+
+## Data or behaviour
+
+Ask what differs between the kinds:
+
+- **Only values** such as health, speed, cost or width: one class, with the
+  values in data. Use a record, a configuration file or a data asset.
+- **Behaviour** such as what happens on arrival, which rules apply, or how
+  output is produced: one class per kind behind an interface.
+
+When a value starts driving a branch (`IsBoss`, `CanFly`), the kinds now differ
+in behaviour. Move that behaviour into the kind's class.
+
+## Extension points table
+
+Every plan that changes code records each concept that has, or will have,
+several variants. The table records machinery decisions; structure is not a
+decision.
+
+| What varies | Variants now or requested | Machinery | Revisit when |
+|---|---|---|---|
+| Export format | CSV only | Interface and one class; no factory | A second format is requested: add its class and a format registry |
+| Enemy kind | Regular, mini boss, boss | Class per kind; values in data assets | — |
+
+## Refactor before extending
+
+Before the first edit to existing code, check whether the change does any of:
+
+1. adds a second variant to something that has one;
+2. adds a case to a behaviour switch, a value to a behaviour-selecting enum, or
+   another branch on the same type code;
+3. repeats an existing type-code check in a new place;
+4. needs edits in three or more places to add one new kind;
+5. turns a data value into a branch condition;
+6. adds a bool or mode parameter that changes what a method does;
+7. adds another method for a new combination of criteria;
+8. needs a test double for a concrete dependency;
+9. meets a "Revisit when" condition in a recorded extension points table.
+
+If any applies, refactor first:
+
+- Change the structure without changing behaviour, with the existing checks
+  passing. Then add the new variant as a new class or data asset, in a separate
+  step.
+- Refactor only the concept being extended. Leave unrelated code to its own
+  change.
+- A refactor that changes saved data, a public interface or many files is part
+  of the plan the user approves.
+
+## Writing check
+
+Before finishing each implementation step, confirm:
+
+- [ ] Each new or changed class has one reason to change.
+- [ ] Behaviour collaborators and external boundaries are reached through interfaces.
+- [ ] No value identifying a kind or mode (enum, string code, flag, type check) selects behaviour, outside a registry or factory.
+- [ ] Kinds that differ only in values are data, not classes.
+- [ ] No factory, registry or selection setting exists for a single variant.
+- [ ] Every class and interface has a role you can name.
+- [ ] A new kind can be added without editing existing kinds.
+
+## Examples
+
+Kinds as classes, with values in data:
+
 ```csharp
-public class Journal
+public sealed record EnemyStats(int Health, float Speed);
+
+public interface IEnemyKind
 {
-    private readonly List<string> entries = new();
+    EnemyStats Stats { get; }
+    void OnReachedBase(IRunOutcome outcome);
+}
 
-    public int AddEntry(string text) { /* journal logic */ }
-    public void RemoveEntry(int index) { /* journal logic */ }
+public sealed class RegularEnemy(EnemyStats stats) : IEnemyKind
+{
+    public EnemyStats Stats { get; } = stats;
+    public void OnReachedBase(IRunOutcome outcome) => outcome.LoseLives(1);
+}
 
-    // VIOLATION: persistence is a separate reason to change
-    public void Save(string filename) { File.WriteAllText(filename, ToString()); }
-    public void Load(string filename) { /* ... */ }
-    public void Load(Uri uri) { /* ... */ }
+public sealed class BossEnemy(EnemyStats stats) : IEnemyKind
+{
+    public EnemyStats Stats { get; } = stats;
+    public void OnReachedBase(IRunOutcome outcome) => outcome.LoseRun();
 }
 ```
 
-**Correct** — separate persistence into its own class:
+Phases as states:
+
 ```csharp
-public class Journal
+public abstract class RunPhase
 {
-    private readonly List<string> entries = new();
-    public int AddEntry(string text) { /* ... */ }
-    public void RemoveEntry(int index) { /* ... */ }
+    public virtual CommandResult PlaceTower(Run run, BuildSpot spot) => CommandResult.WrongPhase;
+    public virtual CommandResult StartWave(Run run) => CommandResult.WrongPhase;
 }
 
-public class Persistence
+public sealed class PreparePhase : RunPhase
 {
-    public void SaveToFile(Journal journal, string filename, bool overwrite = false)
+    public override CommandResult PlaceTower(Run run, BuildSpot spot) => run.Build(spot);
+    public override CommandResult StartWave(Run run)
     {
-        if (overwrite || !File.Exists(filename))
-            File.WriteAllText(filename, journal.ToString());
+        run.EnterPhase(new WavePhase());
+        return CommandResult.Ok;
     }
 }
 ```
 
-**Signal:** If a class name needs "And" or "Manager" to describe what it does, it likely violates SRP.
+A result that carries its own message:
 
----
-
-### O — Open/Closed Principle (MEDIUM+)
-
-**Rule:** Open for extension, closed for modification. New behavior should be addable without changing existing code.
-
-**Concrete question:** "If a new variant of this behavior is needed next week, would you modify this class or extend it? If modify — redesign."
-
-**Anti-pattern** — adding filter methods for every new criterion (state space explosion):
 ```csharp
-public class ProductFilter
+public sealed record CommandResult(bool Succeeded, string Message)
 {
-    public IEnumerable<Product> FilterByColor(IEnumerable<Product> products, Color color) { /* ... */ }
-    public IEnumerable<Product> FilterBySize(IEnumerable<Product> products, Size size) { /* ... */ }
-    public IEnumerable<Product> FilterBySizeAndColor(/* ... */) { /* ... */ }
-    // 3 criteria = 7 methods. Every new criterion = modify this class.
+    public static readonly CommandResult Ok = new(true, string.Empty);
+    public static readonly CommandResult WrongPhase = Refused("That can't be done right now.");
+    public static CommandResult Refused(string message) => new(false, message);
 }
 ```
 
-**Correct** — specification pattern allows extension without modification:
+One variant: interface and one class.
+
 ```csharp
-public interface ISpecification<T>
+public interface IExportFormat
 {
-    bool IsSatisfied(T item);
+    string FileExtension { get; }
+    void Write(IReadOnlyList<ExportRow> rows, Stream output);
 }
 
-public interface IFilter<T>
+public sealed class CsvExportFormat : IExportFormat { /* ... */ }
+```
+
+A second variant: add its class, a selection key and a registry in the same change.
+
+```csharp
+using System.Diagnostics.CodeAnalysis;
+
+public interface IExportFormat
 {
-    IEnumerable<T> Filter(IEnumerable<T> items, ISpecification<T> spec);
+    string Name { get; }
+    string FileExtension { get; }
+    void Write(IReadOnlyList<ExportRow> rows, Stream output);
 }
 
-public class ColorSpecification : ISpecification<Product>
+public sealed class ExportFormatRegistry(IEnumerable<IExportFormat> formats)
 {
-    private readonly Color _color;
-    public ColorSpecification(Color color) => _color = color;
-    public bool IsSatisfied(Product p) => p.Color == _color;
-}
+    private readonly Dictionary<string, IExportFormat> byName =
+        formats.ToDictionary(format => format.Name);
 
-// New criteria = new class, no existing code touched
-public class AndSpecification<T> : ISpecification<T>
-{
-    private readonly ISpecification<T> _first, _second;
-    public AndSpecification(ISpecification<T> first, ISpecification<T> second)
-    {
-        _first = first;
-        _second = second;
-    }
-    public bool IsSatisfied(T item) => _first.IsSatisfied(item) && _second.IsSatisfied(item);
+    public bool TryGet(string name, [NotNullWhen(true)] out IExportFormat? format) =>
+        byName.TryGetValue(name, out format);
 }
 ```
 
-**Signal:** If adding a feature requires modifying a switch/case, if-else chain, or existing method body — consider whether the design is closed for modification.
+A Null Object instead of repeated null checks:
 
----
-
-### L — Liskov Substitution Principle (LARGE/MEGA)
-
-**Rule:** Subtypes must be substitutable for their base types without breaking correctness.
-
-**Concrete question:** "If a caller gets a subtype where it expects the base type, does anything break? Do any overrides change the expected behavior?"
-
-**Anti-pattern** — Square overrides Rectangle with side effects:
 ```csharp
-public class Rectangle
+public interface IRunLog { void Record(string message); }
+
+public sealed class NoRunLog : IRunLog
 {
-    public virtual int Width { get; set; }
-    public virtual int Height { get; set; }
-}
-
-public class Square : Rectangle
-{
-    // VIOLATION: setting Width also changes Height — breaks Rectangle contract
-    public override int Width
-    {
-        set { base.Width = base.Height = value; }
-    }
-    public override int Height
-    {
-        set { base.Width = base.Height = value; }
-    }
-}
-
-// This function breaks when passed a Square:
-static int Area(Rectangle r) => r.Width * r.Height;
-// r = new Square(); r.Width = 4; → Area = 16 (not 4 * original height)
-```
-
-**Correct approach:** Don't make Square inherit from Rectangle. Use a common interface or separate types.
-
-**Signal:** If an override changes the invariants or postconditions of the base, LSP is violated. Watch for `new` keyword hiding base members or overrides with unexpected side effects.
-
----
-
-### I — Interface Segregation Principle (LARGE/MEGA)
-
-**Rule:** No client should be forced to depend on methods it doesn't use. Prefer many small interfaces over one fat one.
-
-**Concrete question:** "Does any implementer of this interface throw NotImplementedException for any method? If yes, the interface is too fat."
-
-**Anti-pattern** — one fat interface forces unused implementations:
-```csharp
-public interface IMachine
-{
-    void Print(Document d);
-    void Fax(Document d);
-    void Scan(Document d);
-}
-
-public class OldFashionedPrinter : IMachine
-{
-    public void Print(Document d) { /* works */ }
-    public void Fax(Document d) { throw new NotImplementedException(); }  // VIOLATION
-    public void Scan(Document d) { throw new NotImplementedException(); }  // VIOLATION
+    public static readonly NoRunLog Instance = new();
+    public void Record(string message) { }
 }
 ```
 
-**Correct** — segregated interfaces with composition:
-```csharp
-public interface IPrinter { void Print(Document d); }
-public interface IScanner { void Scan(Document d); }
+## Unity
 
-public class Printer : IPrinter
-{
-    public void Print(Document d) { /* ... */ }
-}
+- Keep game rules in plain C# classes; MonoBehaviours connect them to the scene.
+- Use ScriptableObject assets for kinds that differ only in values, and for
+  kinds whose behaviour is chosen in the editor.
+- `[SerializeReference]` stores polymorphic objects in a field, but renaming or
+  moving the class breaks saved data unless `[MovedFrom]` records the old name.
+- In per-frame code, avoid allocating new objects for each call; reuse state and
+  strategy instances.
 
-// Multi-function device composes capabilities
-public struct MultiFunctionMachine : IPrinter, IScanner
-{
-    private readonly IPrinter _printer;
-    private readonly IScanner _scanner;
+## Optional library examples
 
-    public MultiFunctionMachine(IPrinter printer, IScanner scanner)
-    {
-        _printer = printer;
-        _scanner = scanner;
-    }
-
-    public void Print(Document d) => _printer.Print(d);
-    public void Scan(Document d) => _scanner.Scan(d);
-}
-```
-
-**Signal:** If you see `NotImplementedException` in an interface implementation, the interface needs splitting.
-
----
-
-### D — Dependency Inversion Principle (MEDIUM+)
-
-**Rule:** High-level modules should not depend on low-level modules. Both should depend on abstractions.
-
-**Concrete question:** "Does this high-level module import/reference a concrete low-level class directly? If yes, introduce an abstraction."
-
-**Anti-pattern** — high-level Research depends directly on low-level Relationships storage:
-```csharp
-public class Research
-{
-    public Research(Relationships relationships)
-    {
-        // VIOLATION: directly accessing internal storage of a low-level module
-        var relations = relationships.Relations;
-        foreach (var r in relations
-            .Where(x => x.Item1.Name == "John" && x.Item2 == Relationship.Parent))
-        {
-            WriteLine($"John has a child called {r.Item3.Name}");
-        }
-    }
-}
-```
-
-**Correct** — depend on abstraction, let the low-level module implement it:
-```csharp
-public interface IRelationshipBrowser
-{
-    IEnumerable<Person> FindAllChildrenOf(string name);
-}
-
-public class Relationships : IRelationshipBrowser
-{
-    private List<(Person, Relationship, Person)> relations = new();
-
-    public IEnumerable<Person> FindAllChildrenOf(string name) =>
-        relations.Where(x => x.Item1.Name == name && x.Item2 == Relationship.Parent)
-                 .Select(r => r.Item3);
-}
-
-public class Research
-{
-    public Research(IRelationshipBrowser browser)
-    {
-        foreach (var p in browser.FindAllChildrenOf("John"))
-            WriteLine($"John has a child called {p.Name}");
-    }
-}
-```
-
-**Signal:** Constructor takes a concrete class instead of an interface? That's a DIP smell. Check if the dependency could be swapped for testing or future extension.
-
----
-
-## Quick Reference Card
-
-Use during Build phase — ask these questions for each implementation step:
-
-### Small tasks (SRP only)
-- [ ] **SRP:** List the reasons this class/method changes. More than one? → Separate.
-
-### Medium tasks (SRP + OCP + DIP)
-- [ ] **SRP:** List the reasons this class/method changes. More than one? → Separate.
-- [ ] **OCP:** New variant next week — modify or extend? Modify → Redesign.
-- [ ] **DIP:** High-level referencing concrete low-level? → Introduce abstraction.
-
-### Large/Mega tasks (full SOLID)
-- [ ] **SRP:** List the reasons this class/method changes. More than one? → Separate.
-- [ ] **OCP:** New variant next week — modify or extend? Modify → Redesign.
-- [ ] **LSP:** Subtype substitutable for base without breaking? Override changes invariants? → Fix hierarchy.
-- [ ] **ISP:** Any NotImplementedException in interface impls? → Split interface.
-- [ ] **DIP:** High-level referencing concrete low-level? → Introduce abstraction.
+When a configured pattern library is available, load
+[design-pattern-retrieval.md](../design-pattern-retrieval.md) and use at most a
+few examples for a specific force. Library examples show one pattern in
+isolation; their supporting code, such as an enum that picks a strategy, is not
+the style to copy.

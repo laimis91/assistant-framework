@@ -69,6 +69,26 @@ Skills on your account also sync into Claude Code (v2.1.273 or later). With the 
 
 The skills work without any instruction file. To apply the framework's routing and working rules before a skill loads, paste the block from [docs/instruction-block.md](docs/instruction-block.md) into `~/.claude/CLAUDE.md` or a project's `CLAUDE.md` (Claude Code), or `~/.codex/AGENTS.md` or a project's `AGENTS.md` (Codex). Nothing writes it for you.
 
+### Optional C# design rule
+
+The workflow loads its design guide (`references/prompts/solid-principles.md` in assistant-workflow) whenever it plans or builds code. To apply the same standard when Claude Code edits C# without the workflow, add a personal rule. Claude Code loads a rule with `paths` whenever it reads, writes or edits a matching file; plugins cannot install rules, so nothing writes it for you. Save as `~/.claude/rules/csharp-design.md`:
+
+```markdown
+---
+paths:
+  - "**/*.cs"
+---
+
+# C# design standard
+
+- One responsibility per class. Behaviour collaborators and I/O, time, randomness and engine APIs are used through interfaces.
+- No enum, string, flag or type check chooses behaviour: one class per kind behind a shared interface, or data when kinds differ only in values.
+- A single variant gets its interface and one implementation. Add a factory, registry or selection setting only when a second variant exists or is requested.
+- Before adding a kind to code that switches on a type code, refactor it first without changing behaviour, then add the new class.
+```
+
+Codex has no path-scoped rules; put the same lines in `~/.codex/AGENTS.md` or a project's `AGENTS.md` if you want them always loaded.
+
 ## Moving from a manual install
 
 The manual installers (`install.sh`, `install.ps1`), the uninstallers and the `assistant-cleanup` skill were retired on 2026-11-17; the marketplace is the only supported channel. Gemini CLI and the Codex `codex-rules/` execution rules are no longer supported. Remove an earlier manual install by hand, in this order, before installing the plugin:

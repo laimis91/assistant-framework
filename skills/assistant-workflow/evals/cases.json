@@ -37961,6 +37961,122 @@
           "deployment mismatch"
         ]
       }
+    },
+    {
+      "id": "build-csv-export-uses-interface-without-machinery",
+      "title": "CSV export gets an interface and one class, with no factory",
+      "category": "design_standard",
+      "purpose": "Checks that a single-variant feature is written with SOLID structure and without pattern machinery.",
+      "prompt": "Implement data export to CSV for the orders report. Only CSV is needed.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active and the plan is approved.",
+        "The repository has an orders report service and no export code.",
+        "No other export format exists or is requested."
+      ],
+      "expected_behavior": [
+        "Loads references/prompts/solid-principles.md before writing code.",
+        "Separates gathering report rows from writing the file format.",
+        "Writes an export format interface with one CSV implementation that callers use through the interface.",
+        "Adds no factory, registry, format enum, format setting or placeholder for other formats.",
+        "Records the export format in the extension points table with a revisit condition for a second format."
+      ],
+      "pass_criteria": [
+        "The response shows the interface and its one CSV implementation.",
+        "The response adds no selection machinery.",
+        "The extension points table names a second format as the revisit condition."
+      ],
+      "fail_signals": [
+        "Writes CSV formatting directly inside the report or export service.",
+        "Adds a factory, registry, format enum or empty XLSX class.",
+        "Skips the extension points table."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "solid-principles.md",
+          "interface",
+          "extension points",
+          "second format"
+        ],
+        "forbidden_substrings": [
+          "class ExportFormatFactory",
+          "class XlsxExportFormat"
+        ]
+      }
+    },
+    {
+      "id": "build-refactors-enum-before-adding-kind",
+      "title": "Adding a kind to enum-based code refactors first",
+      "category": "design_standard",
+      "purpose": "Checks that extending behaviour chosen by an enum triggers a behaviour-preserving refactor before the new kind is added.",
+      "prompt": "Add a fourth enemy kind, Runner, that moves faster and steals gold when it reaches the base.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "EnemyKind is an enum with Regular, MiniBoss and Boss; health growth, base arrival and wave tables switch on it in three files, and saved wave assets store the enum's numeric values.",
+        "Existing tests cover the three current kinds."
+      ],
+      "expected_behavior": [
+        "Identifies the refactor-before-extending triggers: a new value in a behaviour-selecting enum and edits in three or more places.",
+        "Plans a first step that replaces the enum with one class per kind behind an interface, with values in data, without changing behaviour and with existing tests passing.",
+        "Adds Runner as a new class in a separate later step without editing the other kinds.",
+        "Puts the refactor in the plan for approval because it touches several files and saved data."
+      ],
+      "pass_criteria": [
+        "The plan orders the refactor before the new kind.",
+        "The new kind is a new class, not a new enum value or switch case.",
+        "Behaviour preservation is checked before Runner is added."
+      ],
+      "fail_signals": [
+        "Adds Runner to the enum and a case to each switch.",
+        "Combines the refactor and the new kind into one step.",
+        "Refactors unrelated code in the same change."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "refactor",
+          "Runner"
+        ],
+        "forbidden_substrings": [
+          "EnemyKind.Runner =>",
+          "case EnemyKind.Runner:"
+        ]
+      }
+    },
+    {
+      "id": "plan-records-extension-points-table",
+      "title": "A code-changing plan records extension points",
+      "category": "design_standard",
+      "purpose": "Checks that a small code-changing plan includes the extension points table and separates data-only kinds from behaviour kinds.",
+      "prompt": "Plan adding three path tile shapes: straight, gentle curve and sharp curve. They differ only in width and curve angle.",
+      "setup_context": [
+        "The assistant-workflow skill instructions are active.",
+        "The change is small and writes code."
+      ],
+      "expected_behavior": [
+        "Includes an extension points table with what varies, variants now or requested, machinery and revisit when.",
+        "Models the shapes as one class with values in data, because they differ only in values.",
+        "Names a revisit condition: a shape that needs different behaviour, not only different values."
+      ],
+      "pass_criteria": [
+        "The table is present even though the task is small.",
+        "Shapes are data, not an enum with a switch and not three classes."
+      ],
+      "fail_signals": [
+        "Omits the extension points table because the task is small.",
+        "Uses a PathShape enum with a switch.",
+        "Creates one class per shape when only values differ."
+      ],
+      "machine_expectations": {
+        "required_substrings": [
+          "Extension points",
+          "differ only in",
+          "data",
+          "Revisit when"
+        ],
+        "forbidden_substrings": [
+          "enum PathShape {",
+          "case PathShape."
+        ]
+      }
     }
   ],
   "canonical_feature_preparation_result_expectations": {

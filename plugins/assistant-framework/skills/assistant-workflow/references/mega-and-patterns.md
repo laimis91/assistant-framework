@@ -37,5 +37,5 @@ Agent definitions are per-platform: Claude uses `.md` files in `agents/claude/`,
 - **Review once and done:** Review has two stages (spec + quality) and quality is an autonomous loop
 - **No gate:** Always wait for approval before Build
 - **No checkpoints:** Exact phase checkpoints are required only when controller intensity, explicit project policy, or the user requires them. Missing required checkpoints = workflow not followed.
-- **Skip SOLID:** For implementation/execution work, evaluate the graduated SOLID checklist after each Build step, not as a batch at the end.
+- **Skip SOLID:** For implementation/execution work, apply the writing check in `references/prompts/solid-principles.md` after each Build step that writes code, not as a batch at the end.
 - **Context hoarding:** Every file read must serve a purpose

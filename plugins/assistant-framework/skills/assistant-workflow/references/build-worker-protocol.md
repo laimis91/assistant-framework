@@ -246,9 +246,9 @@ resource and host bounds remain controlling with accurate exit reasons.
 
 After all slices are integrated, run the selected checks and binding project checks over the completed scope before fresh Review. Do not add an unselected full suite. Integrated selected and binding checks remain due for one or multiple packets before fresh independent Review; packet-local evidence cannot waive them. Single-slice validation still covers the selected integration claim. Per-slice verification does not satisfy a distinct selected integration check.
 
-After each implementation step, apply the relevant SOLID check from
-`references/prompts/solid-principles.md` and fix material violations before
-moving on.
+Before the first edit to existing code, check the refactor-before-extending
+triggers in `references/prompts/solid-principles.md`. After each implementation
+step, apply its writing check and fix each failed item before moving on.
 
 ## Conditional TDD Boundary
 

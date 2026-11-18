@@ -90,7 +90,7 @@ If you find no new issues above your confidence threshold, say "No new findings.
 ### Readability
 
 - Clear naming: methods say what they do, variables say what they hold
-- No magic numbers or strings — use named constants or enums
+- No magic numbers or strings — use named constants, or a plain value enum that does not select behaviour
 - Comments explain "why," not "what" (code should explain "what")
 - No dead code, commented-out code, or leftover debug statements
 - Consistent formatting with the rest of the codebase

@@ -27,9 +27,10 @@ explicit config path. Do not search home or project directories for one.
 
 ## Guardrails
 
-- KISS and YAGNI override pattern enthusiasm. Do not introduce a pattern when
-  a direct implementation has lower coupling and equal correctness.
-- SOLID, DRY, and design patterns are evidence lenses, not acronym quotas.
+- The structure rules in `prompts/solid-principles.md` always apply. KISS and
+  YAGNI rule out pattern machinery without a second variant, not the structure.
+- Library examples show one pattern in isolation; their supporting code, such as
+  an enum that picks a strategy, is not the style to copy.
 - Do not persist configured roots, source bodies, personal paths, or customer
   code in plans, indexes, logs, generated copies, or company installations.
 - Use library id plus relative path in evidence.

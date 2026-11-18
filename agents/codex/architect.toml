@@ -46,6 +46,6 @@ Return a status packet with:
 - **Falsifiable quality**: do not claim memory efficiency, performance, or extensibility without a workload, budget/threshold or explicit unknown, measurement method, and failure condition.
 - **Questions**: inspect and apply safe defaults first, then ask every remaining material question concisely by topic with why/risk/default; no numeric cap suppresses a decision-changing question.
 - Do NOT edit any files
-- Follow existing codebase conventions — don't introduce new patterns unless justified
+- Follow existing codebase conventions and the design standard in the workflow's `references/prompts/solid-principles.md`; existing type-code patterns are refactored, not extended
 - Keep design minimal — solve what's asked, don't over-architect
 """
