@@ -34,6 +34,22 @@ is_file_nonempty() {
     [[ -s "$path" ]] && grep -q '[^[:space:]]' "$path"
 }
 
+# Text checks match fixed strings, and model answers often write a hyphen as
+# U+2010 to U+2015 or U+2212. Grade text against a copy with those as ASCII "-".
+text_match_copy() {
+    local response_path="$1"
+    local copy
+    # On any failure, grade the original response unchanged.
+    if ! copy="$(mktemp "${TMPDIR:-/tmp}/skill-eval-text.XXXXXX" 2>/dev/null)"; then
+        printf '%s\n' "$response_path"
+        return 0
+    fi
+    if ! LC_ALL=C perl -pe 's/\xe2\x80[\x90-\x95]|\xe2\x88\x92/-/g' "$response_path" >"$copy" 2>/dev/null; then
+        cp "$response_path" "$copy"
+    fi
+    printf '%s\n' "$copy"
+}
+
 count_fail_signal_hits() {
     local fixture_file="$1"
     local id="$2"
@@ -1393,6 +1409,7 @@ grade_responses() {
     local false_positive_marker_failures=0
     local structured_json_assertion_failures=0
     local semantic_validation_failures=0
+    local text_path
     local index
     local skill_name
     local fixture_file
@@ -1444,12 +1461,14 @@ grade_responses() {
                 reason="empty response file"
                 empty=$((empty + 1))
             else
-                fail_signal_hits="$(count_fail_signal_hits "$fixture_file" "$id" "$response_path")"
-                required_misses="$(count_missing_required_substrings "$fixture_file" "$id" "$response_path")"
-                forbidden_hits="$(count_forbidden_substring_hits "$fixture_file" "$id" "$response_path")"
-                ordered_failures="$(count_ordered_substring_failures "$fixture_file" "$id" "$response_path")"
-                seeded_failures="$(count_seeded_defect_failures "$fixture_file" "$id" "$response_path")"
-                false_positive_failures="$(count_false_positive_marker_failures "$fixture_file" "$id" "$response_path")"
+                text_path="$(text_match_copy "$response_path")"
+                fail_signal_hits="$(count_fail_signal_hits "$fixture_file" "$id" "$text_path")"
+                required_misses="$(count_missing_required_substrings "$fixture_file" "$id" "$text_path")"
+                forbidden_hits="$(count_forbidden_substring_hits "$fixture_file" "$id" "$text_path")"
+                ordered_failures="$(count_ordered_substring_failures "$fixture_file" "$id" "$text_path")"
+                seeded_failures="$(count_seeded_defect_failures "$fixture_file" "$id" "$text_path")"
+                false_positive_failures="$(count_false_positive_marker_failures "$fixture_file" "$id" "$text_path")"
+                [[ "$text_path" == "$response_path" ]] || rm -f "$text_path"
                 structured_failures="$(count_structured_json_assertion_failures "$fixture_file" "$id" "$response_path" "$skill_name")"
                 canonical_envelope_failures="$(count_assistant_review_canonical_envelope_failures "$skill_name" "$id" "$response_path" "$fixture_file")"
                 structured_failures=$((structured_failures + canonical_envelope_failures))

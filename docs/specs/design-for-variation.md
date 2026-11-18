@@ -97,7 +97,9 @@ Run 2026-11-18 under fresh authorization, one call at a time, with eval files ou
 
 Across the isolated runs, the change produced the intended design in every case with a valid answer, and the baseline in none. Each result is one sample on `deepseek-flash`.
 
-Still open: the CSV change-arm sample, and grader handling of Unicode hyphens.
+Afterwards, `tools/evals/lib/skill-eval-grade.sh` was changed to match text against a copy of the response with U+2010 to U+2015 and U+2212 written as "-", so the review answer above now grades as a pass. Structured JSON and semantic validators still read the original. `run-framework-instruction-evals.sh` and `run-codex-framework-evals.sh` keep raw matching.
+
+Still open: the CSV change-arm sample.
 
 ## Owners
 
