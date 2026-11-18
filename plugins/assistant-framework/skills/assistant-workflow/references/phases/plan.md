@@ -86,8 +86,9 @@ Selected research lenses/peer retain their isolation. Load
 
 Load only relevant prompt packs: `references/prompts/refactor-safety.md` for
 refactor/parity risks, `migration.md` for DB/migration work, `test-strategy.md`
-for selected automated checks, and `solid-principles.md` for applicable design
-questions. Unknown causes use assistant-debugging first. Active packet TDD uses
+for selected automated checks. Every plan that changes code loads
+`references/prompts/solid-principles.md` and fills its extension points table.
+Unknown causes use assistant-debugging first. Active packet TDD uses
 assistant-tdd (or its available fallback) without changing task-wide `tdd_mode`.
 
 ### Approval gate

@@ -1,16 +1,16 @@
 # Review Principles Lens
 
-Use these principles as evidence lenses during code review. They are not standalone pass/fail laws. A finding is actionable only when it ties a specific observation to concrete risk and the smallest durable fix.
+Use these principles during code review. The SOLID structure and behaviour-selection rules below are the default standard for changed code; the other principles are evidence lenses. A finding is actionable only when it ties a specific observation to concrete risk and the smallest durable fix.
 
 ## SOLID
 
-Apply SOLID primarily to object-oriented or dependency-heavy code:
+SOLID, object-oriented and extendable structure is the framework's default standard for every code change, unless explicit project or user instructions say otherwise. Structure is required; pattern machinery is not (see [Behaviour selection and machinery](#behaviour-selection-and-machinery)).
 
-- Single Responsibility: a unit should have one cohesive reason to change. Flag mixed policy, orchestration, I/O, formatting, persistence, and validation only when the mix makes change risky or tests brittle.
-- Open/Closed: code should allow likely extension without repeatedly editing fragile core logic. Flag switch/if growth, scattered feature edits, or closed extension points when a current requirement already shows the pattern will churn.
+- Single Responsibility: a unit should have one cohesive reason to change. Flag classes or methods that mix policy, orchestration, I/O, formatting, persistence, or validation.
+- Open/Closed: a new kind should be addable without editing existing kinds. Flag switch/if growth on a type code, scattered feature edits, and changes that add a case to existing behaviour selection.
 - Liskov Substitution: subtypes, implementations, or strategy objects must preserve caller expectations. Flag implementations that narrow accepted inputs, weaken guarantees, throw unexpected exceptions, or require caller type checks.
 - Interface Segregation: consumers should not depend on methods or data they do not use. Flag broad interfaces when they force no-op implementations, fake dependencies in tests, or unrelated callers to change together.
-- Dependency Inversion: high-level policy should not be glued to low-level details at boundaries. Flag direct dependencies on infrastructure, time, randomness, network, filesystem, or framework APIs when they hide behavior or block testing.
+- Dependency Inversion: high-level policy should not be glued to low-level details at boundaries. Flag behaviour collaborators used as concrete classes, and direct dependencies on infrastructure, time, randomness, network, filesystem, or framework APIs, when callers cannot depend on an interface instead.
 
 ## Design Coherence Pass
 
@@ -18,7 +18,7 @@ For every medium+ review, identify the affected unit, boundary, responsibility, 
 
 ## KISS
 
-Prefer the simplest design that satisfies the verified requirement. Flag needless layers, abstractions, configuration, indirection, state, branching, concurrency, or patterns that make current behavior harder to read, test, or change. A small abstraction that removes real duplication, isolates side effects, or makes a current requirement safer may be simpler.
+Prefer the simplest design that satisfies the verified requirement within the SOLID structure; KISS never justifies mixed responsibilities or behaviour chosen by type code. Flag needless layers, abstractions, configuration, indirection, state, branching, concurrency, or patterns that make current behavior harder to read, test, or change. A small abstraction that removes real duplication, isolates side effects, or makes a current requirement safer may be simpler.
 
 ## DRY
 
@@ -31,7 +31,7 @@ and error handling; shorter code alone proves nothing. Carried Mapper/task-packe
 
 ## YAGNI
 
-Avoid imagined-future capability: flag speculative extension points, unused abstractions/config/parameters, anticipatory generic types, and future-only branches that add current complexity. YAGNI is not permission to neglect code health; it permits tests, health refactoring, and small seams around real side effects.
+Avoid imagined-future capability: flag pattern machinery for a single variant, unused abstractions/config/parameters, anticipatory generic types, classes without a nameable role, and future-only branches that add current complexity. YAGNI does not apply to SOLID structure: an interface with one implementation for a behaviour role or an external boundary is required structure, not speculation.
 
 ## State and Extensibility Modeling
 
@@ -41,11 +41,23 @@ Avoid imagined-future capability: flag speculative extension points, unused abst
 - Prefer named states and explicit transition methods or events that carry the required data.
 - Do not flag nullable properties when `null` only means optional or missing data.
 
-### Enums as extension points
+### Behaviour selection and machinery
 
-- Flag an enum when it represents an open-ended feature set and adding a value requires changing switches or conditionals in several places.
-- Prefer handlers, strategies, or another extensible design for open-ended cases.
-- Do not flag enums that represent a small, stable, closed set.
+Missing structure:
+
+- Flag a value that identifies a kind or mode (enum, string code, bool flag, or type check) and selects behaviour, whatever the number of values. Ordinary conditions on state are not type codes, and a registry or factory at the composition boundary may pick an implementation by key. The fix is one class per kind behind a shared interface, or data when kinds differ only in values. Should-fix; must-fix when the diff adds a case, value, or branch to existing behaviour selection, even a small one, because that edits working code to add a kind instead of refactoring first.
+- Flag kinds that differ only in values but are modelled as separate classes or branches; the fix is one class with the values in data.
+
+Unjustified machinery:
+
+- Flag a factory, registry, selection setting, kind enum, or empty variant class when only one variant exists or is requested. The fix is to remove the machinery and keep the interface and its one implementation.
+- Flag a class or interface that has no nameable role, such as a pass-through wrapper.
+
+Do not flag:
+
+- an interface with one implementation that represents a behaviour role or an external boundary;
+- interfaces missing from data types such as records, value objects, or DTOs;
+- an enum that is a plain list of values with no behaviour attached, or an external API's enum.
 
 ## Readability
 
@@ -66,7 +78,7 @@ Report the specific comprehension burden: ambiguous name, mixed abstraction, non
 Principle findings must include:
 
 - lens: SOLID, KISS, DRY, YAGNI, readability, design coherence, or combination
-- risk category: correctness, security, unsafe change surface, branching/responsibility growth, hidden dependency/ownership, brittle testing, poor extension seam, or readability/maintainability drag
+- risk category: correctness, security, unsafe change surface, branching/responsibility growth, hidden dependency/ownership, brittle testing, poor extension seam, unjustified machinery, or readability/maintainability drag
 - evidence: file, line, and observed behavior
 - fix: the smallest durable change that removes the risk
 

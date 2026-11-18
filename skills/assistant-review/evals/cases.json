@@ -928,47 +928,75 @@
     },
     {
       "id": "review-detects-enum-extension-traps",
-      "title": "Review distinguishes open-ended enums from closed sets",
+      "title": "Review flags behaviour-selecting enums and leaves plain value enums",
       "category": "state_and_extensibility_modeling",
-      "purpose": "Checks that review flags enums used as open-ended feature extension points without treating every stable closed enum as a defect.",
-      "prompt": "Review this integration change. PaymentProvider is an enum that gains a value for every new provider, and pricing, routing, validation, and logging each switch on it. The product supports provider plugins. LogLevel is a stable closed enum used only for logging severity.",
+      "purpose": "Checks that review flags an enum that selects behaviour, whatever its size, without flagging an enum that is a plain list of values.",
+      "prompt": "Review this integration change, which adds Klarna as a payment provider:\n\n```diff\n--- a/Payments/PaymentProvider.cs\n+++ b/Payments/PaymentProvider.cs\n-public enum PaymentProvider { Card, PayPal, BankTransfer }\n+public enum PaymentProvider { Card, PayPal, BankTransfer, Klarna }\n--- a/Payments/FeeCalculator.cs\n+++ b/Payments/FeeCalculator.cs\n public decimal Fee(PaymentProvider provider, decimal amount) => provider switch\n {\n     PaymentProvider.Card => amount * 0.029m + 0.30m,\n     PaymentProvider.PayPal => amount * 0.034m,\n     PaymentProvider.BankTransfer => 0.50m,\n+    PaymentProvider.Klarna => amount * 0.0299m,\n     _ => throw new ArgumentOutOfRangeException(nameof(provider))\n };\n--- a/Payments/PaymentRouter.cs\n+++ b/Payments/PaymentRouter.cs\n     case PaymentProvider.BankTransfer: return bankGateway;\n+    case PaymentProvider.Klarna: return klarnaGateway;\n--- a/Payments/PaymentValidator.cs\n+++ b/Payments/PaymentValidator.cs\n     case PaymentProvider.BankTransfer: return ValidateIban(request);\n+    case PaymentProvider.Klarna: return ValidateBillingAddress(request);\n--- a/Payments/PaymentLog.cs\n+++ b/Payments/PaymentLog.cs\n     case PaymentProvider.BankTransfer: return \"bank\";\n+    case PaymentProvider.Klarna: return \"klarna\";\n```\n\nUnchanged context in Logging/LogWriter.cs:\n\n```csharp\npublic enum LogLevel { Debug, Info, Warning, Error }\n\nif (entry.Level >= options.MinimumLevel) sink.Write(entry);\n```",
       "setup_context": [
         "The assistant-review skill instructions are active.",
         "The user explicitly requests an audit; report findings only and do not modify source.",
-        "PaymentProvider is an open-ended feature set and additions require changes in several consumers.",
-        "LogLevel is a small stable closed enum with no provider-specific behavior."
+        "PaymentProvider selects behaviour in several consumers, and the diff adds a value and a case to each switch.",
+        "LogLevel is compared and filtered by value; no code switches on it to choose behaviour."
       ],
       "expected_behavior": [
-        "Flags PaymentProvider because new features expand the enum and require changing switches or conditionals in several places.",
-        "Explains the concrete branching growth or poor extension-seam risk.",
-        "Recommends handlers, strategies, or another extensible design for provider-specific behavior.",
-        "Does not flag LogLevel because it is a stable closed enum.",
-        "Does not claim all enums are extension traps."
+        "Flags PaymentProvider as an enum that selects behaviour, regardless of its small number of values.",
+        "Rates the finding must-fix because the diff adds a case to existing behaviour selection, editing working code to add a kind.",
+        "Recommends one class per kind behind a shared interface, refactored before the fourth provider is added.",
+        "Does not flag LogLevel because it is a plain list of values with no behaviour attached.",
+        "Does not claim all enums are defects."
       ],
       "pass_criteria": [
-        "The response distinguishes an open feature axis from a closed value set.",
-        "The finding cites the scattered provider switches and plugin requirement.",
-        "The recommendation is scoped to provider-specific behavior.",
-        "The stable logging enum is not reported as a defect."
+        "The response distinguishes behaviour selection from a plain value list.",
+        "The finding cites the switches and the added case, with must-fix severity.",
+        "The recommendation is one class per kind behind a shared interface; values that differ only per provider, such as fee rates, may be data.",
+        "The logging enum is not reported as a defect."
       ],
       "fail_signals": [
-        "Treats every enum as an extension trap.",
-        "Ignores the scattered PaymentProvider switches.",
-        "Recommends another closed type code without addressing extension.",
+        "Accepts PaymentProvider because it is a small or closed set.",
+        "Treats every enum as a defect.",
+        "Recommends another type code or a larger switch.",
         "Reports LogLevel as a defect."
       ],
       "machine_expectations": {
-        "required_substrings": [
-          "open-ended feature set",
-          "switches or conditionals in several places",
-          "branching growth",
-          "handlers, strategies",
-          "stable closed enum"
-        ],
+        "required_substrings": ["PaymentProvider", "must-fix", "interface"],
         "forbidden_substrings": [
-          "all enums are defects",
-          "every enum is an extension trap",
+          "small, stable, closed set",
           "LogLevel is a defect"
+        ]
+      }
+    },
+    {
+      "id": "review-flags-single-variant-machinery",
+      "title": "Review flags machinery for a single variant and keeps the role interface",
+      "category": "state_and_extensibility_modeling",
+      "purpose": "Checks that review flags a factory and kind enum built for one variant while accepting an interface with one implementation that represents a behaviour role.",
+      "prompt": "Review this export change. It adds IExportFormat with one implementation, CsvExportFormat, plus an ExportFormatFactory, an ExportFormatKind enum with only Csv, and an empty XlsxExportFormat placeholder. Only CSV is requested.",
+      "setup_context": [
+        "The assistant-review skill instructions are active.",
+        "The user explicitly requests an audit; report findings only and do not modify source.",
+        "No second export format exists or is requested."
+      ],
+      "expected_behavior": [
+        "Flags the factory, the kind enum and the empty placeholder as unjustified machinery for a single variant.",
+        "Recommends removing that machinery and keeping IExportFormat with CsvExportFormat.",
+        "Does not flag IExportFormat for having one implementation, because it represents a behaviour role.",
+        "States that the machinery is added together with a second requested format."
+      ],
+      "pass_criteria": [
+        "The machinery is flagged with a concrete cost.",
+        "The interface and its one implementation are kept.",
+        "The response does not recommend inlining the formatting into the export service."
+      ],
+      "fail_signals": [
+        "Flags IExportFormat as speculative because it has one implementation.",
+        "Recommends writing CSV directly in the export service.",
+        "Accepts the empty XlsxExportFormat placeholder."
+      ],
+      "machine_expectations": {
+        "required_substrings": ["machinery", "IExportFormat", "CsvExportFormat"],
+        "forbidden_substrings": [
+          "IExportFormat is speculative",
+          "inline the CSV formatting into"
         ]
       }
     },

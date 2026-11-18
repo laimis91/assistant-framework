@@ -1,5 +1,5 @@
 {
   "name": "assistant-framework",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Assistant Framework skills: workflow, review, verification, TDD, debugging, research, security and more, for Claude Code and Codex."
 }

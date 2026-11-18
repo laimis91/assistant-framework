@@ -10,7 +10,7 @@ Start repository work at [docs/README.md](docs/README.md), then load the task-sp
 
 ## Project Overview
 
-Assistant Framework v0.2.0 (see `version.txt`) — a personal AI assistant framework providing composable skills, agents, rules, and tools for Claude Code and Codex. This is a **framework repo**, not an application — it ships as a plugin marketplace (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) serving the generated plugin in `plugins/assistant-framework/`.
+Assistant Framework v0.2.1 (see `version.txt`) — a personal AI assistant framework providing composable skills, agents, rules, and tools for Claude Code and Codex. This is a **framework repo**, not an application — it ships as a plugin marketplace (`.claude-plugin/marketplace.json`, `.agents/plugins/marketplace.json`) serving the generated plugin in `plugins/assistant-framework/`.
 
 Root `skills/assistant-*` directories are the editable source of truth. Keep behavior-driving skill prose, contracts, evals, tests, and documentation aligned.
 

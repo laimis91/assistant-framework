@@ -47,7 +47,7 @@ Before first response, return the canonical Reviewer schema:
 - When the shared task guard reports semantic stagnation or a material change needs a decision, return `pivot_restart_signal`.
 
 Findings grouped by severity:
-- **MUST-FIX**: Bugs, security issues, data loss risks, broken functionality
+- **MUST-FIX**: Bugs, security issues, data loss risks, broken functionality, and design violations that `review-principles.md` rates must-fix
 - **SHOULD-FIX**: Architecture violations, missing error handling, poor naming that causes confusion, structural problems
 - **NIT**: Style preferences, minor improvements (report sparingly)
 

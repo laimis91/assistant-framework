@@ -6416,4 +6416,23 @@ unauthorized-delete|inspect-only-missing-evidence|.next_action = "Delete tests a
 S1_AUDIT_CONTROLS
 if [[ ${#s1_audit_failures[@]} -eq 0 ]]; then pass; else fail "audit controls: ${s1_audit_failures[*]}"; fi
 
+test_start "substring grading treats Unicode hyphens as plain hyphens"
+unicode_hyphen_dir="$(mktemp -d "${TMPDIR:-/tmp}/skill-eval-unicode-hyphen.XXXXXX")"
+p0p4_register_cleanup "$unicode_hyphen_dir"
+mkdir -p "$unicode_hyphen_dir/assistant-review"
+unicode_hyphen=$'\xe2\x80\x91'
+printf '%s\n' \
+    'PaymentProvider selects behaviour in four switches; adding Klarna edits each one.' \
+    "Severity: must${unicode_hyphen}fix. Move each provider behind a shared interface before adding Klarna." \
+    'LogLevel is compared by value and needs no change.' \
+    >"$unicode_hyphen_dir/assistant-review/review-detects-enum-extension-traps.md"
+if grep -Fq "must${unicode_hyphen}fix" "$unicode_hyphen_dir/assistant-review/review-detects-enum-extension-traps.md" \
+    && "$skill_eval_runner" --responses "$unicode_hyphen_dir" --skill assistant-review \
+        --case review-detects-enum-extension-traps >"$unicode_hyphen_dir/grades.txt" 2>&1 \
+    && grep -q $'^PASS\tassistant-review\treview-detects-enum-extension-traps' "$unicode_hyphen_dir/grades.txt"; then
+    pass
+else
+    fail "a required 'must-fix' written with U+2011 was not matched"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

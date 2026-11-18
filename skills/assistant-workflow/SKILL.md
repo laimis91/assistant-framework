@@ -44,8 +44,11 @@ Use the reuse-first ordering in the Build reference before creating code or help
    ownership/context, recovery, or protocol reason.
 3. **Implement.** For selected checks with active TDD, obtain meaningful
    authorizing RED before the first production edit; assistant-tdd owns the
-   RED/GREEN/REFACTOR cycle. Make the smallest durable change that meets the
-   accepted criteria. Preserve dirty work and user constraints. Stop dependent
+   RED/GREEN/REFACTOR cycle. Before writing or changing code, load
+   [the design guide](references/prompts/solid-principles.md) and check its
+   refactor-before-extending triggers; apply its writing check after each step.
+   Make the smallest durable change that meets the accepted criteria and the
+   design guide. Preserve dirty work and user constraints. Stop dependent
    work for material unknowns or a scope/risk change; refresh the decision and
    obtain renewed approval when required before further edits.
 4. **Verify.** Run the selected and binding checks or reuse adequate current

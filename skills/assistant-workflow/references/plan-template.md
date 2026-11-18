@@ -34,7 +34,7 @@ Include this directly; no separate document:
 - **Independent challenge evidence:** [required when Pack mode=review_intensive; challenge, dissent/validation, resolution, selected-design impact]
 **Risks:** [what could go wrong]
 **Verification:** [selected checks and binding project checks; test plan only when tests are selected]
-**SRP check:** [single responsibility confirmed / split needed]
+**Extension points:** [what varies | variants now or requested | machinery | revisit when, per `references/prompts/solid-principles.md`; or N/A when no code changes]
 ```
 
 ## Executable Task Packet (`execution_intent != prepare_only`)
@@ -68,6 +68,7 @@ Medium/Large/Mega authoritative packets preserve identical meaning and role evid
   - Create: [exact paths or "none"]
   - Modify: [exact paths or "none"]
 - Test: [exact selected test paths or "none"]
+- Extension points: [rows from the plan's extension points table that this packet touches, including any refactor-before-extending step, per `references/prompts/solid-principles.md`; or N/A when no code changes]
 - Enabling changes included:
   - [setup, contracts, wiring, or "none"]
 - Depends on: [canonical packet_ids or empty array]
@@ -525,7 +526,7 @@ Fill during Plan; Security/Operability stays optional. Plan approval alone does 
 - Layer rules: [boundaries]
 - Dependency direction: [A → B → C]
 - New files placement: [file → location/rationale]
-- SOLID notes: [SRP/OCP/DIP risks or N/A]
+- Extension points: [what varies | variants now or requested | machinery | revisit when, per `references/prompts/solid-principles.md`; or N/A when no code changes]
 
 ## Analysis
 ### Candidate search summary

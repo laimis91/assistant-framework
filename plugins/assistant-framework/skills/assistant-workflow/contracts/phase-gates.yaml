@@ -604,8 +604,8 @@ gates:
 
       - id: B8
         severity: guidance
-        check: "SOLID principles checklist was evaluated for each implementation step (SRP for small, SRP+OCP+DIP for medium, full SOLID for large/mega per references/prompts/solid-principles.md)"
-        on_fail: "Load references/prompts/solid-principles.md when design risk is material; otherwise use code review to catch concrete violations"
+        check: "The writing check in references/prompts/solid-principles.md was applied to each implementation step that wrote code, and its refactor-before-extending triggers were checked before the first edit to existing code"
+        on_fail: "Load references/prompts/solid-principles.md, apply its writing check to the changed code, and refactor or record each failed item before Review"
 
       - id: B9
         severity: blocker

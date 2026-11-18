@@ -36,7 +36,7 @@ Include this directly; no separate document:
 - **Independent challenge evidence:** [required when Pack mode=review_intensive; challenge, dissent/validation, resolution, selected-design impact]
 **Risks:** [what could go wrong]
 **Verification:** [selected checks and binding project checks; test plan only when tests are selected]
-**SRP check:** [single responsibility confirmed / split needed]
+**Extension points:** [what varies | variants now or requested | machinery | revisit when, per `references/prompts/solid-principles.md`; or N/A when no code changes]
 ```
 
 ## Which tier to use

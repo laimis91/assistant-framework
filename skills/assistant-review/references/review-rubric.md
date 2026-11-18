@@ -13,7 +13,7 @@ Structured scoring system for evaluator calibration. Replaces open-ended "find i
 | Dimension | Weight | What It Measures |
 |---|---|---|
 | **Correctness** | 0.30 | Bugs, logic errors, edge cases, acceptance criteria met |
-| **Code Quality** | 0.20 | Readability, naming, maintainability, right-sized SOLID/KISS/DRY/YAGNI adherence |
+| **Code Quality** | 0.20 | Readability, naming, maintainability, SOLID structure per review-principles.md, and KISS/DRY/YAGNI where they reduce real risk |
 | **Architecture** | 0.20 | Layer boundaries, dependency direction, pattern consistency |
 | **Security** | 0.15 | Injection, auth bypass, data exposure, OWASP top 10 |
 | **Verification Evidence** | 0.15 | Selected verification methods, evidence quality, material gaps, and test quality when tests were selected |
@@ -40,7 +40,7 @@ Each dimension is scored 1-5. Use these anchors to calibrate:
 
 | Score | Anchor |
 |---|---|
-| **5** | Clear, self-documenting code. Names, control flow, responsibilities, and abstractions make intent easy to recover. SOLID/KISS/DRY/YAGNI are applied where they reduce real risk. |
+| **5** | Clear, self-documenting code. Names, control flow, responsibilities, and abstractions make intent easy to recover. SOLID structure is followed; KISS/DRY/YAGNI are applied where they reduce real risk. |
 | **4** | Readable and maintainable. Minor inconsistency or localized complexity, but no duplicated knowledge, speculative abstraction, or unclear responsibility that would meaningfully slow future change. |
 | **3** | Works but some areas are hard to follow. Mixed abstraction levels, unclear names, mild duplication of knowledge, or slightly overbuilt seams create maintenance friction. |
 | **2** | Multiple code smells. Large/mixed-responsibility units, misleading names, copy-paste business rules, unnecessary indirection, or speculative branches create concrete change risk. |
@@ -50,7 +50,7 @@ Each dimension is scored 1-5. Use these anchors to calibrate:
 
 | Score | Anchor |
 |---|---|
-| **5** | Follows existing patterns exactly. Correct layer placement. Dependencies point inward. |
+| **5** | Follows existing patterns, except type-code behaviour selection, which is refactored rather than extended. Correct layer placement. Dependencies point inward. |
 | **4** | Mostly aligned. One minor boundary concern (e.g., a helper in the wrong layer but low impact). |
 | **3** | Works but introduces a new pattern where existing one applies. Or bypasses a layer for convenience. |
 | **2** | Layer violation that will cause coupling issues. Domain depends on infrastructure. |
