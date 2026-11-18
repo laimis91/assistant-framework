@@ -112,6 +112,9 @@ If any applies, refactor first:
   change.
 - A refactor that changes saved data, a public interface or many files is part
   of the plan the user approves.
+- Do not offer extending the type code (a new enum value, switch case or
+  branch) as an alternative. If the user declines the refactor, state what each
+  later kind will cost and follow their decision.
 
 ## Writing check
 

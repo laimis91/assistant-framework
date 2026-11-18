@@ -1,6 +1,6 @@
 # Design standard: SOLID structure and pattern machinery
 
-Status: **Accepted** by the user 2026-11-18, including D-DV-1 to D-DV-4; D-DV-5 added after independent review. Implemented on branch `feature/design-for-variation`. Behavioural evaluation run 2026-11-18 (see [Behavioural evaluation](#behavioural-evaluation)); the review enum case and two required substrings need revision before the cases can separate the arms.
+Status: **Accepted** by the user 2026-11-18, including D-DV-1 to D-DV-4; D-DV-5 added after independent review. Implemented on branch `feature/design-for-variation`. Behavioural evaluation run 2026-11-18 (see [Behavioural evaluation](#behavioural-evaluation)); the cases were revised afterwards and a rerun of the revised cases is owed.
 Source: user requests of 2026-11-05 and 2026-11-18. The user's M1 game build came out with enums and switch statements choosing behaviour although assistant-workflow was active. A follow-up session had to plan a refactor.
 
 ## Problem and intended outcome
@@ -58,10 +58,13 @@ Two earlier runs were discarded. In the first, packets kept the case title and I
 
 Substring grading gives 1/5 to each arm. Read against each case's pass criteria, the change produced the intended design in three cases where the baseline did not, was partial in the enum case, and made no difference in the review enum case. One sample per arm on one non-Claude model does not establish an effect size.
 
-Case revisions needed before a rerun, which also needs fresh authorization:
+Revisions made after the run, so that grading checks behaviour:
 
-- `review-detects-enum-extension-traps` describes the change in prose only, so both arms block for missing material. Add the code or diff to the setup.
-- `build-csv-export-uses-interface-without-machinery` requires the string `solid-principles.md`, and `plan-records-extension-points-table` requires "differ only in". Both test wording, not behaviour; replace them.
+- `review-detects-enum-extension-traps` now carries the diff and the `LogLevel` context in its prompt; before, both arms blocked for missing material. Its pass criteria accept fee rates as data.
+- The required strings `solid-principles.md`, "differ only in" and "second format" were removed because they test wording. The forbidden string `enum PathShape {` became `public enum PathShape`, which also catches the brace on the next line.
+- The writing guide's refactor-before-extending section now says not to offer extending the type code as an alternative; if the user declines the refactor, state what each later kind will cost and follow their decision.
+
+Regrading the saved isolated answers against the revised cases gives 3/4 with the change and 1/4 without, matching the reading above; the review enum case has no comparable answers. A rerun of the revised cases needs fresh authorization.
 
 ## Owners
 

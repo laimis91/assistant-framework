@@ -37992,10 +37992,8 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "solid-principles.md",
           "interface",
-          "extension points",
-          "second format"
+          "extension points"
         ],
         "forbidden_substrings": [
           "class ExportFormatFactory",
@@ -38068,12 +38066,11 @@
       "machine_expectations": {
         "required_substrings": [
           "Extension points",
-          "differ only in",
           "data",
           "Revisit when"
         ],
         "forbidden_substrings": [
-          "enum PathShape {",
+          "public enum PathShape",
           "case PathShape."
         ]
       }

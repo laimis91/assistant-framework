@@ -931,7 +931,7 @@
       "title": "Review flags behaviour-selecting enums and leaves plain value enums",
       "category": "state_and_extensibility_modeling",
       "purpose": "Checks that review flags an enum that selects behaviour, whatever its size, without flagging an enum that is a plain list of values.",
-      "prompt": "Review this integration change. PaymentProvider is an enum with three values, and pricing, routing, validation, and logging each switch on it; this change adds a fourth value and a case to each switch. LogLevel is an enum used only to compare and filter log severity.",
+      "prompt": "Review this integration change, which adds Klarna as a payment provider:\n\n```diff\n--- a/Payments/PaymentProvider.cs\n+++ b/Payments/PaymentProvider.cs\n-public enum PaymentProvider { Card, PayPal, BankTransfer }\n+public enum PaymentProvider { Card, PayPal, BankTransfer, Klarna }\n--- a/Payments/FeeCalculator.cs\n+++ b/Payments/FeeCalculator.cs\n public decimal Fee(PaymentProvider provider, decimal amount) => provider switch\n {\n     PaymentProvider.Card => amount * 0.029m + 0.30m,\n     PaymentProvider.PayPal => amount * 0.034m,\n     PaymentProvider.BankTransfer => 0.50m,\n+    PaymentProvider.Klarna => amount * 0.0299m,\n     _ => throw new ArgumentOutOfRangeException(nameof(provider))\n };\n--- a/Payments/PaymentRouter.cs\n+++ b/Payments/PaymentRouter.cs\n     case PaymentProvider.BankTransfer: return bankGateway;\n+    case PaymentProvider.Klarna: return klarnaGateway;\n--- a/Payments/PaymentValidator.cs\n+++ b/Payments/PaymentValidator.cs\n     case PaymentProvider.BankTransfer: return ValidateIban(request);\n+    case PaymentProvider.Klarna: return ValidateBillingAddress(request);\n--- a/Payments/PaymentLog.cs\n+++ b/Payments/PaymentLog.cs\n     case PaymentProvider.BankTransfer: return \"bank\";\n+    case PaymentProvider.Klarna: return \"klarna\";\n```\n\nUnchanged context in Logging/LogWriter.cs:\n\n```csharp\npublic enum LogLevel { Debug, Info, Warning, Error }\n\nif (entry.Level >= options.MinimumLevel) sink.Write(entry);\n```",
       "setup_context": [
         "The assistant-review skill instructions are active.",
         "The user explicitly requests an audit; report findings only and do not modify source.",
@@ -948,7 +948,7 @@
       "pass_criteria": [
         "The response distinguishes behaviour selection from a plain value list.",
         "The finding cites the switches and the added case, with must-fix severity.",
-        "The recommendation is one class per kind behind a shared interface.",
+        "The recommendation is one class per kind behind a shared interface; values that differ only per provider, such as fee rates, may be data.",
         "The logging enum is not reported as a defect."
       ],
       "fail_signals": [
