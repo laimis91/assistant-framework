@@ -86,4 +86,5 @@ Use the field schema, phase gate schema, and handoff schema formats defined in t
 - **Native skill discovery drives routing.** Adding a new skill requires only a well-described SKILL.md and any actual consumed contracts; no runtime script changes are needed.
 - **sync-plugin.py auto-discovers skills** — any subdirectory of `skills/` containing a SKILL.md ships in the plugin.
 - **Contracts** (`contracts/` dirs) define structured input/output schemas in YAML. Instruction-only skills are valid; see the canonical guide.
+- **Contract checks test behavior, not wording.** Add a check under `tests/p0-p4/` only when it fails for a defect a user or maintainer would notice (structure, safety, contract consistency, eval grading); a check that only pins a sentence in a skill file is not added. See `docs/specs/contract-test-cleanup.md` R-TC-1.
 - **C# code** targets modern .NET and follows the existing Clean Architecture style. Tests use descriptive names and Arrange-Act-Assert where applicable.

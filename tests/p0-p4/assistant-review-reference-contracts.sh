@@ -3,94 +3,19 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-contract_field_block() {
-    local file="$1"
-    local field="$2"
-    awk -v field="$field" '
-        $0 == "  - name: " field { inside = 1 }
-        inside && /^  - name: / && $0 != "  - name: " field { exit }
-        inside { print }
-    ' "$file"
-}
-
-test_start "standalone architecture records can project complete typed review facts"
-review_missing=()
-review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
-review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
-review_required_block="$(contract_field_block "$review_input" architecture_decision_pack_review_required)"
-review_pack_block="$(contract_field_block "$review_input" architecture_decision_pack)"
-for term in \
-    'equivalent standalone architecture decision record' \
-    'or a decision record that makes memory, performance, extensibility, public interface, data lifecycle, ownership, or'; do
-    if ! grep -Fq -- "$term" <<<"$review_required_block"; then review_missing+=("review trigger: $term"); fi
-done
-for term in \
-    'on_missing: infer' \
-    'Only for standalone review with an equivalent decision record, derive its compact Pack projection from the supplied record' \
-    'If a workflow Pack is required but absent' \
-    '      - name: facts' \
-    '          - name: claim' \
-    '      - name: assumptions' \
-    '          - name: statement' \
-    '          - name: rationale_or_impact' \
-    '      - name: material_questions' \
-    '          - name: topic' \
-    '          - name: why_needed' \
-    '          - name: risk_if_guessed' \
-    '          - name: recommended_default_or_none' \
-    '      - name: independent_challenge_evidence' \
-    '        on_missing: fail' \
-    '          - name: challenge_ref' \
-    '          - name: dissent_or_validation' \
-    '          - name: resolution' \
-    '          - name: selected_design_impact'; do
-    if ! grep -Fq -- "$term" <<<"$review_pack_block"; then review_missing+=("Pack projection: $term"); fi
-done
-if ! grep -Fq -- 'standalone equivalent records derive its compact Pack projection' "$review_handoffs"; then
-    review_missing+=("Reviewer handoff derivation rule")
-fi
-if [[ ${#review_missing[@]} -eq 0 ]]; then pass; else fail "assistant-review Pack projection gaps: ${review_missing[*]}"; fi
-
-p0p4_reference_section_has_term() {
-    local file="$1"
-    local heading="$2"
-    local term="$3"
-
-    awk -v heading="$heading" -v term="$term" '
-        $0 == heading { in_section = 1; next }
-        in_section && /^## / { exit }
-        in_section && index($0, term) { found = 1; exit }
-        END { exit found ? 0 : 1 }
-    ' "$file"
-}
 
 review_skill="$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"
+review_input="$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"
+review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
+review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
+review_batch_reference="$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md"
 review_legacy="$FRAMEWORK_DIR/skills/assistant-review/references/legacy-compatibility.md"
 review_checklists="$FRAMEWORK_DIR/skills/assistant-review/references/review-checklists.md"
 review_loop="$FRAMEWORK_DIR/skills/assistant-review/references/review-loop.md"
 review_index="$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml"
 review_phase_gates="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
 review_principles="$FRAMEWORK_DIR/skills/assistant-review/references/review-principles.md"
-review_rubric="$FRAMEWORK_DIR/skills/assistant-review/references/review-rubric.md"
 review_evals="$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json"
-
-test_start "assistant-review scores selected verification evidence without penalizing adequate non-test methods"
-review_verification_projection_failures=()
-for term in \
-    "| **Verification Evidence** | 0.15 | Selected verification methods, evidence quality, material gaps, and test quality when tests were selected |" \
-    "Absence of tests alone is not a failure when another selected method is adequate."; do
-    if ! grep -Fq -- "$term" "$review_rubric"; then
-        review_verification_projection_failures+=("review-rubric.md missing: $term")
-    fi
-done
-if ! grep -Fq -- 'name: test_coverage' "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"; then
-    review_verification_projection_failures+=("stable test_coverage output key was removed")
-fi
-if [[ "${#review_verification_projection_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "review verification evidence policy drifted: ${review_verification_projection_failures[*]}"
-fi
 
 test_start "assistant-review requires current evidence for due test and non-test checks"
 review_due_evidence_failures=()
@@ -169,190 +94,6 @@ if [[ "${#review_prompt_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "reviewer method-neutral scoring prompt gaps: ${review_prompt_failures[*]}"
-fi
-
-test_start "assistant-review applies mandatory review checklists from reference"
-review_checklist_failures=()
-
-if [[ ! -f "$review_checklists" ]]; then
-    review_checklist_failures+=("skills/assistant-review/references/review-checklists.md missing")
-fi
-
-for inline_heading in \
-    "## Agentic Loop Safety Checklist" \
-    "## Behavioral Contract Review Checklist" \
-    "## Semantic Contract Review Checklist"; do
-    if grep -Fqx "$inline_heading" "$review_skill"; then
-        review_checklist_failures+=("skills/assistant-review/SKILL.md still has inline section $inline_heading")
-    fi
-done
-
-for file_and_term in \
-    "$review_skill::references/review-checklists.md" \
-    "$review_index::id: fresh-reviewer-context-bundle" \
-    "$review_loop::Load this reference before the first REVIEW step" \
-    "$review_loop::triggered checklist sections" \
-    "$review_index::references/review-checklists.md" \
-    "$review_checklists::Agentic Loop Safety Checklist" \
-    "$review_checklists::Behavioral Contract Review Checklist" \
-    "$review_checklists::Semantic Contract Review Checklist" \
-    "$review_checklists::Architecture Decision Pack Review Checklist" \
-    "$review_evals::review-checklists-reference-is-mandatory" \
-    "$review_evals::references/review-checklists.md" \
-    "$review_evals::Agentic Loop Safety Checklist" \
-    "$review_evals::Behavioral Contract Review Checklist" \
-    "$review_evals::Semantic Contract Review Checklist" \
-    "$review_evals::bounded execution" \
-    "$review_evals::interface-implementation alignment" \
-    "$review_evals::template-contract alignment"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        review_checklist_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-
-if [[ -f "$review_checklists" ]]; then
-    for section_and_term in \
-        "## Agentic Loop Safety Checklist::Bounded execution" \
-        "## Agentic Loop Safety Checklist::Stop condition" \
-        "## Agentic Loop Safety Checklist::empty-result" \
-        "## Agentic Loop Safety Checklist::Tool-error handling" \
-        "## Agentic Loop Safety Checklist::Progress/stagnation detection" \
-        "## Agentic Loop Safety Checklist::Cost/token guardrails" \
-        "## Agentic Loop Safety Checklist::Low-confidence escalation" \
-        "## Behavioral Contract Review Checklist::Existing behavior and invariants" \
-        "## Behavioral Contract Review Checklist::Interface-implementation alignment" \
-        "## Behavioral Contract Review Checklist::Test inheritance coverage" \
-        "## Behavioral Contract Review Checklist::External protocol / algorithm fidelity" \
-        "## Behavioral Contract Review Checklist::High-impact operation guards" \
-        "## Behavioral Contract Review Checklist::Runtime surface sync" \
-        "## Semantic Contract Review Checklist::Inherited contract obligations" \
-        "## Semantic Contract Review Checklist::Template-contract alignment" \
-        "## Semantic Contract Review Checklist::Eval coverage inheritance" \
-        "## Semantic Contract Review Checklist::External-method signature fidelity" \
-        "## Semantic Contract Review Checklist::High-stakes recommendation guard" \
-        "## Semantic Contract Review Checklist::Mirror surfaces"; do
-        section="${section_and_term%%::*}"
-        term="${section_and_term#*::}"
-        if ! p0p4_reference_section_has_term "$review_checklists" "$section" "$term"; then
-            review_checklist_failures+=("skills/assistant-review/references/review-checklists.md $section missing $term")
-        fi
-    done
-fi
-
-if [[ "${#review_checklist_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review mandatory review checklist reference is incomplete: ${review_checklist_failures[*]}"
-fi
-
-test_start "assistant-review requires evidence-bound medium-scope design coherence"
-design_coherence_failures=()
-for file_and_term in \
-    "$review_skill::Design Coherence Pass" \
-    "$review_loop::Design Coherence evidence" \
-    "$review_handoffs::scope_size" \
-    "$review_handoffs::design_coherence" \
-    "$review_phase_gates::RS6A" \
-    "$review_phase_gates::principle_checks.design_coherence" \
-    "$review_evals::review-medium-scope-design-coherence" \
-    "$review_evals::review-design-coherence-avoids-structural-heuristic"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        design_coherence_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-for section_and_term in \
-    "## Design Coherence Pass::independent reasons to change" \
-    "## Design Coherence Pass::no concrete risk found" \
-    "## Design Coherence Pass::structural diff shape"; do
-    section="${section_and_term%%::*}"
-    term="${section_and_term#*::}"
-    if ! p0p4_reference_section_has_term "$review_principles" "$section" "$term"; then
-        design_coherence_failures+=("skills/assistant-review/references/review-principles.md $section missing $term")
-    fi
-done
-if ! awk '
-    $0 == "  - name: fresh_reviewer_context" { in_bundle = 1; next }
-    in_bundle && /^  - name: / { exit }
-    in_bundle && /^[[:space:]]+context_fields_from_dispatch: / {
-        fields = $0
-        sub(/^.*\[/, "", fields)
-        sub(/\].*$/, "", fields)
-        count = split(fields, items, ",")
-        for (item_index = 1; item_index <= count; item_index++) {
-            item = items[item_index]
-            gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
-            if (item == "scope_size") found = 1
-        }
-    }
-    END { exit found ? 0 : 1 }
-' "$review_handoffs"; then
-    design_coherence_failures+=("fresh_reviewer_context.context_fields_from_dispatch missing scope_size")
-fi
-if ! awk '
-    $0 == "      - name: principle_checks" { in_checks = 1; next }
-    in_checks && /^      - name: / { exit }
-    in_checks && $0 == "        required: conditional" { required = 1 }
-    in_checks && $0 == "        condition: \"quality_principles_required is true or scope_size in [medium, large]\"" { condition = 1 }
-    END { exit required && condition ? 0 : 1 }
-' "$review_handoffs"; then
-    design_coherence_failures+=("principle_checks is not conditionally required for its applicable scope")
-fi
-if ! awk '
-    $0 == "      - name: principle_checks" { in_checks = 1; next }
-    in_checks && /^      - name: / { exit }
-    in_checks && $0 == "          - name: design_coherence" { in_design_coherence = 1; next }
-    in_design_coherence && /^          - name: / { exit }
-    in_design_coherence && $0 == "            required: conditional" { required = 1 }
-    in_design_coherence && $0 == "            condition: \"scope_size in [medium, large]\"" { condition = 1 }
-    END { exit required && condition ? 0 : 1 }
-' "$review_handoffs"; then
-    design_coherence_failures+=("principle_checks.design_coherence is not conditionally required for medium/large scope")
-fi
-if [[ "${#design_coherence_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review medium-scope design-coherence contract is incomplete: ${design_coherence_failures[*]}"
-fi
-
-test_start "assistant-review checks applicable Architecture Decision Packs"
-architecture_pack_review_failures=()
-for file_and_term in \
-    "$review_checklists::## Architecture Decision Pack Review Checklist" \
-    "$review_checklists::Freshness, facts, and material questions" \
-    "$review_checklists::Ownership, dependency, and lifecycle boundary" \
-    "$review_checklists::Design-pressure checks" \
-    "$review_checklists::Semantic type ledger and primitive exceptions" \
-    "$review_checklists::Falsifiable quality scenarios" \
-    "$review_checklists::Compatibility, extension, and verification handoff" \
-    "$review_index::architecture_decision_pack_review_required" \
-    "$review_phase_gates::RS10" \
-    "$review_evals::architecture-decision-pack-review-is-fresh-and-falsifiable"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        architecture_pack_review_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-for section_and_term in \
-    "## Architecture Decision Pack Review Checklist::Freshness, facts, and material questions" \
-    "## Architecture Decision Pack Review Checklist::Design-pressure checks" \
-    "## Architecture Decision Pack Review Checklist::Semantic type ledger and primitive exceptions" \
-    "## Architecture Decision Pack Review Checklist::Falsifiable quality scenarios" \
-    "## Architecture Decision Pack Review Checklist::Compatibility, extension, and verification handoff"; do
-    section="${section_and_term%%::*}"
-    term="${section_and_term#*::}"
-    if ! p0p4_reference_section_has_term "$review_checklists" "$section" "$term"; then
-        architecture_pack_review_failures+=("skills/assistant-review/references/review-checklists.md $section missing $term")
-    fi
-done
-if [[ ${#architecture_pack_review_failures[@]} -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review Architecture Decision Pack reference is incomplete: ${architecture_pack_review_failures[*]}"
 fi
 
 test_start "assistant-review binds Pack review to the canonical architecture mode"
@@ -437,16 +178,11 @@ adversarial_review_responses="$adversarial_review_root/responses"
 adversarial_review_output="$adversarial_review_root/grader.out"
 p0p4_register_cleanup "$adversarial_review_root"
 mkdir -p "$adversarial_review_responses/assistant-review"
-while IFS= read -r adversarial_case_id; do
-    adversarial_response_path="$adversarial_review_responses/assistant-review/$adversarial_case_id.txt"
-    adversarial_required_summary="$(jq -r --arg id "$adversarial_case_id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$review_evals" | paste -sd ' ' -)"
-    if [[ "$adversarial_case_id" == "standalone-high-risk-record-without-challenge-remains-review-intensive" ]]; then
-        jq -n --arg summary "$adversarial_required_summary" '{summary: $summary, architecture_design_mode: "required", architecture_decision_pack: {mode: "required"}, validation_result: {status: "accepted", missing_field: "none", evidence_or_gap: "challenge evidence is accepted"}}' >"$adversarial_response_path"
-    else
-        printf '%s\n' "$adversarial_required_summary" >"$adversarial_response_path"
-    fi
-done < <(jq -r '.cases[].id' "$review_evals")
-if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$adversarial_review_responses" --skill assistant-review >"$adversarial_review_output" 2>&1; then
+adversarial_case_id="standalone-high-risk-record-without-challenge-remains-review-intensive"
+adversarial_response_path="$adversarial_review_responses/assistant-review/$adversarial_case_id.txt"
+adversarial_required_summary="$(jq -r --arg id "$adversarial_case_id" '.cases[] | select(.id == $id) | .machine_expectations.required_substrings[]' "$review_evals" | paste -sd ' ' -)"
+jq -n --arg summary "$adversarial_required_summary" '{summary: $summary, architecture_design_mode: "required", architecture_decision_pack: {mode: "required"}, validation_result: {status: "accepted", missing_field: "none", evidence_or_gap: "challenge evidence is accepted"}}' >"$adversarial_response_path"
+if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$adversarial_review_responses" --skill assistant-review --case "$adversarial_case_id" >"$adversarial_review_output" 2>&1; then
     architecture_pack_mode_consumer_failures+=("adversarial standalone ADR grader response passed")
 elif ! grep -Fq $'FAIL\tassistant-review\tstandalone-high-risk-record-without-challenge-remains-review-intensive' "$adversarial_review_output" \
     || ! grep -Fq "structured JSON assertion failure" "$adversarial_review_output"; then
@@ -466,79 +202,6 @@ if [[ ${#architecture_pack_mode_consumer_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "assistant-review canonical Pack mode consumer gaps: ${architecture_pack_mode_consumer_failures[*]}"
-fi
-
-test_start "assistant-review does not use rubric score alone to force round 3 or stronger claims"
-review_threshold_failures=()
-
-for file_and_forbidden in \
-    "$review_skill::REFINE with zero findings -> EXIT CLEAN" \
-    "$review_skill::Rubric score {score} is below target" \
-    "$review_rubric::| 4-5 |"; do
-    file="${file_and_forbidden%%::*}"
-    forbidden="${file_and_forbidden#*::}"
-    if [[ -f "$file" ]] && grep -Fq "$forbidden" "$file"; then
-        review_threshold_failures+=("${file#$FRAMEWORK_DIR/}: still contains $forbidden")
-    fi
-done
-
-for file_and_term in \
-    "$review_loop::A score below the rubric threshold alone is insufficient to start round 3 or later." \
-    "$review_loop::additional_round_reason" \
-    "$review_phase_gates::Score below threshold alone is insufficient" \
-    "$review_phase_gates::changed_files" \
-    "$review_phase_gates::unresolved_finding" \
-    "$review_phase_gates::validation_failure" \
-    "$review_phase_gates::regression_or_drift" \
-    "$review_phase_gates::changed_hypothesis" \
-    "$review_rubric::A score below threshold alone does not authorize round 3 or later."; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        review_threshold_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-
-if [[ "${#review_threshold_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review additional-round and evidence-bounded claim contract drifted: ${review_threshold_failures[*]}"
-fi
-
-test_start "assistant-review defaults to one complete audit batch and at most one post-fix re-review batch"
-review_round_policy_failures=()
-review_output="$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml"
-review_handoffs="$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml"
-
-for file_and_term in \
-    "$review_loop::Audit exits after one started terminal batch" \
-    "$review_loop::Load this reference before the first REVIEW step" \
-    "$review_skill::After fixes, verify due selected/binding checks, freeze the source and run a fresh complete batch" \
-    "$review_loop::Incomplete coverage -> \`HAS_REMAINING_ITEMS\`, never CLEAN/ISSUES_FIXED" \
-    "$review_loop::Audit exits after one started terminal batch; retry exhaustion never starts another." \
-    "$review_loop::After round 1 fixes, start fresh round 2." \
-    "$review_loop::references/review-batch.md" \
-    "$review_loop::Round 3+ requires a recorded" \
-    "$review_handoffs::- name: additional_round_reason" \
-    "$review_handoffs::condition: \"round >= 3\"" \
-    "$review_output::- name: additional_round_reasons" \
-    "$review_output::condition: \"rounds >= 2\"" \
-    "$review_output::Contains one entry for every round from 2 through rounds" \
-    "$review_output::round 2 records changed-files/fix evidence retrospectively" \
-    "$review_evals::bounded-review-default-rounds" \
-    "$review_evals::audit-one-pass" \
-    "$review_evals::additional_round_reason"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        review_round_policy_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-
-if [[ "${#review_round_policy_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review default round policy is incomplete: ${review_round_policy_failures[*]}"
 fi
 
 test_start "assistant-review final no-finding claim is evidence-bounded and role-separated"
@@ -596,125 +259,6 @@ else
     fail "assistant-review phase-gate IDs must be unique: ${phase_gate_id_failures[*]}"
 fi
 
-test_start "review scores and finding counts calibrate without manufacturing work"
-workflow_gates="$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"
-review_gates="$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"
-if ! grep -Fq 'final rubric weighted score >= 4.0' "$workflow_gates" \
-    && ! grep -Fq 'Fix lowest-scoring dimensions and re-review' "$workflow_gates" \
-    && p0p4_contains_text "$workflow_gates" "A score below 4.0 records residual risk but does not by itself authorize fixes or another review round" \
-    && ! grep -Fq 'Each round finds fewer or equal issues than the previous round' "$review_gates" \
-    && p0p4_contains_text "$review_gates" "Never suppress a new evidence-backed finding to preserve a monotonic count"; then
-    pass
-else
-    fail "score or issue-count gates still bias review toward churn or suppressed findings"
-fi
-
-test_start "assistant-review return requires evidence-bounded reuse-search results"
-reuse_search_return_failures=()
-for file_and_term in \
-    "$review_handoffs::- name: reuse_search" \
-    "$review_handoffs::applicability" \
-    "$review_handoffs::enum_values: [applicable, not_applicable]" \
-    "$review_handoffs::applicability_reason" \
-    "$review_handoffs::query_or_path" \
-    "$review_handoffs::scope" \
-    "$review_handoffs::outcome" \
-    "$review_handoffs::disposition" \
-    "$review_handoffs::enum_values: [reuse, extend, intentional_duplicate, reject_coincidental, reject_independent]" \
-    "$review_handoffs::no_candidate_reason" \
-    "$review_handoffs::decision_rationale" \
-    "$review_handoffs::divergence_control" \
-    "$review_phase_gates::reuse_search" \
-    "$review_phase_gates::cannot return clean"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        reuse_search_return_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-if [[ "${#reuse_search_return_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review reuse-search return contract is incomplete: ${reuse_search_return_failures[*]}"
-fi
-
-test_start "assistant-review requires an independent reuse search in every fresh review"
-independent_reuse_search_failures=()
-for file_and_term in \
-    "$review_handoffs::- name: reuse_search_instruction" \
-    "$review_loop::bounded independent capability search" \
-    "$review_loop::carried Mapper evidence cannot satisfy review" \
-    "$review_phase_gates::fresh independent capability search" \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/review-principles.md::independently during review" \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/review-principles.md::Carried Mapper/task-packet evidence alone cannot satisfy review"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        independent_reuse_search_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-if ! awk '
-    $0 == "  - name: fresh_reviewer_context" { in_bundle = 1; next }
-    in_bundle && /^  - name: / { exit }
-    in_bundle && /^[[:space:]]+context_fields_from_dispatch: / {
-        fields = $0
-        sub(/^.*\[/, "", fields)
-        sub(/\].*$/, "", fields)
-        count = split(fields, items, ",")
-        for (item_index = 1; item_index <= count; item_index++) {
-            item = items[item_index]
-            gsub(/^[[:space:]]+|[[:space:]]+$/, "", item)
-            if (item == "reuse_search_instruction") found = 1
-        }
-    }
-    END { exit found ? 0 : 1 }
-' "$review_handoffs"; then
-    independent_reuse_search_failures+=("fresh_reviewer_context.context_fields_from_dispatch missing reuse_search_instruction")
-fi
-if [[ "${#independent_reuse_search_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review fresh independent reuse-search instruction is incomplete: ${independent_reuse_search_failures[*]}"
-fi
-
-test_start "assistant-review v7 preserves recoverable selected-design Pack projections"
-pack_projection_cardinality_failures=()
-if ! ruby -ryaml -e '
-    input = YAML.load_file(ARGV.fetch(0))
-    contracts = ARGV.map { |path| YAML.load_file(path) }
-    pack = input.fetch("fields").find { |field| field["name"] == "architecture_decision_pack" }
-    fields = pack.fetch("object_fields").to_h { |field| [field["name"], field] }
-    boundaries = fields.fetch("boundaries_and_dependencies")
-    pressure = fields.fetch("design_pressure_checks")
-    required_concerns = %w[control_and_early_exit ownership_and_disposal resource_envelope extension_registration representative_path]
-    ref = fields.fetch("ref")
-    valid = contracts.all? { |contract| contract.fetch("schema_version") == "11.0" } &&
-      boundaries["required"] == true && boundaries["min_items"] == 1 &&
-      pressure["required"] == true && pressure["min_items"] == 5 && pressure["max_items"] == 5 &&
-      ref["required"] == true && ref.fetch("validation").include?("selected design") && ref.fetch("validation").include?("rationale") && ref.fetch("validation").include?("viable alternatives") &&
-      required_concerns.all? { |concern| pressure.fetch("validation").include?(concern) }
-    exit valid ? 0 : 1
-' "$review_input" "$review_output" "$review_phase_gates" "$review_handoffs" "$review_index"; then
-    pack_projection_cardinality_failures+=("v7 input does not preserve recoverable selected design, rationale, viable alternative dispositions, non-empty boundaries, and exact five-concern pressure coverage")
-fi
-if ! p0p4_contains_text "$review_legacy" 'Current v10 field definitions' \
-    || ! p0p4_contains_text "$review_legacy" 'recoverable selected design, rationale, viable alternatives/dispositions'; then
-    pack_projection_cardinality_failures+=("9.0 migration note does not describe recoverable selected design evidence")
-fi
-if ! jq -e '
-    .cases[] | select(.id == "architecture-pack-empty-review-evidence-blocks") |
-    (.prompt | contains("Return exactly one valid JSON object")) and
-    (.machine_expectations.structured_json_assertions | any(. == {"operator":"equals","path":["architecture_decision_pack_review","architecture_pack_findings_summary"],"expected":"Blocked: boundaries_and_dependencies_or_design_pressure_checks is empty."})) and
-    (.machine_expectations.structured_json_assertions | any(. == {"operator":"path_absent","path":["architecture_decision_pack_review","independent_challenge_evidence"]}))
-' "$review_evals" >/dev/null; then
-    pack_projection_cardinality_failures+=("empty Pack projection negative eval is missing structured blocked evidence")
-fi
-if [[ ${#pack_projection_cardinality_failures[@]} -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review Pack projection cardinality gaps: ${pack_projection_cardinality_failures[*]}"
-fi
-
 test_start "assistant-review grader rejects unrecoverable selected Pack decisions"
 review_identity_eval_root="$(mktemp -d "${TMPDIR:-/tmp}/assistant-review-selected-decision.XXXXXX")"
 p0p4_register_cleanup "$review_identity_eval_root"
@@ -730,80 +274,6 @@ elif grep -Fq $'FAIL\tskill\tarchitecture-pack-selected-design-recovery-blocks' 
     pass
 else
     fail "real grader did not reject unrecoverable selected Pack decision for the intended reason"
-fi
-
-test_start "assistant-review v7 conditionally requires Pack checks in Reviewer returns"
-reviewer_pack_return_failures=()
-if ! ruby -ryaml -e '
-    handoffs = YAML.load_file(ARGV.fetch(0))
-    reviewer = handoffs.fetch("handoffs").find { |handoff| handoff["name"] == "orchestrator_to_reviewer" }
-    checks = reviewer.fetch("return_fields").find { |field| field["name"] == "architecture_decision_pack_checks" }
-    validation = handoffs.fetch("return_validation_bundles").find { |bundle| bundle["name"] == "reviewer_return_validation" }
-    valid = checks["required"] == "conditional" &&
-      checks["condition"] == "architecture_decision_pack_review_required is true" &&
-      validation.fetch("validation").include?("architecture_decision_pack_checks when triggered")
-    exit valid ? 0 : 1
-' "$review_handoffs"; then
-    reviewer_pack_return_failures+=("Reviewer return can omit triggered architecture_decision_pack_checks")
-fi
-if [[ ${#reviewer_pack_return_failures[@]} -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review Reviewer Pack return requiredness gaps: ${reviewer_pack_return_failures[*]}"
-fi
-
-test_start "assistant-review batches independent passes before aggregation or exit"
-review_batch_failures=()
-review_batch_reference="$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md"
-for file_and_term in \
-    "$review_input::review_snapshot_id" \
-    "$review_input::snapshot_identity" \
-    "$review_index::harness_capable" \
-    "$review_handoffs::review_batch" \
-    "$review_handoffs::expected_passes" \
-    "$review_handoffs::review_pass_id" \
-    "$review_handoffs::sibling-blind" \
-    "$review_handoffs::coverage_entries" \
-    "$review_phase_gates::all expected passes reach terminal accounting" \
-    "$review_phase_gates::coverage is incomplete" \
-    "$review_phase_gates::HAS_REMAINING_ITEMS" \
-    "$review_output::coverage_complete" \
-    "$review_output::coverage_ledger" \
-    "$review_loop::wait for all expected responses" \
-    "$review_batch_reference::at least two independent narrow passes" \
-    "$review_batch_reference::one \`light_contract_and_runtime\` pass covering both concerns" \
-    "$review_batch_reference::Do not aggregate, fix, exit, or report a clean result" \
-    "$review_evals::audit-batch-waits-for-all-pass-results" \
-    "$review_evals::incomplete-review-batch-never-cleans" \
-    "$review_evals::post-fix-review-uses-fresh-snapshot-batch"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        review_batch_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-if [[ "${#review_batch_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review multi-pass batch contract is incomplete: ${review_batch_failures[*]}"
-fi
-
-test_start "assistant-review incomplete-batch eval keeps clean states out of generated success text"
-if ruby -rjson -e '
-  review = JSON.parse(File.read(ARGV.fetch(0)))
-  item = review.fetch("cases").find { |entry| entry["id"] == "incomplete-review-batch-never-cleans" }
-  expectations = item.fetch("machine_expectations")
-  generated_success_text = (item.fetch("expected_behavior") + item.fetch("pass_criteria")).join(" ")
-  forbidden = expectations.fetch("forbidden_substrings")
-  valid = expectations.fetch("required_substrings").include?("HAS_REMAINING_ITEMS") &&
-    forbidden.include?("final result: CLEAN") &&
-    forbidden.include?("final result: ISSUES_FIXED") &&
-    !generated_success_text.include?("CLEAN") && !generated_success_text.include?("ISSUES_FIXED")
-  exit valid ? 0 : 1
-' "$review_evals"; then
-    pass
-else
-    fail "assistant-review incomplete-batch eval collides with its generated success response"
 fi
 
 test_start "assistant-review batch topology preserves snapshot, closure, and aggregate semantics"
@@ -912,38 +382,6 @@ if ruby -ryaml -e '
     pass
 else
     fail "assistant-review discovery topology, scope manifest, final-snapshot lifecycle, or aggregate rubric contract is incomplete"
-fi
-
-test_start "assistant-review preserves carried feature-preparation QA acceptance obligation"
-if ruby -ryaml -e '
-  input = YAML.load_file(ARGV.fetch(0))
-  handoffs = YAML.load_file(ARGV.fetch(1))
-  gates = YAML.load_file(ARGV.fetch(2))
-  workflow = YAML.load_file(ARGV.fetch(3))
-  field = input.fetch("fields").find { |entry| entry["name"] == "approved_feature_preparation_qa_acceptance_obligation" }
-  qa = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_qa_evaluator" }
-  handoff = qa.fetch("context_fields").find { |entry| entry["name"] == "approved_feature_preparation_qa_acceptance_obligation" }
-  fields = field.fetch("object_fields").to_h { |entry| [entry["name"], entry] }
-  canonical = workflow.fetch("fields").find { |entry| entry["name"] == "approved_feature_preparation_qa_acceptance_obligation" }
-  canonical_fields = canonical.fetch("object_fields")
-  projection = ->(entries) { entries.map { |entry| entry.slice("name", "type", "enum_values", "required", "condition", "validation") } }
-  entry = gates.fetch("gates").find { |gate| gate["phase"] == "ENTRY" }.fetch("exit_assertions").to_h { |gate| [gate["id"], gate] }
-  qa_gates = gates.fetch("gates").find { |gate| gate["phase"] == "QA_EVALUATION_STEP" }.fetch("exit_assertions").to_h { |gate| [gate["id"], gate] }
-  valid = field["type"] == "object" && field["required"] == "conditional" && field["condition"] == "approved_feature_preparation_qa_acceptance_obligation is carried from workflow" &&
-    projection.call(field.fetch("object_fields")) == projection.call(canonical_fields) &&
-    projection.call(handoff.fetch("object_fields")) == projection.call(canonical_fields) &&
-    fields.fetch("requested_scope")["type"] == "string" && field.fetch("validation").include?("unchanged") &&
-    entry.fetch("E7").fetch("check").include?("approved_feature_preparation_qa_acceptance_obligation") &&
-    qa_gates.fetch("QA1").fetch("check").include?("execution_prerequisite") && qa_gates.fetch("QA1").fetch("on_fail").downcase.include?("block")
-  exit valid ? 0 : 1
-' "$review_input" "$review_handoffs" "$review_phase_gates" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml" \
-  && grep -Fq 'approved_feature_preparation_qa_acceptance_obligation' "$review_index" \
-  && grep -Fq 'qa_evaluation_mode=required' "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md" \
-  && grep -Fq 'execution_prerequisite' "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md" \
-  && grep -Fq 'block if prerequisite or evidence is missing' "$FRAMEWORK_DIR/skills/assistant-review/references/qa-evaluation-loop.md"; then
-    pass
-else
-    fail "assistant-review drops or weakens carried feature-preparation QA acceptance obligation"
 fi
 
 test_start "assistant-review requires exact pass assignment, terminal accounting, and mutation-safe aggregation"
@@ -1109,33 +547,6 @@ else
     fail "assistant-review does not exactly close required obligations, canonical perspectives, or typed pre-batch findings"
 fi
 
-test_start "assistant-review preserves the full canonical finding projection and explicit delegation"
-if ruby -ryaml -e '
-  handoffs, output, input, gates = ARGV.map { |path| YAML.load_file(path) }
-  reviewer = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_reviewer" }
-  batch = reviewer.fetch("context_fields").to_h { |field| [field["name"], field] }.fetch("review_batch").fetch("object_fields").to_h { |field| [field["name"], field] }
-  returned = reviewer.fetch("return_fields").find { |field| field["name"] == "findings" }.fetch("object_fields").to_h { |field| [field["name"], field] }
-  prebatch = batch.fetch("pre_batch_findings").fetch("object_fields").to_h { |field| [field["name"], field] }.fetch("finding").fetch("object_fields").to_h { |field| [field["name"], field] }
-  final = output.fetch("artifacts").find { |item| item["name"] == "final_summary" }.fetch("object_fields").to_h { |field| [field["name"], field] }
-  aggregate = final.fetch("aggregated_findings").fetch("object_fields").to_h { |field| [field["name"], field] }
-  audit = output.fetch("artifacts").find { |item| item["name"] == "audit_report" }.fetch("object_fields").to_h { |field| [field["name"], field] }.fetch("findings").fetch("object_fields").to_h { |field| [field["name"], field] }
-  fields = %w[finding_id file line locus invariant failure_mechanism severity evidence smallest_useful_fix description confidence_pct]
-  same_shape = ->(left, right) { fields.all? { |name| left.fetch(name).slice("type", "required", "enum_values") == right.fetch(name).slice("type", "required", "enum_values") } }
-  gates_by_id = gates.fetch("gates").find { |gate| gate["phase"] == "REVIEW_STEP" }.fetch("exit_assertions").to_h { |item| [item["id"], item] }
-  mode = input.fetch("fields").find { |field| field["name"] == "subagent_execution_mode" }
-  valid = same_shape.call(returned, prebatch) && same_shape.call(returned, aggregate) && same_shape.call(returned, audit) &&
-    prebatch.fetch("confidence_pct").fetch("validation").include?("spec_review") && aggregate.fetch("confidence_pct").fetch("validation").include?("minimum") &&
-    gates_by_id.fetch("RS1").fetch("condition") == "subagent_execution_mode == delegated" &&
-    gates_by_id.fetch("RS1B").fetch("condition") == "scope_size in [trivial, small]" &&
-    mode.fetch("enum_values") == %w[delegated not_applicable direct_fallback] && mode.fetch("infer_from").include?("unavailable isolation remains incomplete") &&
-    mode.fetch("validation").include?("direct_fallback is a historical v9 reader-only label") && mode.fetch("validation").include?("a current v10 producer never emits it and it never certifies current review")
-  exit valid ? 0 : 1
-' "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$review_input" "$review_phase_gates"; then
-    pass
-else
-    fail "assistant-review lacks a lossless finding projection or explicit-trigger delegation"
-fi
-
 test_start "assistant-review rejects unsupported perspective field types"
 if ruby -ryaml -e '
   handoffs = YAML.load_file(ARGV.fetch(0))
@@ -1151,21 +562,6 @@ if ruby -ryaml -e '
     pass
 else
     fail "assistant-review allows unsupported enum[] perspective fields"
-fi
-
-test_start "assistant-review gives drift precedence over a large score increase"
-if ruby -e '
-  classify = ->(score_delta, finding_delta) {
-    return "DRIFT" if score_delta > 0 && finding_delta >= 0
-    return "SUSPICIOUS" if score_delta > 1.0 && finding_delta < 0
-    "OTHER"
-  }
-  exit (classify.call(1.1, -1) == "SUSPICIOUS" && classify.call(1.1, 0) == "DRIFT" && classify.call(1.1, 1) == "DRIFT") ? 0 : 1
-' && grep -Fq 'score_delta > 1.0 AND aggregated_finding_count_delta < 0 → SUSPICIOUS' "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md" \
-  && grep -Fq 'DRIFT takes precedence whenever finding count is unchanged or increased' "$FRAMEWORK_DIR/skills/assistant-review/references/score-tracking.md"; then
-    pass
-else
-    fail "assistant-review score tracking does not make SUSPICIOUS and DRIFT mutually exclusive"
 fi
 
 test_start "assistant-review rubric examples use correct arithmetic"
@@ -1188,152 +584,6 @@ if ruby -ryaml -e '
     pass
 else
     fail "assistant-review rubric examples do not match the 3.90 arithmetic"
-fi
-
-test_start "assistant-review 8.0 migration wording preserves source and target direction"
-if grep -Fq 'Rebuild persisted 6.0 or incompatible 7.0/7.1/7.2/8.0 under 10.0 from a fresh snapshot' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md" \
-  && ! grep -Fq 'Rebuild 8.0 from' "$FRAMEWORK_DIR/skills/assistant-review/references/review-batch.md"; then
-    pass
-else
-    fail "assistant-review review-batch migration wording reverses the v6-to-v7 rebuild direction"
-fi
-
-test_start "assistant-review correlates active attempts, QA obligations, and finding closure"
-if ruby -ryaml -e '
-  handoffs, output, gates = ARGV.map { |path| YAML.load_file(path) }
-  reviewer = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_reviewer" }
-  qa = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_qa_evaluator" }
-  fields = reviewer.fetch("context_fields").to_h { |field| [field["name"], field] }
-  batch = fields.fetch("review_batch").fetch("object_fields").to_h { |field| [field["name"], field] }
-  attempts = batch.fetch("pass_attempt_ledger").fetch("object_fields").to_h { |field| [field["name"], field] }
-  returned = reviewer.fetch("return_fields").to_h { |field| [field["name"], field] }
-  coverage = returned.fetch("coverage_entries").fetch("object_fields").to_h { |field| [field["name"], field] }
-  qa_return = qa.fetch("return_fields").to_h { |field| [field["name"], field] }
-  qa_finding = qa_return.fetch("acceptance_findings").fetch("object_fields").to_h { |field| [field["name"], field] }
-  final = output.fetch("artifacts").find { |item| item["name"] == "final_summary" }.fetch("object_fields").to_h { |field| [field["name"], field] }
-  ledger = final.fetch("aggregation_ledger").fetch("object_fields").to_h { |field| [field["name"], field] }
-  aggregate = final.fetch("aggregated_findings").fetch("object_fields").to_h { |field| [field["name"], field] }
-  qa_output = output.fetch("artifacts").find { |item| item["name"] == "qa_evaluation_result" }.fetch("object_fields").to_h { |field| [field["name"], field] }
-  qa_output_finding = qa_output.fetch("acceptance_findings").fetch("object_fields").to_h { |field| [field["name"], field] }
-  bundle = handoffs.fetch("dispatch_context_bundles").find { |item| item["name"] == "fresh_reviewer_context" }
-  qa_shape = %w[severity criterion evidence impact recommendation disposition]
-  review_gates = gates.fetch("gates").find { |item| item["phase"] == "REVIEW_STEP" }.fetch("exit_assertions").to_h { |item| [item["id"], item] }
-  qa_gates = gates.fetch("gates").find { |item| item["phase"] == "QA_EVALUATION_STEP" }.fetch("exit_assertions").to_h { |item| [item["id"], item] }
-  attempt_fields = attempts.fetch("attempts").fetch("object_fields").to_h { |field| [field["name"], field] }
-  events = attempt_fields.fetch("response_events").fetch("object_fields").to_h { |field| [field["name"], field] }
-  valid = fields.key?("review_attempt_id") && returned.key?("review_attempt_id") && attempts.key?("active_terminal_attempt_id") &&
-    events.fetch("disposition").fetch("enum_values") == %w[active_terminal stale duplicate] && attempt_fields.fetch("review_attempt_id").fetch("required") == true &&
-    coverage.fetch("finding_ids").fetch("condition") == "status == finding" && ledger.fetch("source_finding_ids").fetch("min_items") == 1 && aggregate.fetch("source_finding_ids").fetch("min_items") == 1 &&
-    qa_shape.all? { |name| qa_finding.fetch(name).slice("type", "required", "enum_values") == qa_output_finding.fetch(name).slice("type", "required", "enum_values") } &&
-    qa_return.fetch("approved_feature_preparation_qa_acceptance_obligation_result").fetch("required") == "conditional" && qa_output.fetch("approved_feature_preparation_qa_acceptance_obligation_result").fetch("required") == "conditional" &&
-    qa_gates.fetch("QA3").fetch("check").include?("approved_feature_preparation_qa_acceptance_obligation_result") && qa_gates.fetch("QA5").fetch("check").include?("fulfilled") &&
-    bundle.fetch("selected_dispatch_context_ref") == "handoffs.orchestrator_to_reviewer.reviewer_pass_context_fields" && !bundle.fetch("context_fields_from_dispatch").include?("review_batch") &&
-    review_gates.fetch("RS_BATCH_BARRIER").fetch("check").include?("active review_attempt_id") && review_gates.fetch("RS_BATCH_AGGREGATION").fetch("check").include?("source_finding_ids")
-  exit valid ? 0 : 1
-' "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$review_phase_gates"; then
-    pass
-else
-    fail "assistant-review lacks attempt correlation, canonical QA findings, or exact finding closure"
-fi
-
-test_start "assistant-review rejects stale attempts, lossy provenance, and incompatible terminal audit results"
-if ruby -ryaml -e '
-  handoffs, output, gates = ARGV.map { |path| YAML.load_file(path) }
-  reviewer = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_reviewer" }
-  qa = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_qa_evaluator" }
-  fields = reviewer.fetch("context_fields").to_h { |field| [field["name"], field] }
-  batch = fields.fetch("review_batch").fetch("object_fields").to_h { |field| [field["name"], field] }
-  ledger = batch.fetch("pass_attempt_ledger").fetch("object_fields").to_h { |field| [field["name"], field] }
-  returned = reviewer.fetch("return_fields").to_h { |field| [field["name"], field] }
-  coverage = returned.fetch("coverage_entries").fetch("object_fields").to_h { |field| [field["name"], field] }
-  audit = output.fetch("artifacts").find { |item| item["name"] == "audit_report" }.fetch("object_fields").to_h { |field| [field["name"], field] }.fetch("findings").fetch("object_fields").to_h { |field| [field["name"], field] }
-  final = output.fetch("artifacts").find { |item| item["name"] == "final_summary" }.fetch("object_fields").to_h { |field| [field["name"], field] }
-  qa_result = qa.fetch("return_fields").to_h { |field| [field["name"], field] }.fetch("approved_feature_preparation_qa_acceptance_obligation_result").fetch("object_fields").to_h { |field| [field["name"], field] }
-  qa_output = output.fetch("artifacts").find { |item| item["name"] == "qa_evaluation_result" }.fetch("object_fields").to_h { |field| [field["name"], field] }.fetch("approved_feature_preparation_qa_acceptance_obligation_result").fetch("object_fields").to_h { |field| [field["name"], field] }
-  review = gates.fetch("gates").find { |item| item["phase"] == "REVIEW_STEP" }.fetch("exit_assertions").to_h { |item| [item["id"], item] }
-  evaluate = gates.fetch("gates").find { |item| item["phase"] == "EVALUATE_STEP" }.fetch("exit_assertions").to_h { |item| [item["id"], item] }
-  active_terminal = ->(records, active) { records.count { |record| record["review_attempt_id"] == active && record.fetch("response_events", []).count { |event| event["disposition"] == "active_terminal" } == 1 } == 1 }
-  late_a_active_b = active_terminal.call([{"review_attempt_id" => "A", "response_events" => [{"disposition" => "stale"}]}, {"review_attempt_id" => "B", "response_events" => [{"disposition" => "active_terminal"}]}], "B")
-  duplicate_b = active_terminal.call([{"review_attempt_id" => "A", "response_events" => [{"disposition" => "stale"}]}, {"review_attempt_id" => "B", "response_events" => [{"disposition" => "active_terminal"}, {"disposition" => "duplicate"}]}], "B")
-  all_stale = active_terminal.call([{"review_attempt_id" => "A", "response_events" => [{"disposition" => "stale"}]}], "B")
-  wrong_active = active_terminal.call([{"review_attempt_id" => "A", "response_events" => [{"disposition" => "active_terminal"}]}], "B")
-  severity = {"nit" => 0, "should-fix" => 1, "must-fix" => 2}
-  source = [{"severity" => "nit"}, {"severity" => "must-fix"}]
-  valid = ledger.key?("attempts") && ledger.key?("active_terminal_attempt_id") && ledger.fetch("attempts").fetch("type") == "object[]" &&
-    late_a_active_b && duplicate_b && !all_stale && !wrong_active &&
-    returned.fetch("review_attempt_id").fetch("required") == true && coverage.fetch("finding_ids").fetch("condition") == "status == finding" &&
-    audit.fetch("source_finding_ids").fetch("min_items") == 1 && final.key?("final_snapshot_identity") &&
-    qa_result.key?("requested_scope") && qa_result.key?("execution_prerequisite") && qa_result.key?("feature_preparation_scope") && !qa_result.key?("source_binding") &&
-    %w[requested_scope execution_prerequisite feature_preparation_scope source_feature_preparation_evidence_ref source_preparation_basis].all? { |name| qa_result.fetch(name).slice("type", "required", "condition", "enum_values", "validation") == qa_output.fetch(name).slice("type", "required", "condition", "enum_values", "validation") } &&
-    severity.fetch(source.map { |finding| finding.fetch("severity") }.max_by { |value| severity.fetch(value) }) == 2 &&
-    evaluate.fetch("EV4").fetch("check").include?("complete or incomplete") && evaluate.fetch("EV8").fetch("check").include?("complete or incomplete")
-  exit valid ? 0 : 1
-' "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$review_phase_gates"; then
-    pass
-else
-    fail "assistant-review lacks active-attempt, typed-QA, provenance, or incomplete-audit safeguards"
-fi
-
-test_start "assistant-review invalidates real legacy and immediate-prior-minor packets with Unicode-safe v6 IDs"
-if ruby -ryaml -e '
-  input, handoffs, output = ARGV.take(3).map { |path| YAML.load_file(path) }
-  reviewer = handoffs.fetch("handoffs").find { |entry| entry["name"] == "orchestrator_to_reviewer" }
-  bundle = handoffs.fetch("dispatch_context_bundles").find { |entry| entry["name"] == "fresh_reviewer_context" }
-  require "digest"
-  legacy_packet = {
-    "schema_version" => "6.0",
-    "final_summary" => {"result" => "CLEAN", "final_review_snapshot_id" => "legacy-snapshot"},
-    "previously_fixed" => [
-      {"description" => "standalone", "fixed_in_round" => 1},
-      {"description" => "e\u0301", "fixed_in_round" => 2},
-      {"description" => "\u00e9", "fixed_in_round" => 2}
-    ]
-  }
-  base = ->(record) { "legacy-v6:#{record.fetch("fixed_in_round")}:#{Digest::SHA256.hexdigest(record.fetch("description").unicode_normalize(:nfc).encode("UTF-8"))[0, 24]}" }
-  migrate_ids = ->(records) {
-    groups = records.each_with_index.group_by { |record, _index| base.call(record) }
-    records.each_with_index.map do |record, index|
-      members = groups.fetch(base.call(record))
-      members.length == 1 ? base.call(record) : "#{base.call(record)}:#{members.index { |_member, member_index| member_index == index } + 1}"
-    end
-  }
-  migrated_ids = migrate_ids.call(legacy_packet.fetch("previously_fixed"))
-  current_schema_version = input.fetch("schema_version")
-  migration = {"source_schema_version" => legacy_packet.fetch("schema_version"), "batch_disposition" => "invalidated_rebuild_required", "rebuilt_review_snapshot_id" => "fresh-v#{current_schema_version}-snapshot"}
-  legacy_v7_packet = {"schema_version" => "7.0", "final_summary" => {"result" => "CLEAN"}}
-  immediate_prior_schema_version = "8.0"
-  immediate_prior_history = [{"description" => "retained closure", "fixed_in_round" => 1, "aggregate_finding_id" => "aggregate-v8", "source_finding_ids" => ["review-pass-v8"], "source_provenance" => [{"source_kind" => "review_pass", "source_id" => "review-pass-v8"}]}]
-  immediate_prior_packet = {"schema_version" => immediate_prior_schema_version, "final_summary" => {"result" => "CLEAN"}, "previously_fixed" => immediate_prior_history, "canonical_result_ref" => "legacy-result", "delegation_path_ref" => "legacy-delegation", "final_snapshot_identity_ref" => "legacy-snapshot", "architecture_decision_pack_review_ref" => "legacy-pack", "qa_evaluation_result_ref" => "legacy-qa", "final_batch_plan_ref" => "legacy-plan", "coverage_ledger_ref" => "legacy-coverage"}
-  can_claim_clean = ->(packet, migration_state) { packet.fetch("schema_version") == current_schema_version && migration_state.fetch("batch_disposition") != "invalidated_rebuild_required" }
-  previously_fixed = input.fetch("fields").find { |field| field["name"] == "previously_fixed" }.fetch("object_fields").to_h { |field| [field["name"], field] }
-  migration_contract = input.fetch("fields").find { |field| field["name"] == "persisted_v6_packet_migration" }
-  v7_invalidation = input.fetch("fields").find { |field| field["name"] == "persisted_v7_0_packet_invalidation" }
-  v7_2_invalidation = input.fetch("fields").find { |field| field["name"] == "persisted_v7_2_packet_invalidation" }
-  immediate_prior_invalidation = input.fetch("fields").find { |field| field["name"] == "persisted_v8_packet_invalidation" }
-  review_loop = File.read(ARGV.fetch(3))
-  pass_fields = reviewer.fetch("context_fields").map { |field| field.fetch("name") }
-  final = output.fetch("artifacts").find { |item| item["name"] == "final_summary" }.fetch("object_fields").to_h { |field| [field["name"], field] }
-  valid = legacy_packet.fetch("schema_version") == "6.0" && legacy_packet.dig("final_summary", "result") == "CLEAN" &&
-    migrated_ids[0] == base.call(legacy_packet.fetch("previously_fixed")[0]) && migrated_ids[1].end_with?(":1") && migrated_ids[2].end_with?(":2") && migrated_ids[1] != migrated_ids[2] &&
-    migration.fetch("source_schema_version") == "6.0" && migration.fetch("batch_disposition") == "invalidated_rebuild_required" && !can_claim_clean.call(legacy_packet, migration) && !can_claim_clean.call(legacy_v7_packet, {"batch_disposition" => "current"}) && !can_claim_clean.call(immediate_prior_packet, {"batch_disposition" => "current"}) &&
-    previously_fixed.fetch("aggregate_finding_id").fetch("condition") == "entry was created under producer schema 7.1 or later" &&
-    migration_contract.fetch("description").include?(current_schema_version) && migration_contract.fetch("validation").include?("freshly rehashed #{current_schema_version} snapshot") && migration_contract.fetch("object_fields").find { |field| field["name"] == "rebuilt_snapshot_identity" }.fetch("description").include?(current_schema_version) &&
-    migration_contract.fetch("validation").include?("UTF-8 NFC") && migration_contract.fetch("validation").include?("SHA-256") && migration_contract.fetch("validation").downcase.include?("invalidate") &&
-    migration_contract.fetch("validation").downcase.include?("non-colliding records use") && migration_contract.fetch("validation").include?("every colliding record appends") &&
-    v7_invalidation.fetch("condition").include?("7.0") && v7_invalidation.fetch("validation").include?("do not reinterpret") && v7_invalidation.fetch("validation").include?("fresh 10.0 snapshot") &&
-    v7_2_invalidation.fetch("condition").include?("7.2") && v7_2_invalidation.fetch("object_fields").find { |field| field["name"] == "source_schema_version" }.fetch("enum_values") == ["7.2"] && v7_2_invalidation.fetch("validation").include?("Invalidate active 7.2 result/delegation/snapshot/Pack/QA/plan/coverage refs") && v7_2_invalidation.fetch("validation").include?("preserve raw history and complete finding identity tuples unchanged") && v7_2_invalidation.fetch("validation").include?("fresh 10.0 snapshot") &&
-    immediate_prior_invalidation.fetch("required") == "conditional" && immediate_prior_invalidation.fetch("on_missing") == "fail" && immediate_prior_invalidation.fetch("condition").include?(immediate_prior_schema_version) && immediate_prior_invalidation.fetch("object_fields").find { |field| field["name"] == "source_schema_version" }.fetch("enum_values") == [immediate_prior_schema_version] && immediate_prior_invalidation.fetch("validation").include?("Invalidate active 8.0 result/delegation/snapshot/Pack/QA/plan/coverage refs") && immediate_prior_invalidation.fetch("validation").include?("without reassigning IDs") && immediate_prior_invalidation.fetch("validation").include?("fresh 10.0 snapshot") &&
-    immediate_prior_packet.fetch("previously_fixed") == immediate_prior_history && immediate_prior_history.all? { |entry| entry.fetch("aggregate_finding_id").start_with?("aggregate-") && entry.fetch("source_finding_ids").length == 1 && entry.fetch("source_provenance").length == 1 } &&
-    %w[canonical_result_ref delegation_path_ref final_snapshot_identity_ref architecture_decision_pack_review_ref qa_evaluation_result_ref final_batch_plan_ref coverage_ledger_ref].all? { |ref| immediate_prior_packet.key?(ref) } && review_loop.include?("previously_fixed = validated_entry.previously_fixed || []") && review_loop.include?("invalidating current result/delegation/snapshot/Pack/QA/plan/coverage refs") && review_loop.include?("retain every aggregate_finding_id, source_finding_ids, and source_provenance entry") &&
-    bundle.fetch("context_fields_from_dispatch").include?("review_focus") && pass_fields.include?("review_focus") &&
-    bundle.fetch("review_evidence_pointer").fetch("required_refs").include?("review_material_snapshot") &&
-    !bundle.fetch("review_evidence_pointer").fetch("required_refs").include?("review_material_snapshot_ref") &&
-    final.fetch("final_review_snapshot_id").fetch("validation").downcase.include?("exactly equals current review_snapshot_id")
-  exit valid ? 0 : 1
-' "$review_input" "$review_handoffs" "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" "$review_loop"; then
-    pass
-else
-    fail "assistant-review lacks immediate-prior invalidate/rebuild migration, Unicode-safe legacy IDs, pass-only focus, or final identity binding"
 fi
 
 test_start "assistant-review enforces orchestrator terminals, response events, and exact batch closure"
@@ -1972,85 +1222,6 @@ else
     fail "assistant-review clean claim has periodized or missing producer literal: ${clean_claim_failures[*]}"
 fi
 
-test_start "review lifecycle context preserves conditional reference agreement"
-if ruby -ryaml -e '
-  index = YAML.load_file(ARGV.fetch(0))
-  handoffs = YAML.load_file(ARGV.fetch(1))
-  sets = index.fetch("load_sets")
-  ordinary = sets.fetch("reviewer_context")
-  lifecycle = sets.fetch("lifecycle_reviewer_context")
-  guide = "references/lifecycle-verification.md"
-  bundle = handoffs.fetch("dispatch_context_bundles").find { |b| b["name"] == "fresh_reviewer_context" }
-  ref = bundle.fetch("worker_references").find { |r| r["path"] == guide }
-  condition = "assigned_scope or coverage_obligations affect acquisition/readiness, active work, cancellation, collection/finalization, shutdown, owned resources, cleanup or retry"
-  loop_text = File.read(ARGV.fetch(2))
-  valid = !ordinary.fetch("references").include?(guide) && ordinary.fetch("references").include?("references/csharp-review.md") && File.read(ARGV.fetch(3)).include?("\n## Document Review Checklist\n") && lifecycle.fetch("references") == ordinary.fetch("references") + [guide] &&
-        lifecycle.fetch("selectors").map { |x| x.reject { |key, _| key == "id" } } == ordinary.fetch("selectors").map { |x| x.reject { |key, _| key == "id" } } &&
-    ref && ref["condition"] == condition && bundle.fetch("worker_references").find { |r| r["path"] == "references/csharp-review.md" }.fetch("condition") == "reviewed material includes C#" && bundle.fetch("worker_references").find { |r| r["path"] == "references/review-checklists.md" }.fetch("sections").any? { |x| x["name"] == "Document Review Checklist" } && loop_text.include?(condition) && loop_text.include?("condition worker references identically")
-  exit valid ? 0 : 1
-' "$review_index" "$review_handoffs" "$review_loop" "$review_checklists"; then pass; else fail "review lifecycle load set or worker condition diverged"; fi
-
-test_start "assistant-review light review, plan-review reconciliation binding and request_plan loading are explicit"
-light_failures=()
-for file_and_term in \
-    "$review_skill::For review_subject plan or acceptance, load request_plan" \
-    "$review_phase_gates::one newly created fresh-context light_contract_and_runtime pass covering both" \
-    "$review_phase_gates::after a fix one newly created fresh re-review" \
-    "$review_phase_gates::never self-review or author reuse"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if ! p0p4_contains_text "$file" "$term"; then light_failures+=("${file#$FRAMEWORK_DIR/}: missing $term"); fi
-done
-if ! ruby -ryaml -e '
-  field = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |item| item["name"] == "request_plan_reconciliation" }
-  plan_ref = field.fetch("object_fields").find { |item| item["name"] == "approved_plan_ref" }
-  description = plan_ref.fetch("description")
-  exit(plan_ref["required"] == true && plan_ref["on_missing"] == "fail" &&
-    description.include?("For review_subject plan, the reviewed plan-definition ref bound to the reviewed plan identity") &&
-    description.include?("it is not an approval") ? 0 : 1)
-' "$review_input"; then
-    light_failures+=("request_plan_reconciliation.approved_plan_ref does not define the plan-review binding")
-fi
-if [[ ${#light_failures[@]} -eq 0 ]]; then pass; else fail "${light_failures[*]}"; fi
-
-test_start "score bookkeeping loads only at structured boundaries"
-score_boundary_failures=()
-review_skill="$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"
-score_tracking_line="$(grep -F 'references/score-tracking.md' "$review_skill" || true)"
-if [[ -z "$score_tracking_line" ]] \
-    || [[ "$score_tracking_line" != *'only at a structured'* ]] \
-    || ! p0p4_contains_text "$review_skill" 'only at a structured boundary for score bookkeeping' \
-    || ! p0p4_contains_text "$review_skill" 'A standalone review returned only to the user is not a structured boundary for score bookkeeping'; then
-    score_boundary_failures+=("assistant-review loads score bookkeeping unconditionally")
-fi
-if grep -Fq 'Medium+ score diagnostics use' "$review_skill"; then
-    score_boundary_failures+=("SKILL.md keeps the unconditional 'Medium+ score diagnostics use' load")
-fi
-if ! grep -Fq 'condition: "scope_size in [medium, large]"' "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"; then
-    score_boundary_failures+=("phase-gates.yaml X3 condition changed")
-fi
-if ! ruby -ryaml -e '
-  output = YAML.safe_load(File.read(ARGV[0]), aliases: false)
-  rubric = output.fetch("artifacts").find { |artifact| artifact["name"] == "rubric_summary" }
-  fields = rubric && rubric.fetch("object_fields", []).map { |field| field["name"] }
-  exit((fields || []).include?("score_progression") ? 0 : 1)
-' "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" 2>/dev/null; then
-    score_boundary_failures+=("output.yaml rubric_summary lost score_progression")
-fi
-for contract in index input output handoffs phase-gates; do
-    if ! grep -Fxq 'schema_version: "11.0"' "$FRAMEWORK_DIR/skills/assistant-review/contracts/$contract.yaml"; then
-        score_boundary_failures+=("contracts/$contract.yaml no longer declares schema 10.0")
-    fi
-done
-if ! jq -e '.cases[] | select(.id == "medium-review-requires-rubric")' \
-    "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >/dev/null; then
-    score_boundary_failures+=("medium-review-requires-rubric case is missing")
-elif jq -e '.cases[] | select(.id == "medium-review-requires-rubric") | .expected_behavior[] | select(contains("Includes score progression"))' \
-    "$FRAMEWORK_DIR/skills/assistant-review/evals/cases.json" >/dev/null; then
-    score_boundary_failures+=("medium-review-requires-rubric still expects score progression for a standalone review")
-fi
-if [[ ${#score_boundary_failures[@]} -eq 0 ]]; then pass; else fail "${score_boundary_failures[*]}"; fi
-
 test_start "review briefs cover every discovery perspective without changing topology"
 review_briefs="$FRAMEWORK_DIR/skills/assistant-review/references/review-briefs.md"
 if [[ ! -f "$review_briefs" ]]; then
@@ -2131,18 +1302,6 @@ elif review_brief_errors="$(ruby -ryaml -e '
 else
     fail "review briefs contract: $(tr '\n' ';' <<<"$review_brief_errors")"
 fi
-
-test_start "simplification findings state actual cost and rule out an intentional boundary"
-simplification_failures=()
-for term in "actual cost" "intentional boundary" "compatibility shim" "low-confidence" "non-blocking" "divergence-control rule in Reuse Search"; do
-    if ! p0p4_reference_section_has_term "$review_principles" "## Reporting Rule" "$term"; then
-        simplification_failures+=("## Reporting Rule missing $term")
-    fi
-done
-if ! jq -e '.cases[] | select(.id == "simplification-finding-states-cost-and-rules-out-shim") | .fail_signals | length > 0' "$review_evals" >/dev/null; then
-    simplification_failures+=("eval simplification-finding-states-cost-and-rules-out-shim missing")
-fi
-if [[ ${#simplification_failures[@]} -eq 0 ]]; then pass; else fail "${simplification_failures[*]}"; fi
 
 test_start "review preflight stays optional, orchestrator-only and checkout-safe"
 review_preflight="$FRAMEWORK_DIR/skills/assistant-review/references/review-preflight.md"

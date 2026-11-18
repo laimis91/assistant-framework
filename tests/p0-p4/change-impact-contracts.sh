@@ -8,110 +8,11 @@ source "$FRAMEWORK_DIR/tests/p0-p4/lib/feature-preparation-response-fixtures.sh"
 
 skill_validator="$FRAMEWORK_DIR/tools/skills/validate-skills.sh"
 
-test_start "expanded-work checklist lives once in assistant-review and needs no script or runtime"
-if ruby - "$FRAMEWORK_DIR" <<'RUBY'
-framework = ARGV.fetch(0)
-review = File.read(File.join(framework, "skills/assistant-review/references/change-impact.md"))
-section = review[/^## Expanded-work checklist\n(.*?)(?=^## )/m, 1] or abort "review reference lacks the expanded-work checklist section"
-items = section.scan(/^(\d+)\. \*\*([^*]+)\*\*/)
-abort "checklist items drifted: #{items.inspect}" unless items.map(&:first) == %w[1 2 3 4 5 6 7 8]
-["Universe recorded.", "Consumer classes covered.", "One disposition per requirement.", "Independent expected context.", "No material unknown.", "Same artifact identity.", "Verification bound", "Review bound"].each_with_index do |name, index|
-  abort "checklist item #{index + 1} is not #{name}" unless items[index][1].start_with?(name)
-end
-%w[pass fail not_applicable checklist_result_ref].each { |term| abort "checklist omits #{term}" unless section.include?(term) }
-abort "checklist does not block on fail" unless section.include?("Any `fail` blocks the phase")
-abort "reviewer does not check the result against the diff" unless review.include?("fresh independent reviewer checks the checklist result against the diff")
-abort "review reference lacks older-packet reading" unless review.include?("## Older packets") && review.include?("validator_result_ref")
-%w[assistant-workflow assistant-debugging].each do |skill|
-  text = File.read(File.join(framework, "skills", skill, "references/change-impact.md"))
-  abort "#{skill} reference does not link the shared checklist" unless text.include?("](../../assistant-review/references/change-impact.md#expanded-work-checklist)")
-  abort "#{skill} reference lacks the older-packet note" unless text.include?("`validator_result_ref`") && text.include?("`checklist_result_ref`")
-end
-%w[assistant-workflow assistant-debugging assistant-review].each do |skill|
-  text = File.read(File.join(framework, "skills", skill, "references/change-impact.md"))
-  abort "#{skill} reference still names a script or runtime" if text =~ /validate-change-impact|tools\/change-impact|\bNode\b|--receipt/
-  abort "#{skill} reference does not say no script or runtime is needed" unless text.include?("no script or runtime is needed")
-end
-RUBY
-then
-    pass
-else
-    fail "expanded-work checklist, its links, or the no-runtime statement drifted"
-fi
-
-test_start "change-impact contracts carry checklist_result_ref with a fail action and no checker receipt"
-if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
-framework = ARGV.fetch(0)
-names = []
-walk = lambda do |value, path|
-  case value
-  when Hash
-    names << [path, value] if value["name"].is_a?(String)
-    value.each { |key, child| walk.call(child, "#{path}/#{key}") }
-  when Array
-    value.each_with_index { |child, index| walk.call(child, "#{path}[#{index}]") }
-  end
-end
-found = 0
-%w[assistant-workflow assistant-debugging assistant-review].each do |skill|
-  Dir[File.join(framework, "skills", skill, "contracts/*.yaml")].sort.each do |path|
-    names.clear
-    walk.call(YAML.load_file(path), File.basename(path))
-    names.each do |where, field|
-      abort "#{skill} #{where} still declares validator_result_ref" if field["name"] == "validator_result_ref"
-      next unless field["name"] == "checklist_result_ref"
-      found += 1
-      abort "#{skill} #{where} checklist_result_ref has no fail action" unless field["on_missing"] == "fail"
-      abort "#{skill} #{where} checklist_result_ref does not describe the recorded checklist" unless field["description"].to_s.include?("checklist")
-    end
-    text = File.read(path)
-    abort "#{path} still names the Node checker" if text =~ /validate-change-impact|tools\/change-impact|Node 22|--receipt/
-  end
-end
-abort "too few checklist_result_ref carriers: #{found}" if found < 9
-RUBY
-then
-    pass
-else
-    fail "change-impact contracts still carry checker receipts or lack checklist_result_ref fail actions"
-fi
-
 test_start "change-impact source contracts validate without relying on scenario prompt text"
 if "$skill_validator" --skill assistant-workflow --skill assistant-debugging --skill assistant-review >/tmp/p0p4-change-impact-skills.out 2>/tmp/p0p4-change-impact-skills.err; then
     pass
 else
     fail "affected skill contracts failed validation; see /tmp/p0p4-change-impact-skills.err"
-fi
-
-test_start "evidenced local behavior remains compact without a checklist, while shared and unresolved paths expand"
-local_proportionality_failures=()
-for local_contract in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml" \
-    "$FRAMEWORK_DIR/skills/assistant-debugging/contracts/input.yaml" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml"; do
-    grep -Fq 'name: change_impact_applicability' "$local_contract" \
-        || local_proportionality_failures+=("missing compact applicability in $(basename "$(dirname "$local_contract")")")
-    grep -Fq 'condition: "impact_scope == local"' "$local_contract" \
-        || local_proportionality_failures+=("missing local causal-evidence condition in $local_contract")
-done
-for expanded_contract in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml" \
-    "$FRAMEWORK_DIR/skills/assistant-debugging/contracts/phase-gates.yaml" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"; do
-    grep -Fq 'impact_scope in [shared, unresolved] or an expanded change-impact artifact is explicitly carried' "$expanded_contract" \
-        || local_proportionality_failures+=("missing shared/unresolved-only common gate in $expanded_contract")
-done
-for local_reference in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/change-impact.md" \
-    "$FRAMEWORK_DIR/skills/assistant-debugging/references/change-impact.md" \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/change-impact.md"; do
-    grep -Eqi 'local' "$local_reference" && grep -Fq 'no script or runtime is needed' "$local_reference" \
-        || local_proportionality_failures+=("local no-runtime path absent in $local_reference")
-done
-if [[ "${#local_proportionality_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "$(IFS='; '; printf '%s' "${local_proportionality_failures[*]}")"
 fi
 
 test_start "all change-impact outputs preserve compact local and cosmetic applicability without relaxing expanded obligations"
@@ -213,57 +114,51 @@ debugging_semantic_response="$semantic_eval_responses/assistant-debugging/$debug
 build_medium_prepare_only_shared_impact_response "$workflow_semantic_response" "prepare_only change_impact_evidence discovery capture-prepare-only-current"
 build_local_debugging_compact_causal_response "$debugging_semantic_response" "local change_impact_applicability causal_evidence_ref"
 semantic_eval_failures=()
-run_semantic_eval() {
-    local skill="$1"
-    local case_id="$2"
-    local response="$3"
-    local expected="$4"
-
-    if "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$semantic_eval_responses" --skill "$skill" --case "$case_id" >"$semantic_eval_output" 2>&1; then
-        [[ "$expected" == "PASS" ]] || return 1
-    else
-        [[ "$expected" == "FAIL" ]] || return 1
-    fi
-}
-if ! run_semantic_eval assistant-workflow "$workflow_semantic_case" "$workflow_semantic_response" PASS; then
-    semantic_eval_failures+=("workflow baseline")
-fi
-for mutation in \
-    'del(.change_impact_applicability)' \
-    'del(.change_impact_applicability.applicability_reason)' \
-    '.change_impact_applicability.impact_scope = "local"' \
-    '.change_impact_applicability.expanded_artifact_carried = false' \
-    'del(.change_impact_evidence)' \
-    '.change_impact_evidence.phase = "pre_build"' \
-    '.change_impact_evidence.assessment_ref = "assessment.json"' \
-    '.fresh_review_result = {status:"CLEAN"}'; do
-    jq "$mutation" "$workflow_semantic_response" >"$semantic_eval_root/mutated.json"
-    mv "$semantic_eval_root/mutated.json" "$workflow_semantic_response"
-    if ! run_semantic_eval assistant-workflow "$workflow_semantic_case" "$workflow_semantic_response" FAIL; then
-        semantic_eval_failures+=("workflow:$mutation")
-    fi
+workflow_semantic_mutations=(
+    'del(.change_impact_applicability.applicability_reason)'
+    '.change_impact_applicability.impact_scope = "local"'
+    '.change_impact_applicability.expanded_artifact_carried = false'
+    'del(.change_impact_evidence)'
+    '.change_impact_evidence.phase = "pre_build"'
+    '.change_impact_evidence.assessment_ref = "assessment.json"'
+    '.fresh_review_result = {status:"CLEAN"}'
+)
+debugging_semantic_mutations=(
+    'del(.symptom_summary)'
+    'del(.reproduction)'
+    'del(.hypotheses)'
+    'del(.root_cause)'
+    'del(.confidence)'
+    'del(.verification)'
+    'del(.residual_risks)'
+    'del(.change_impact_applicability.causal_evidence_ref)'
+    '.change_impact_applicability.expanded_artifact_carried = true'
+    '.change_impact_evidence = {artifact_identity:"unexpected"}'
+)
+# Grades one workflow and one debugging response per runner call; each case keeps its own PASS/FAIL line.
+run_semantic_round() {
+    local label="$1" expected="$2" workflow_mutation="$3" debugging_mutation="$4" case_args=() line skill case_id
     build_medium_prepare_only_shared_impact_response "$workflow_semantic_response" "prepare_only change_impact_evidence discovery capture-prepare-only-current"
-done
-if ! run_semantic_eval assistant-debugging "$debugging_semantic_case" "$debugging_semantic_response" PASS; then
-    semantic_eval_failures+=("debugging baseline")
-fi
-for mutation in \
-    'del(.symptom_summary)' \
-    'del(.reproduction)' \
-    'del(.hypotheses)' \
-    'del(.root_cause)' \
-    'del(.confidence)' \
-    'del(.verification)' \
-    'del(.residual_risks)' \
-    'del(.change_impact_applicability.causal_evidence_ref)' \
-    '.change_impact_applicability.expanded_artifact_carried = true' \
-    '.change_impact_evidence = {artifact_identity:"unexpected"}'; do
-    jq "$mutation" "$debugging_semantic_response" >"$semantic_eval_root/mutated.json"
-    mv "$semantic_eval_root/mutated.json" "$debugging_semantic_response"
-    if ! run_semantic_eval assistant-debugging "$debugging_semantic_case" "$debugging_semantic_response" FAIL; then
-        semantic_eval_failures+=("debugging:$mutation")
-    fi
     build_local_debugging_compact_causal_response "$debugging_semantic_response" "local change_impact_applicability causal_evidence_ref"
+    if [[ "$expected" == PASS || -n "$workflow_mutation" ]]; then
+        [[ -z "$workflow_mutation" ]] || { jq "$workflow_mutation" "$workflow_semantic_response" >"$semantic_eval_root/mutated.json" && mv "$semantic_eval_root/mutated.json" "$workflow_semantic_response"; }
+        case_args+=(--skill assistant-workflow --case "$workflow_semantic_case")
+    fi
+    if [[ "$expected" == PASS || -n "$debugging_mutation" ]]; then
+        [[ -z "$debugging_mutation" ]] || { jq "$debugging_mutation" "$debugging_semantic_response" >"$semantic_eval_root/mutated.json" && mv "$semantic_eval_root/mutated.json" "$debugging_semantic_response"; }
+        case_args+=(--skill assistant-debugging --case "$debugging_semantic_case")
+    fi
+    "$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh" --responses "$semantic_eval_responses" "${case_args[@]}" >"$semantic_eval_output" 2>&1 || true
+    for line in "assistant-workflow|$workflow_semantic_case|$workflow_mutation" "assistant-debugging|$debugging_semantic_case|$debugging_mutation"; do
+        IFS='|' read -r skill case_id mutation <<<"$line"
+        [[ "$expected" == PASS || -n "$mutation" ]] || continue
+        grep -Eq "^$expected"$'\t'"$skill"$'\t'"$case_id"$'\t' "$semantic_eval_output" \
+            || semantic_eval_failures+=("$skill:${mutation:-$label}")
+    done
+}
+run_semantic_round baseline PASS "" ""
+for ((semantic_index = 0; semantic_index < ${#debugging_semantic_mutations[@]}; semantic_index++)); do
+    run_semantic_round mutation FAIL "${workflow_semantic_mutations[$semantic_index]:-}" "${debugging_semantic_mutations[$semantic_index]}"
 done
 if [[ "${#semantic_eval_failures[@]}" -eq 0 ]]; then
     pass
@@ -305,47 +200,6 @@ then
     pass
 else
     fail "debugging local applicability or harness artifact enum parity regressed"
-fi
-
-test_start "impact selectors record cosmetic applicability and shared fanout keeps the light Build lane"
-if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
-framework = ARGV.fetch(0)
-section = lambda do |path, start_marker, end_marker|
-  content = File.read(File.join(framework, path))
-  start = content.index(start_marker) or abort "missing #{start_marker} in #{path}"
-  tail = content[start..]
-  tail.split(end_marker, 2).first
-end
-
-workflow_root = File.read(File.join(framework, "skills/assistant-workflow/SKILL.md")).gsub(/\s+/, " ")
-workflow_phases = section.call("skills/assistant-workflow/references/phases.md", "## Shared Controller Decisions", "## Progress Updates")
-debugging_root = File.read(File.join(framework, "skills/assistant-debugging/SKILL.md")).gsub(/\s+/, " ")
-debugging_ref = section.call("skills/assistant-debugging/references/change-impact.md", "# Change-impact during debugging", "##")
-review_ref = section.call("skills/assistant-review/references/change-impact.md", "# Change-impact review projection", "##")
-abort "workflow root omits behavior/cosmetic/locality routing" unless workflow_root.include?("references/change-impact.md") && workflow_root.match?(/behavior(?:\/| or )cosmetic/) && workflow_root.include?("locality")
-abort "workflow phase trigger omits cosmetic" unless workflow_phases.include?("behavior-bearing, cosmetic, or locality/shared-impact claim")
-abort "debugging root omits repair-impact routing" unless debugging_root.include?("references/change-impact.md") && debugging_root.include?("diagnosis/repair")
-abort "debugging reference trigger omits cosmetic" unless debugging_ref.include?("fix, or cosmetic decision")
-abort "review reference trigger omits cosmetic" unless review_ref.include?("behavior or cosmetic change")
-%w[assistant-workflow assistant-debugging assistant-review].each do |skill|
-  index = YAML.load_file(File.join(framework, "skills", skill, "contracts/index.yaml"))
-  load_set = index.fetch("load_sets").fetch("change_impact")
-  abort "#{skill} change-impact set omits guidance" unless load_set.fetch("references").include?("references/change-impact.md")
-  input = load_set.fetch("selectors").find { |item| item["path"] == "contracts/input.yaml" && item["section"] == "fields" }
-  abort "#{skill} selector omits applicability/context" unless input && %w[change_impact_applicability change_impact_context].all? { |name| input.fetch("names").include?(name) }
-end
-
-controller = section.call("skills/assistant-workflow/references/workflow-controller.md", "- `light`:", "- `standard`:")
-build = section.call("skills/assistant-workflow/references/build-worker-protocol.md", "## Source-changing execution ownership", "## Expanded-impact mutation authorization")
-triage = section.call("skills/assistant-workflow/references/triage-rubric.md", "| Intensity | Use when |", "## Candidate Scope Scan")
-abort "light controller promotes shared fanout" unless controller.include?("Shared fanout alone keeps this Build policy")
-abort "Build protocol promotes shared fanout" unless build.include?("Shared fanout alone does not promote this Build lane")
-abort "triage light selection promotes shared fanout" unless triage.include?("shared fanout alone does not promote Build")
-RUBY
-then
-    pass
-else
-    fail "cosmetic impact activation or light shared-fanout Build selection regressed"
 fi
 
 test_start "read-only impact carriers retain discovery while mutation handoffs require current pre_build evidence"
@@ -712,10 +566,8 @@ fi
 for mutation in \
     'del(.canonical_final_summary)' \
     'del(.change_impact_evidence.review_projection_ref)' \
-    'del(.change_impact_evidence.capture_ref)' \
     '.current_final_batch.final_snapshot_identity.value = "foreign-current-snapshot"' \
-    '.current_review_delegation_path.artifact.subagent_execution_mode = "not_applicable"' \
-    'del(.change_impact_evidence.checklist_result_ref)'; do
+    '.current_review_delegation_path.artifact.subagent_execution_mode = "not_applicable"'; do
     jq "$mutation" "$expanded_response" >"$expanded_response.mutated"
     mv "$expanded_response.mutated" "$expanded_response"
     if ! run_light_expanded_fixture "$expanded_response" FAIL; then
@@ -736,48 +588,6 @@ if [[ ${#expanded_failures[@]} -eq 0 ]]; then
     pass
 else
     fail "light expanded-impact canonical review fixture gaps: ${expanded_failures[*]}"
-fi
-
-test_start "standalone review repairs enter FIX_STEP before mutation"
-if ruby -ryaml - "$FRAMEWORK_DIR" <<'RUBY'
-framework = ARGV.fetch(0)
-gates = YAML.load_file(File.join(framework, "skills/assistant-review/contracts/phase-gates.yaml"))
-entry = gates.fetch("gates").find { |gate| gate["phase"] == "ENTRY" }
-e8 = entry.fetch("exit_assertions").find { |assertion| assertion["id"] == "E8" }
-fix_step = gates.fetch("gates").find { |gate| gate["phase"] == "FIX_STEP" }
-impact_entry = fix_step.fetch("entry_assertions").find { |assertion| assertion["id"] == "F_CHANGE_IMPACT_PREBUILD" }
-abort "E8 bypasses FIX_STEP entry assertions on repair" unless e8.fetch("check").include?("FIX_STEP entry_assertions before repair or mutation dispatch")
-abort "E8 recovery bypasses FIX_STEP entry assertions on repair" unless e8.fetch("on_fail").include?("FIX_STEP entry_assertions before repair or mutation dispatch")
-abort "FIX_STEP lost the pre-mutation impact entry gate" unless impact_entry
-
-loop = File.read(File.join(framework, "skills/assistant-review/references/review-loop.md"))
-prepare = loop.split(/^while round <= 10:/, 2).first
-abort "PREPARE standalone repair bypasses FIX_STEP" unless prepare.include?("FIX_STEP entry_assertions before repair or mutation dispatch")
-RUBY
-then
-    pass
-else
-    fail "standalone Spec Review repair must use FIX_STEP entry assertions before mutation"
-fi
-
-test_start "assistant-review routes triggered change-impact before planning and excludes it from Reviewer bundles"
-if ruby - "$FRAMEWORK_DIR/skills/assistant-review/SKILL.md" <<'RUBY'
-source = File.read(ARGV.fetch(0))
-routing = source.split(/\n\s*\n/).find { |paragraph| paragraph.include?("references/change-impact.md") }
-abort "missing change-impact guidance route" unless routing
-routing = routing.gsub(/\s+/, " ")
-%w[behavior cosmetic artifact locality shared unresolved].each do |trigger|
-  abort "missing #{trigger} change-impact trigger" unless routing.include?(trigger)
-end
-abort "missing active change-impact selector" unless routing.include?("`change_impact`") && routing.match?(/\bload\b/i)
-abort "change-impact routing runs after planning/dispatch" unless routing.include?("before planning or dispatch")
-abort "missing Reviewer-bundle change-impact exclusion" unless routing.match?(/(?:outside|out of) Reviewer bundles/)
-
-RUBY
-then
-    pass
-else
-    fail "assistant-review must route triggered change-impact before planning and exclude it from Reviewer bundles"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

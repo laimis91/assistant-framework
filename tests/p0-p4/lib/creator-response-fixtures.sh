@@ -66,20 +66,3 @@ p0p4_write_creator_bound_response_fixtures() {
         P0P4_CREATOR_BOUND_FIXTURE_BUNDLE=""
     fi
 }
-
-p0p4_run_default_response_grades() {
-    local response_dir="$1"
-    local fixture_file
-    local skill_name
-    local args=(--responses "$response_dir")
-    shift
-
-    while IFS= read -r fixture_file; do
-        skill_name="$(basename "$(dirname "$(dirname "$fixture_file")")")"
-        [[ "$skill_name" == "assistant-skill-creator" ]] && continue
-        args+=(--skill "$skill_name")
-    done < <(p0p4_skill_eval_default_fixtures)
-
-    args+=(--skill "$response_dir/.creator-bound/assistant-skill-creator")
-    "$skill_eval_runner" "${args[@]}" "$@"
-}

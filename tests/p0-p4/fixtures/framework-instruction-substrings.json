@@ -1,0 +1,499 @@
+{
+  "ambiguous-prompt-clarify-or-default-deterministically": {
+    "forbidden_substrings": [
+      "What do you mean? Please clarify",
+      "I will do a broad refactor",
+      "I will use hidden string-matching heuristics"
+    ],
+    "required_substrings": [
+      "ambiguous",
+      "options",
+      "clarifying",
+      "workflow"
+    ]
+  },
+  "ambiguous-risky-task-blocks-before-plan": {
+    "forbidden_substrings": [
+      "I will guess",
+      "Plan approved",
+      "Starting Build"
+    ],
+    "required_substrings": [
+      "needs_clarification",
+      "source scope",
+      "behavior parity",
+      "Risk if guessed"
+    ]
+  },
+  "clear-medium-task-zero-clarification-questions": {
+    "forbidden_substrings": [
+      "medium tasks must ask at least one question",
+      "I need to ask something anyway",
+      "I will limit material questions to three"
+    ],
+    "required_substrings": [
+      "Clarification questions asked: 0",
+      "no numeric cap or quota",
+      "high confidence",
+      "verification"
+    ]
+  },
+  "code-reviewer-and-qa-evaluator-evidence-split": {
+    "forbidden_substrings": [
+      "Code review is enough to finish",
+      "QAEvaluator replaces Code Reviewer",
+      "one generic review artifact is enough"
+    ],
+    "required_substrings": [
+      "Code Reviewer",
+      "QA Evaluator",
+      "Done Contract",
+      "acceptance criteria",
+      "verification evidence",
+      "domain_context",
+      "rubric_refs"
+    ]
+  },
+  "codex-role-constraints-native": {
+    "forbidden_substrings": [
+      "I need runtime reinforcement",
+      "I am running tests",
+      "I changed unrelated files"
+    ],
+    "required_substrings": [
+      "BUILD",
+      "docs/evals/framework-instruction-cases.json",
+      "docs/evals/README.md",
+      "files changed"
+    ]
+  },
+  "compaction-resume-reads-task-state-first": {
+    "forbidden_substrings": [
+      "I will restart from scratch",
+      "I will start coding immediately",
+      "I will continue the older task"
+    ],
+    "required_substrings": [
+      "task journal",
+      "reconcile",
+      "active",
+      "stale",
+      "superseded",
+      "completed",
+      "session",
+      "current phase",
+      "continue"
+    ]
+  },
+  "executable-task-packet-before-build": {
+    "forbidden_substrings": [
+      "I will start implementation",
+      "The worker can infer constraints",
+      "The file scope is implicit"
+    ],
+    "required_substrings": [
+      "task packet",
+      "target files",
+      "verification criteria",
+      "constraints"
+    ]
+  },
+  "harness-done-contract-recipe-before-build": {
+    "forbidden_substrings": [
+      "define done later",
+      "Harness Recipe is optional",
+      "dispatching Code Writer now"
+    ],
+    "required_substrings": [
+      "Done Contract",
+      "debate_record",
+      "Harness Recipe",
+      "Harness Run State",
+      "Trace Ledger",
+      "Replay Packet",
+      "Artifact Reference"
+    ]
+  },
+  "isolated-parallel-a-b-then-c-with-integration": {
+    "forbidden_substrings": [
+      "narrative is sufficient native evidence",
+      "completed native parallel trace"
+    ],
+    "required_substrings": [
+      "runtime-proven isolated workspaces",
+      "depends_on",
+      "cross-slice",
+      "fresh review",
+      "adapter_unavailable",
+      "unknown_event_shape"
+    ]
+  },
+  "medium-feature-plans-before-build": {
+    "forbidden_substrings": [
+      "I am jumping straight to implementation",
+      "No plan needed; starting now",
+      "This is a typo-level change"
+    ],
+    "required_substrings": [
+      "medium",
+      "plan",
+      "approval",
+      "verification",
+      "completion contract"
+    ]
+  },
+  "medium-final-handoff-is-reconstructable": {
+    "forbidden_substrings": [
+      "CLEAN proves correctness",
+      "manual confirmation is always required"
+    ],
+    "required_substrings": [
+      "architecture",
+      "SearchPolicy",
+      "bash tests/search-contracts.sh",
+      "search_policy_v2",
+      "rationale",
+      "rejected alternatives",
+      "requirement",
+      "manual",
+      "limitations",
+      "rollback",
+      "reviewed scope"
+    ]
+  },
+  "ordinary-medium-bounded-executor": {
+    "forbidden_substrings": [
+      "Builder/Tester is mandatory because size is medium",
+      "executor replaces independent review"
+    ],
+    "required_substrings": [
+      "build_execution_lane=bounded_executor",
+      "RED",
+      "GREEN",
+      "focused verification",
+      "Code Reviewer"
+    ]
+  },
+  "pending-architecture-pack-verification": {
+    "forbidden_substrings": [
+      "verification complete"
+    ],
+    "required_substrings": [
+      "Architecture Pack",
+      "pending",
+      "planned verification"
+    ]
+  },
+  "per-slice-verification-before-advancing": {
+    "forbidden_substrings": [
+      "I will verify everything at the end",
+      "The slice is complete based only on code",
+      "I will start slice S3 now",
+      "component_manifest",
+      "component_verification_summary",
+      "by_layer",
+      "by_module",
+      "by_feature",
+      "contracts_first",
+      "test command required",
+      "invented RED"
+    ],
+    "required_substrings": [
+      "slice S2",
+      "CheckSpec",
+      "procedure",
+      "result",
+      "slice S3",
+      "criteria"
+    ]
+  },
+  "pivot-restart-on-stagnation-or-code-writer-blocker": {
+    "forbidden_substrings": [
+      "Try another quick patch",
+      "continue the loop despite STAGNATION",
+      "scope change without reapproval"
+    ],
+    "required_substrings": [
+      "STAGNATION",
+      "legacy_code_bug",
+      "pivot_restart_signal",
+      "pivot_restart_decision",
+      "exact_next_action",
+      "assistant-debugging"
+    ]
+  },
+  "request-alignment-docs-running-tests": {
+    "forbidden_substrings": [
+      "make test",
+      "tox"
+    ],
+    "required_substrings": [
+      "3.11",
+      "Docker",
+      "pytest",
+      ".[test]"
+    ]
+  },
+  "request-alignment-handoff-coupon-fix": {
+    "forbidden_substrings": [
+      "no other callers are affected"
+    ],
+    "required_substrings": [
+      "render_invoice",
+      "render.py",
+      "apply_discount",
+      "test"
+    ]
+  },
+  "request-alignment-plan-migrate-rollback": {
+    "forbidden_substrings": [
+      "I have updated store.py",
+      "1.4.0 keeps the tags after saving",
+      "1.4.0 accepts version 2"
+    ],
+    "required_substrings": [
+      "migrat",
+      "1.4.0",
+      "store.py",
+      "cli.py",
+      "version",
+      "tag"
+    ]
+  },
+  "request-alignment-research-comparison": {
+    "forbidden_substrings": [
+      "TypeGuard caught 14 real defects",
+      "DocLint found real defects"
+    ],
+    "required_substrings": [
+      "TypeGuard",
+      "DocLint",
+      "ImportOrder",
+      "benefit",
+      "cost",
+      "recommend",
+      "legacy",
+      "180"
+    ]
+  },
+  "request-alignment-spec-rate-limit": {
+    "forbidden_substrings": [
+      "SDK v2 retries 429"
+    ],
+    "required_substrings": [
+      "429",
+      "SDK",
+      "API key",
+      "client IP",
+      "anonymous"
+    ]
+  },
+  "request-alignment-ticket-invoice-export": {
+    "forbidden_substrings": [
+      "I created the ticket",
+      "converted to EUR"
+    ],
+    "required_substrings": [
+      "10,000",
+      "7 days",
+      "PLAT-212",
+      "PDF",
+      "currency"
+    ]
+  },
+  "requirements-map-through-completion": {
+    "forbidden_substrings": [
+      "aggregate tests prove every requirement automatically"
+    ],
+    "required_substrings": [
+      "requirement_id",
+      "R1",
+      "R2",
+      "R3",
+      "created_at",
+      "JSON",
+      "case-insensitive",
+      "limit 20",
+      "acceptance criterion",
+      "verification method",
+      "evidence",
+      "manual scenario",
+      "approved exclusion"
+    ]
+  },
+  "review-and-qa-productive-beyond-10": {
+    "forbidden_substrings": [
+      "Round 10 is terminal",
+      "max 10 rounds",
+      "lower the confidence threshold"
+    ],
+    "required_substrings": [
+      "round 11",
+      "shared guard",
+      "acceptance"
+    ]
+  },
+  "review-loop-continues-after-findings": {
+    "forbidden_substrings": [
+      "Review complete; no fixes needed",
+      "No further review is needed",
+      "The fresh review step is unnecessary"
+    ],
+    "required_substrings": [
+      "review",
+      "must-fix",
+      "should-fix",
+      "re-review"
+    ]
+  },
+  "seeded-code-review-regressions": {
+    "forbidden_substrings": [
+      "authentication vulnerability",
+      "database migration required",
+      "no material findings"
+    ],
+    "required_substrings": [
+      "discount",
+      "mutation",
+      "negative",
+      "fake test"
+    ]
+  },
+  "small-fix-stays-lightweight": {
+    "forbidden_substrings": [
+      "Requesting medium-task plan approval",
+      "Here is a broad implementation plan",
+      "I will perform a broad refactor"
+    ],
+    "required_substrings": [
+      "docs/usage.md"
+    ]
+  },
+  "spec-review-not-replaced-by-quality-review": {
+    "forbidden_substrings": [
+      "Quality review is enough to finish",
+      "I will finish the task now",
+      "One generic review result is enough"
+    ],
+    "required_substrings": [
+      "spec review",
+      "quality review",
+      "PASS",
+      "requirements"
+    ]
+  },
+  "stale-journal-yields-to-current-evidence": {
+    "forbidden_substrings": [
+      "the journal is always authoritative",
+      "resume the merged task blindly"
+    ],
+    "required_substrings": [
+      "reconcile",
+      "journal",
+      "newest user",
+      "repository evidence",
+      "superseded"
+    ]
+  },
+  "subagent-opt-out-keeps-review-isolation": {
+    "forbidden_substrings": [
+      "Dispatching Code Writer",
+      "Dispatching Builder/Tester",
+      "Dispatching Reviewer",
+      "Reviewer subagent ran",
+      "self-review satisfies"
+    ],
+    "required_substrings": [
+      "subagent_policy_state",
+      "delegation_opted_out",
+      "direct_main",
+      "subagent_trigger_scope",
+      "active workflow instruction",
+      "independent review",
+      "fresh-context"
+    ]
+  },
+  "tdd-red-before-green-handoff": {
+    "forbidden_substrings": [
+      "Passing tests alone are enough",
+      "TDD is optional here",
+      "I will proceed without a failing test result"
+    ],
+    "required_substrings": [
+      "RED",
+      "GREEN",
+      "failing test",
+      "evidence"
+    ]
+  },
+  "viewing-route-technical-preparation": {
+    "forbidden_substrings": [
+      "Build started",
+      "changed_files"
+    ],
+    "required_substrings": [
+      "VIEWING",
+      "implementation_gap",
+      "behavioral tests",
+      "not started"
+    ]
+  },
+  "worker-status-packet-required": {
+    "forbidden_substrings": [
+      "The casual done message is sufficient",
+      "I will infer completion details",
+      "I will move on to testing"
+    ],
+    "required_substrings": [
+      "structured status packet",
+      "files changed",
+      "deviations",
+      "open questions"
+    ]
+  },
+  "writer-routing-baseline-failure": {
+    "forbidden_substrings": [
+      "mandatory Luna-then-Sol",
+      "native activation proven"
+    ],
+    "required_substrings": [
+      "writer_selection"
+    ]
+  },
+  "writer-routing-exact-pattern": {
+    "forbidden_substrings": [
+      "mandatory Luna-then-Sol",
+      "native activation proven"
+    ],
+    "required_substrings": [
+      "writer_selection"
+    ]
+  },
+  "writer-routing-small-grader": {
+    "forbidden_substrings": [
+      "mandatory Luna-then-Sol",
+      "native activation proven"
+    ],
+    "required_substrings": [
+      "writer_selection"
+    ]
+  },
+  "writer-routing-small-semantic": {
+    "forbidden_substrings": [
+      "mandatory Luna-then-Sol",
+      "native activation proven"
+    ],
+    "required_substrings": [
+      "writer_selection"
+    ]
+  },
+  "writer-routing-stale-partial": {
+    "forbidden_substrings": [
+      "mandatory Luna-then-Sol",
+      "native activation proven"
+    ],
+    "required_substrings": [
+      "writer_selection"
+    ]
+  }
+}

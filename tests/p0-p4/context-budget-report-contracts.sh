@@ -6,7 +6,6 @@ fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 context_report="$FRAMEWORK_DIR/tools/context-budget-report.sh"
-eval_readme="$FRAMEWORK_DIR/docs/evals/codex-trials.md"
 context_evidence_lib="$FRAMEWORK_DIR/tools/evals/lib/context-budget-evidence.sh"
 
 test_start "context budget reporter exists and is executable"
@@ -66,17 +65,6 @@ if printf '%s\n' "$context_help" | grep -Fq -- "--agent AGENT" \
     pass
 else
     fail "context budget reporter help is missing a required option or still documents hook profiles"
-fi
-
-test_start "eval README documents the reproducible context budget command"
-if grep -Fq -- "tools/context-budget-report.sh" "$eval_readme" \
-    && grep -Fq -- "--agent codex --skill assistant-workflow --format json" "$eval_readme" \
-    && grep -Fq -- "source-repository-only" "$eval_readme" \
-    && ! grep -Fq -- "hook-output semantics" "$eval_readme" \
-    && ! grep -Fq -- "hook-benchmark" "$eval_readme"; then
-    pass
-else
-    fail "docs/evals/README.md does not document the hookless native Codex context budget command"
 fi
 
 report_home="$(mktemp -d "${TMPDIR:-/tmp}/context-budget-home.XXXXXX")"

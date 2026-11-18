@@ -76,18 +76,4 @@ else
     fail "skill activation boundaries failed: ${activation_failures[*]}"
 fi
 
-test_start "skill activation inventory excludes retired custom memory routes"
-if [[ ! -e "$FRAMEWORK_DIR/skills/assistant-memory" ]] \
-    && [[ ! -e "$FRAMEWORK_DIR/skills/assistant-reflexion" ]] \
-    && [[ ! -e "$FRAMEWORK_DIR/memory-protocol.md" ]] \
-    && ! rg -n -i -e 'memory_reflect' -e 'learning controller' \
-        "$FRAMEWORK_DIR/skills/assistant-workflow" >/tmp/p0p4-retired-activation-routes.out; then
-    pass
-else
-    fail "skill activation inventory retains retired custom-memory routes"
-fi
-
-# Option-generation depth and decision behavior are covered by assistant-thinking-options-contracts.sh.
-# Numeric idea quotas and prompt-only YAML envelopes are retired, not activation rules.
-
 p0p4_finish_suite "${BASH_SOURCE[0]}"

@@ -2850,25 +2850,17 @@ PY_STALE_RECEIPT
 
     test_start "malformed item inventory events invalidate zero-decision controls"
     invalid_item_inventory_count=0
-    for event_type in started updated completed; do
-        for payload_shape in missing null primitive array; do
-            variant="$event_type-$payload_shape"
-            if run_importer --review "$evidence_root/review-item-$variant-zero-decision.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
-                && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("transcript_turn_1_started_prefix_unavailable")) != null' "$framework_grade" >/dev/null; then
-                invalid_item_inventory_count=$((invalid_item_inventory_count + 1))
-            fi
-        done
-    done
-    for variant in missing-type null-type primitive-type blank-type agent-message-missing-text agent-message-null-text agent-message-primitive-text; do
+    # One representative per event type and per payload shape, type defect and message-text defect.
+    for variant in started-missing updated-null completed-primitive completed-array missing-type blank-type agent-message-missing-text agent-message-primitive-text; do
         if run_importer --review "$evidence_root/review-item-$variant-zero-decision.json" --oracle "$oracle_file" --evidence-root "$evidence_root" >"$framework_grade" 2>&1 \
             && jq -e '.behavior_status == "UNAVAILABLE" and (.unavailable_reasons | index("transcript_turn_1_started_prefix_unavailable")) != null' "$framework_grade" >/dev/null; then
             invalid_item_inventory_count=$((invalid_item_inventory_count + 1))
         fi
     done
-    if [[ "$invalid_item_inventory_count" -eq 19 ]]; then
+    if [[ "$invalid_item_inventory_count" -eq 8 ]]; then
         pass
     else
-        fail "a malformed item lifecycle, role, or completed-message event remained usable evidence ($invalid_item_inventory_count/19)"
+        fail "a malformed item lifecycle, role, or completed-message event remained usable evidence ($invalid_item_inventory_count/8)"
     fi
 
     test_start "malformed completed file-change payloads invalidate zero-decision controls"

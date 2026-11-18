@@ -13,7 +13,7 @@ jobs:
   framework-contracts:
     name: Framework contracts
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 90
     steps:
       - name: Check out repository
         uses: actions/checkout@v5
@@ -22,7 +22,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -49,9 +49,12 @@ jobs:
           command -v ruby
           ruby -rjson -ryaml -rbigdecimal -e 'abort "Ruby JSON, Psych/YAML, or BigDecimal unavailable" unless defined?(JSON) && defined?(Psych) && defined?(YAML) && YAML.respond_to?(:load_file) && defined?(BigDecimal)'
 
+      - name: Check response fixture entrypoints
+        run: |
+          python3 tests/p0-p4/lib/response-fixture-entrypoint-probe.py skill-eval-contracts.sh
+          python3 tests/p0-p4/lib/response-fixture-entrypoint-probe.py progressive-discovery-contracts.sh
+
       - name: Run aggregate framework contracts
-        env:
-          P0P4_EXCLUDED_SUITES: skill-eval-contracts.sh progressive-discovery-contracts.sh workflow-architecture-completion-contracts.sh codex-behavioral-eval-contracts.sh
         run: ./tests/test-p0-p4-contracts.sh
 
       - name: Run skill-activation tool tests
@@ -59,50 +62,3 @@ jobs:
 
       - name: Validate skills
         run: tools/skills/validate-skills.sh
-
-  contract-shards:
-    name: Contract shard (${{ matrix.suite }})
-    runs-on: ubuntu-latest
-    timeout-minutes: ${{ matrix.suite == 'skill-eval-contracts.sh' && 75 || 60 }}
-    strategy:
-      fail-fast: false
-      matrix:
-        suite:
-          - skill-eval-contracts.sh
-          - progressive-discovery-contracts.sh
-          - workflow-architecture-completion-contracts.sh
-          - codex-behavioral-eval-contracts.sh
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: tools/evals/package-lock.json
-
-      - name: Install required packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends ripgrep
-
-      - name: Install evaluation dependencies
-        working-directory: tools/evals
-        run: npm ci --ignore-scripts
-
-      - name: Verify runner prerequisites
-        run: |
-          command -v ruby
-          ruby -rjson -ryaml -rbigdecimal -e 'abort "Ruby JSON, Psych/YAML, or BigDecimal unavailable" unless defined?(JSON) && defined?(Psych) && defined?(YAML) && YAML.respond_to?(:load_file) && defined?(BigDecimal)'
-
-      - name: Check response fixture entrypoint
-        if: matrix.suite == 'skill-eval-contracts.sh' || matrix.suite == 'progressive-discovery-contracts.sh'
-        run: python3 tests/p0-p4/lib/response-fixture-entrypoint-probe.py "${{ matrix.suite }}"
-
-      - name: Run long contract shard
-        run: bash "tests/p0-p4/${{ matrix.suite }}"

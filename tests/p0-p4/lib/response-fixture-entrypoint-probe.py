@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise one shard's response-builder entrypoint without semantic grading."""
+"""Exercise one suite's response-builder entrypoint without semantic grading."""
 
 import argparse
 import json

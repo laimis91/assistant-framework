@@ -7,6 +7,8 @@ Rule 2: no runtime-instruction path reaches outside the skill folder (into
 framework `tools/`, `docs/`, `agents/`, `hooks/` or an agent home's
 tools directory), unless the exact file and path are allowlisted
 below with a reason.
+Rule 3: every backtick path naming a skill file (`references/`, `contracts/`,
+`evals/`, `scripts/`) resolves; see BACKTICK_REF below.
 
 See docs/specs/self-contained-skills.md (R-SC-4).
 """
@@ -19,6 +21,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# Framework skill names, from the repository source, so a copy holding only some
+# skills can tell another framework skill's file from an ordinary possessive.
+FRAMEWORK_SKILLS = {p.parent.name for p in (REPO_ROOT / "skills").glob("*/SKILL.md")}
 
 LINK = re.compile(r"\]\(([^)\s]+)\)")
 RUNTIME_PATH = re.compile(
@@ -30,6 +35,25 @@ RUNTIME_PATH = re.compile(
     r"|(?:~|\$\{?HOME\}?|\$\{?CODEX_HOME\}?)/(?:\.[\w-]+/)?tools/[^\s`)\"']*"
     r"|(?<![\w~}$./-])(?:/[\w.@-]+)*/\.(?:claude|codex|agents)/tools/[^\s`)\"']*"
 )
+# Rule 3 (docs/specs/contract-test-cleanup.md D-TC-2): a backtick path naming a
+# skill file resolves from the skill root, the file's folder, a skill named just
+# before it ("workflow's `references/x.md`"), an explicit skill prefix, or a skill
+# in `requires`.
+BACKTICK_REF = re.compile(
+    r"(?:\b([A-Za-z][\w-]*)'s\s+)?"
+    r"`((?:[a-z0-9-]+/)?(?:references|contracts|evals|scripts)/[A-Za-z0-9_./-]+"
+    r"\.(?:md|yaml|yml|json|py|sh))(?:#[^`]*)?`"
+)
+# (skill-relative file, exact path text) -> reason, for paths that name files of
+# another project rather than of a framework skill.
+ALLOWED_REFERENCES = {
+    ("assistant-skill-creator/references/upstream-guidance.md", "references/schemas.md"):
+        "names a file of the upstream Anthropic skill-creator",
+    ("assistant-skill-creator/references/upstream-guidance.md", "references/openai_yaml.md"):
+        "names a file of the upstream OpenAI skill-creator",
+    ("assistant-skill-creator/references/upstream-guidance.md", "scripts/quick_validate.py"):
+        "names a file of the upstream OpenAI skill-creator",
+}
 TEXT_SUFFIXES = {".md", ".yaml", ".yml", ".json", ".py", ".sh", ".ps1", ".toml", ".txt"}
 
 # Whole files that are maintainer notes, eval inputs or synced repository docs.
@@ -95,6 +119,7 @@ def is_exempt(rel: str) -> bool:
 def check(skills_dir: Path) -> list[str]:
     errors: list[str] = []
     used: set[tuple[str, str]] = set()
+    used_refs: set[tuple[str, str]] = set()
     skills = sorted(p.parent for p in skills_dir.glob("*/SKILL.md"))
     names = {s.name for s in skills}
     for skill in skills:
@@ -121,6 +146,12 @@ def check(skills_dir: Path) -> list[str]:
                             errors.append(f"{rel}:{lineno}: link leaves the skill and its requires: {target}")
                         elif not resolved.exists():
                             errors.append(f"{rel}:{lineno}: link target does not exist: {target}")
+                    for owner, target in BACKTICK_REF.findall(line):
+                        if (rel, target) in ALLOWED_REFERENCES:
+                            used_refs.add((rel, target))
+                            continue
+                        if not reference_resolves(skills_dir, skill, path, owner, target, allowed_roots, names):
+                            errors.append(f"{rel}:{lineno}: reference path does not exist: {target}")
                 for match in RUNTIME_PATH.finditer(line):
                     found = match.group(0).rstrip(".,;:")
                     if any(found.startswith(p) for p in MAINTAINER_PREFIXES):
@@ -132,7 +163,29 @@ def check(skills_dir: Path) -> list[str]:
     for rel, found in sorted(set(ALLOWED_PATHS) - used):
         if (skills_dir / rel).is_file():
             errors.append(f"{rel}: allowlist entry no longer matches; remove it: {found}")
+    for rel, found in sorted(set(ALLOWED_REFERENCES) - used_refs):
+        if (skills_dir / rel).is_file():
+            errors.append(f"{rel}: reference allowlist entry no longer matches; remove it: {found}")
     return errors
+
+
+def reference_resolves(skills_dir: Path, skill: Path, path: Path, owner: str, target: str,
+                       allowed_roots: list[Path], names: set[str]) -> bool:
+    candidates = [skill / target, path.parent / target]
+    first = target.split("/", 1)[0]
+    if first in names:
+        candidates.append(skills_dir / target)
+    if owner:
+        owner_names = (owner.lower(), f"assistant-{owner.lower()}")
+        owners = [n for n in owner_names if n in names]
+        if not owners and any(n in FRAMEWORK_SKILLS for n in owner_names):
+            # A framework skill's file named in prose ("Workflow's `scripts/x.py`"); that
+            # skill is not in this copy, so there is nothing to resolve against. Any
+            # other possessive ("the skill's", "the user's") resolves as usual.
+            return True
+        candidates.extend(skills_dir / name / target for name in owners)
+    candidates.extend(root / target for root in allowed_roots[1:])
+    return any(candidate.is_file() for candidate in candidates)
 
 
 def main(argv: list[str]) -> int:

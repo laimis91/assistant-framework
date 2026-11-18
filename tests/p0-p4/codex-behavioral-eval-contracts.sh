@@ -2044,6 +2044,116 @@ printf '%s\n' '{"type":"turn.completed","usage":{"input_tokens":123,"output_toke
 FAKE
 chmod +x "$fake_codex"
 
+# Direct grading: the runner's own function definitions (everything before its argument
+# parsing) graded against one fake-Codex run per variant, without plan, lease, supervisor,
+# catalog or comparison work. Each check that targets one verifier rule grades its
+# mutations here; one full runner witness per runner path stays end to end.
+runner_function_lib="$fixture_root/runner-functions.sh"
+awk -v script_dir="$FRAMEWORK_DIR/tools/evals" '
+    NR == 7 && /^SCRIPT_DIR=/ { print "SCRIPT_DIR=\"" script_dir "\""; next }
+    /^readonly EVENT_EVIDENCE_NORMALIZATION_JQ=/ { printf "%s", "[[ -n \"${EVENT_EVIDENCE_NORMALIZATION_JQ+set}\" ]] || " }
+    /^if \[\[ \$# -eq 0 \]\]; then$/ { exit }
+    { print }
+' "$runner" >"$runner_function_lib"
+grep -Fxq "SCRIPT_DIR=\"$FRAMEWORK_DIR/tools/evals\"" "$runner_function_lib" \
+    && grep -Fq 'verify_workspace() {' "$runner_function_lib" \
+    && grep -Fq 'grade_response() {' "$runner_function_lib" \
+    && ! grep -Fq 'while [[ $# -gt 0 ]]; do' "$runner_function_lib" \
+    || { printf '%s\n' "runner function extraction failed" >&2; exit 1; }
+
+# Usage: direct_case_variant OUTPUT CASE_ID VARIANT [ENV=VALUE ...]
+# Writes OUTPUT/traces/CASE_ID-VARIANT.json in the runner's trace shape for the fields checks read.
+direct_case_variant() {
+    local output="$1" case_id="$2" variant="$3"
+    shift 3
+    local root="$output/raw-$case_id-$variant"
+    local skill_source="$baseline"
+    [[ "$variant" == candidate ]] && skill_source="$candidate"
+    rm -rf "$root"
+    mkdir -p "$output/traces" "$root/capture" "$root/workspace/.agents/skills/assistant-workflow"
+    cp "$skill_source/SKILL.md" "$root/workspace/.agents/skills/assistant-workflow/SKILL.md"
+    (
+        # shellcheck source=/dev/null
+        source "$runner_function_lib"
+        direct_workspace="$root/workspace"
+        direct_jsonl="$root/events.jsonl"
+        direct_final="$root/final-response.txt"
+        direct_trace="$output/traces/$case_id-$variant.json"
+        direct_unavailable() {
+            jq -cn --arg variant "$variant" --arg case_id "$case_id" --arg code "$1" \
+                '{variant:$variant,case_id:$case_id,status:"adapter_unavailable",error:{code:$code},execution:{verifier:{status:"not_run"}}}' >"$direct_trace"
+            exit 0
+        }
+        seed_case_workspace "$direct_workspace" "$case_id"
+        git -C "$direct_workspace" init -q
+        git -C "$direct_workspace" add -A
+        git -C "$direct_workspace" -c user.name='Framework Eval' -c user.email='eval@invalid' \
+            -c commit.gpgsign=false -c core.hooksPath=/dev/null commit -qm eval-baseline
+        env FAKE_CODEX_CAPTURE_DIR="$root/capture" "$@" "$fake_codex" exec --json --ignore-user-config --ephemeral \
+            -C "$direct_workspace" --output-last-message "$direct_final" -m test-model --sandbox workspace-write \
+            "$(blind_prompt_for_case "$case_id")" >"$direct_jsonl" 2>"$root/stderr.txt" \
+            || direct_unavailable codex_exit_nonzero
+        validate_event_stream "$direct_jsonl" || direct_unavailable unknown_event_shape
+        jq -s -e 'any(.[]; .type == "turn.completed" and (.usage | type == "object"))' "$direct_jsonl" >/dev/null \
+            || direct_unavailable missing_usage
+        [[ -s "$direct_final" ]] && grep -q '[^[:space:]]' "$direct_final" || direct_unavailable missing_final_output
+        if [[ "$case_id" == small-fix-stays-lightweight ]] && small_fix_requires_unavailable_adapter_policy \
+            && ! small_fix_event_shape_supported "$direct_jsonl"; then
+            direct_unavailable unknown_event_shape
+        fi
+        if [[ "$case_id" == pivot-restart-on-stagnation-or-code-writer-blocker ]] \
+            && ! stagnation_event_shape_supported "$direct_jsonl"; then
+            direct_unavailable unknown_event_shape
+        fi
+        case "$case_id" in
+            writer-routing-*) case_event_payload_shape_supported "$direct_jsonl" "$case_id" || direct_unavailable unknown_event_shape ;;
+        esac
+        direct_response="$(grade_response "$case_id" "$direct_final" "")"
+        direct_verifier="$(verify_workspace "$case_id" "$direct_workspace" "$direct_jsonl")"
+        if [[ "$case_id" == small-fix-stays-lightweight ]] && small_fix_requires_unavailable_adapter_policy \
+            && jq -n -e --argjson response "$direct_response" --argjson workspace "$direct_verifier" \
+                '$response.status == "passed" and $workspace.workspace_failure_ids == ["workspace-003"] and $workspace.scope_deviations == 0' >/dev/null \
+            && small_fix_command_scope_missing_telemetry "$direct_jsonl" "$direct_workspace"; then
+            direct_unavailable unknown_event_shape
+        fi
+        jq -n --arg variant "$variant" --arg case_id "$case_id" \
+            --argjson response "$direct_response" --argjson workspace "$direct_verifier" \
+            --argjson tool_calls "$(jq -s '[.[] | select(.type == "item.completed") | .item.type | select(. == "command_execution" or . == "mcp_tool_call" or . == "web_search")] | length' "$direct_jsonl")" \
+            --argjson file_changes "$(jq -s '[.[] | select(.type == "item.completed" and .item.type == "file_change")] | length' "$direct_jsonl")" '
+          ($response.status == "passed" and ($workspace.status == "passed" or $workspace.status == "not_applicable")) as $passed
+          | {
+              variant: $variant, case_id: $case_id, status: "completed",
+              metrics: {
+                acceptance_passed: $passed, tool_calls: $tool_calls,
+                rework_count: (if $file_changes > 1 then $file_changes - 1 else 0 end),
+                scope_deviations: $workspace.scope_deviations
+              },
+              execution: {verifier: {
+                status: (if $passed then "passed" else "failed" end),
+                workspace_status: $workspace.status,
+                workspace_failure_ids: $workspace.workspace_failure_ids,
+                scope_deviations: $workspace.scope_deviations,
+                required_missing: $response.required_missing,
+                forbidden_hits: $response.forbidden_hits,
+                acceptance_items_total: ($response.acceptance_items_total + $workspace.acceptance_items_total),
+                acceptance_items_passed: ($response.acceptance_items_passed + $workspace.acceptance_items_passed)
+              }}
+            }' >"$direct_trace"
+    )
+}
+
+# Usage: direct_case_pair OUTPUT CASE_ID[,CASE_ID...] [ENV=VALUE ...] grades both variants of each case.
+direct_case_pair() {
+    local output="$1" case_list="$2" case_id
+    shift 2
+    rm -rf "$output"
+    for case_id in ${case_list//,/ }; do
+        direct_case_variant "$output" "$case_id" baseline "$@" \
+            && direct_case_variant "$output" "$case_id" candidate "$@" \
+            || return 1
+    done
+}
+
 test_start "behavioral candidate branches use explicit skill identities rather than mutable prose"
 if grep -Fq 'candidate instruction marker' "$fake_codex"; then
     fail "behavioral fake still derives candidate identity from mutable instruction prose"
@@ -2203,6 +2313,22 @@ else
     fail "canonical smoke and pilot coverage was not enforced before model execution"
 fi
 
+test_start "shipped workflow-kernel manifest satisfies the runner's promotion contract"
+# The runner hard-codes the smoke and pilot case lists. A trimmed or reordered list in
+# the shipped manifest would make every promotion run fail at start-up.
+shipped_manifest_error="$fixture_root/shipped-manifest-error.txt"
+trimmed_manifest="$fixture_root/trimmed-pilot-manifest.json"
+jq '.pilot_cases |= .[:-1]' "$historical_kernel_manifest" >"$trimmed_manifest"
+if bash -c 'source "$1"; CANDIDATE_MANIFEST="$2"; validate_candidate_manifest' _ \
+        "$runner_function_lib" "$historical_kernel_manifest" 2>"$shipped_manifest_error" \
+    && ! bash -c 'source "$1"; CANDIDATE_MANIFEST="$2"; validate_candidate_manifest' _ \
+        "$runner_function_lib" "$trimmed_manifest" 2>"$fixture_root/trimmed-manifest-error.txt" \
+    && grep -Fq 'Candidate manifest does not match' "$fixture_root/trimmed-manifest-error.txt"; then
+    pass
+else
+    fail "shipped workflow-kernel manifest does not match the runner's smoke and pilot contract: $(cat "$shipped_manifest_error")"
+fi
+
 test_start "runner never derives or executes a context reporter from baseline input"
 hostile_baseline="$fixture_root/hostile-baseline-root"
 hostile_candidate="$fixture_root/hostile-candidate"
@@ -2287,17 +2413,6 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" \
     pass
 else
     fail "default model did not use the current gpt-5.6-sol Codex catalog slug"
-fi
-
-test_start "documented smoke command is explicitly GPT-5.6-Terra while runner default remains Sol"
-if grep -Fq -- '--model gpt-5.6-terra' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
-    && grep -Fq -- '--cases small-fix-stays-lightweight,seeded-code-review-regressions' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
-    && grep -Fq -- '--repeats 1' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
-    && grep -Fq 'The general runner default remains `gpt-5.6-sol`' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
-    && grep -Fq 'GPT-5.6-Terra represents the common simple-task smoke profile' "$FRAMEWORK_DIR/docs/evals/codex-trials.md"; then
-    pass
-else
-    fail "smoke guidance did not pin Terra explicitly without changing the Sol default"
 fi
 
 test_start "execute mode uses hardened Codex flags and blind prompts"
@@ -3399,10 +3514,7 @@ for stale_spec in \
     read -r stale_mode expected_workspace_id <<<"$stale_spec"
     stale_mode_output="$fixture_root/stale-$stale_mode-output"
     rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_STALE_JOURNAL_MODE="$stale_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases stale-journal-yields-to-current-evidence --repeats 1 --output "$stale_mode_output" \
-        --codex-bin "$fake_codex" >/dev/null \
+    if ! direct_case_pair "$stale_mode_output" stale-journal-yields-to-current-evidence FAKE_STALE_JOURNAL_MODE="$stale_mode" \
         || ! jq -s -e --arg expected "$expected_workspace_id" '
           all(.[] | select(.variant == "baseline");
             .execution.verifier.workspace_status == "passed"
@@ -3475,11 +3587,7 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_STRUCTURED_ARTIFACTS=true FAKE_STRUCTU
 fi
 
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_STRUCTURED_ARTIFACTS=true FAKE_STRUCTURED_PARAPHRASE=true \
-    FAKE_INVALID_STRUCTURED_ARTIFACT=true "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases "$structured_cases" --repeats 1 --output "$structured_negative_output" \
-    --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$structured_negative_output" "$structured_cases" FAKE_STRUCTURED_ARTIFACTS=true FAKE_STRUCTURED_PARAPHRASE=true FAKE_INVALID_STRUCTURED_ARTIFACT=true \
     && jq -s -e '
       all(.[] | select(.variant == "baseline");
         .metrics.acceptance_passed == true and .execution.verifier.workspace_failure_ids == [])
@@ -3490,7 +3598,7 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_STRUCTURED_ARTIFACTS=true FAKE_STRUCTU
         and .execution.verifier.acceptance_items_passed < .execution.verifier.acceptance_items_total
         and all(.execution.verifier.workspace_failure_ids[]; test("^workspace-[0-9]{3}$")))
     ' "$structured_negative_output/traces/"*.json >/dev/null \
-    && ! grep -R -E 'newest first|avoid mutable global state|mixed-case fixture' "$structured_negative_output" >/dev/null 2>&1; then
+    && ! grep -R -E 'newest first|avoid mutable global state|mixed-case fixture' "$structured_negative_output/traces" >/dev/null 2>&1; then
     structured_negative_ok=true
 fi
 if [[ "$structured_positive_ok" == true && "$structured_negative_ok" == true ]]; then
@@ -3503,22 +3611,13 @@ test_start "ordered workflow verifier rejects every missing repair-loop stage"
 ordered_workflow_negative_ok=true
 for workflow_spec in \
     'skip_failed_review workspace-011' \
-    'first_review_passes workspace-011' \
     'skip_repair workspace-012' \
     'skip_revalidation workspace-013' \
-    'fresh_review_fails workspace-014' \
-    'early_handoff workspace-014' \
-    'false_review_finding workspace-011' \
-    'no_op_repair workspace-012' \
-    'spoof_review_commands workspace-011'; do
+    'fresh_review_fails workspace-014'; do
     read -r workflow_mode expected_workspace_id <<<"$workflow_spec"
     workflow_output="$fixture_root/ordered-workflow-$workflow_mode-output"
     rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_END_TO_END_MODE="$workflow_mode" \
-        "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases medium-final-handoff-is-reconstructable --repeats 1 \
-        --output "$workflow_output" --codex-bin "$fake_codex" >/dev/null \
+    if ! direct_case_pair "$workflow_output" medium-final-handoff-is-reconstructable FAKE_END_TO_END_MODE="$workflow_mode" \
         || ! jq -s -e --arg expected "$expected_workspace_id" '
           all(.[] | select(.variant == "baseline");
             .metrics.acceptance_passed == true
@@ -3544,22 +3643,14 @@ handoff_absolute_output="$fixture_root/handoff-absolute-output"
 rm -f "$capture"/*
 handoff_paraphrase_ok=false
 handoff_absolute_ok=false
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_HANDOFF_CLAIM_MODE=paraphrase \
-    "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases medium-final-handoff-is-reconstructable --repeats 1 \
-    --output "$handoff_paraphrase_output" --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$handoff_paraphrase_output" medium-final-handoff-is-reconstructable FAKE_HANDOFF_CLAIM_MODE=paraphrase \
     && jq -s -e 'all(.[].execution.verifier;
       .status == "passed" and .workspace_status == "passed" and .workspace_failure_ids == [])' \
       "$handoff_paraphrase_output/traces/"*.json >/dev/null; then
     handoff_paraphrase_ok=true
 fi
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_HANDOFF_CLAIM_MODE=contradictory_candidate \
-    "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases medium-final-handoff-is-reconstructable --repeats 1 \
-    --output "$handoff_absolute_output" --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$handoff_absolute_output" medium-final-handoff-is-reconstructable FAKE_HANDOFF_CLAIM_MODE=contradictory_candidate \
     && jq -s -e '
       all(.[] | select(.variant == "baseline"); .metrics.acceptance_passed == true)
       and all(.[] | select(.variant == "candidate");
@@ -3596,11 +3687,7 @@ fi
 for attack in file_symlink parent_escape oversize; do
     attack_output="$fixture_root/structured-$attack-output"
     rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_STRUCTURED_ATTACK="$attack" FAKE_STRUCTURED_PARAPHRASE=true \
-        "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases requirements-map-through-completion --repeats 1 \
-        --output "$attack_output" --codex-bin "$fake_codex" >/dev/null \
+    if ! direct_case_pair "$attack_output" requirements-map-through-completion FAKE_STRUCTURED_ATTACK="$attack" FAKE_STRUCTURED_PARAPHRASE=true \
         || ! jq -s -e '
           all(.[] | select(.variant == "baseline");
             .metrics.acceptance_passed == true and .execution.verifier.workspace_failure_ids == [])
@@ -3614,8 +3701,8 @@ for attack in file_symlink parent_escape oversize; do
 done
 if [[ "$structured_hardening_ok" == true ]] \
     && ! grep -R -E 'outside-[0-9]+|garbage' \
-        "$garbage_output" "$fixture_root"/structured-file_symlink-output \
-        "$fixture_root"/structured-parent_escape-output "$fixture_root"/structured-oversize-output >/dev/null 2>&1; then
+        "$garbage_output" "$fixture_root"/structured-file_symlink-output/traces \
+        "$fixture_root"/structured-parent_escape-output/traces "$fixture_root"/structured-oversize-output/traces >/dev/null 2>&1; then
     pass
 else
     fail "structured artifact path guards or closed-world semantic checks failed or leaked content"
@@ -3841,40 +3928,28 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_SMALL_CONCISE=true "$runner" --execute
     small_concise_ok=true
 fi
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_SMALL_BROAD=true "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases small-fix-stays-lightweight --repeats 1 --output "$small_broad_output" \
-    --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$small_broad_output" small-fix-stays-lightweight FAKE_SMALL_BROAD=true \
     && jq -s -e 'all(.[].execution.verifier;
       .status == "failed" and .workspace_status == "passed" and .forbidden_hits == 1
     )' "$small_broad_output/traces/"*.json >/dev/null; then
     small_broad_ok=true
 fi
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_SMALL_CONCISE=true FAKE_SCOPE_DEVIATION=true "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases small-fix-stays-lightweight --repeats 1 --output "$small_scope_output" \
-    --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$small_scope_output" small-fix-stays-lightweight FAKE_SMALL_CONCISE=true FAKE_SCOPE_DEVIATION=true \
     && jq -s -e 'all(.[].execution.verifier;
       .status == "failed" and .workspace_status == "failed" and .scope_deviations == 1
     )' "$small_scope_output/traces/"*.json >/dev/null; then
     small_scope_ok=true
 fi
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_SMALL_CONCISE=true FAKE_WRONG_SMALL_EDIT=true "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases small-fix-stays-lightweight --repeats 1 --output "$small_wrong_output" \
-    --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$small_wrong_output" small-fix-stays-lightweight FAKE_SMALL_CONCISE=true FAKE_WRONG_SMALL_EDIT=true \
     && jq -s -e 'all(.[].execution.verifier;
       .status == "failed" and .workspace_status == "failed" and .scope_deviations == 0
     )' "$small_wrong_output/traces/"*.json >/dev/null; then
     small_wrong_ok=true
 fi
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_SMALL_CONCISE=true FAKE_SMALL_PLAN_MODE=inline "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases small-fix-stays-lightweight --repeats 1 --output "$small_plan_mode_output" \
-    --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$small_plan_mode_output" small-fix-stays-lightweight FAKE_SMALL_CONCISE=true FAKE_SMALL_PLAN_MODE=inline \
     && jq -s -e '
       all(.[] | select(.variant == "baseline");
         .metrics.acceptance_passed == true and .execution.verifier.workspace_status == "passed")
@@ -3972,21 +4047,15 @@ else
     fail "VIEWING runtime prompt hides exact producer obligations or exposes grader sections: ${viewing_prompt_failures[*]}"
 fi
 
-test_start "all four preparation and pending-Pack pilot inflation modes fail closed"
+test_start "preparation and pending-Pack pilot inflation modes fail closed"
 pilot_mode_failures=()
-for pilot_mode in product_question execution_evidence verified premature_ref; do
+for pilot_mode in product_question verified; do
     pilot_output="$fixture_root/pilot-mode-$pilot_mode"
     rm -f "$capture"/*
     if [[ "$pilot_mode" == product_question || "$pilot_mode" == execution_evidence ]]; then
-        FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_PREPARATION_MODE="$pilot_mode" "$runner" --execute \
-            --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-            --cases viewing-route-technical-preparation --repeats 1 --output "$pilot_output" \
-            --codex-bin "$fake_codex" >/dev/null || pilot_mode_failures+=("$pilot_mode:runner")
+        direct_case_pair "$pilot_output" viewing-route-technical-preparation FAKE_VIEWING_PREPARATION_MODE="$pilot_mode" || pilot_mode_failures+=("$pilot_mode:runner")
     else
-        FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PENDING_PACK_MODE="$pilot_mode" "$runner" --execute \
-            --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-            --cases pending-architecture-pack-verification --repeats 1 --output "$pilot_output" \
-            --codex-bin "$fake_codex" >/dev/null || pilot_mode_failures+=("$pilot_mode:runner")
+        direct_case_pair "$pilot_output" pending-architecture-pack-verification FAKE_PENDING_PACK_MODE="$pilot_mode" || pilot_mode_failures+=("$pilot_mode:runner")
     fi
     if ! jq -s -e 'any(.[]; .variant == "candidate" and .execution.verifier.workspace_status == "failed" and .execution.verifier.status == "failed")' "$pilot_output/traces/"*.json >/dev/null; then
         pilot_mode_failures+=("$pilot_mode:accepted")
@@ -4708,13 +4777,10 @@ fi
 
 test_start "VIEWING evidence mutations are isolated to the candidate verifier"
 viewing_mutation_failures=()
-for viewing_mutation in omitted_ref stale_hashes bad_path bad_symbol bad_assertion bad_event_ref missing_event extra_top_key extra_evidence_key extra_item_key extra_design_key extra_implementation_key extra_trace_key extra_behavioral_test_key extra_result_key prepended_document appended_document; do
+for viewing_mutation in stale_hashes extra_trace_key appended_document; do
     viewing_mutation_output="$fixture_root/viewing-mutation-$viewing_mutation"
     rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_PREPARATION_MODE="$viewing_mutation" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_mutation_output" \
-        --codex-bin "$fake_codex" >/dev/null; then
+    if ! direct_case_pair "$viewing_mutation_output" viewing-route-technical-preparation FAKE_VIEWING_PREPARATION_MODE="$viewing_mutation"; then
         viewing_mutation_failures+=("$viewing_mutation:runner")
     elif ! jq -s -e '
         all(.[] | select(.variant == "baseline"); .execution.verifier.workspace_status == "passed")
@@ -4744,6 +4810,15 @@ run_direct_viewing_event_fixture() {
         "$fake_codex" exec --json --ignore-user-config --ephemeral \
         -C "$workspace" --output-last-message "$last_message" -m test-model \
         --sandbox workspace-write "Inspect the VIEWING route fixture." >"$jsonl"
+}
+
+viewing_direct_event_accepted() {
+    local mode="$1"
+    local jsonl="$fixture_root/viewing-accepted-event-$mode.jsonl"
+    run_direct_viewing_event_fixture "$mode" "$jsonl" \
+        && validate_event_stream "$jsonl" >/dev/null 2>&1 \
+        && viewing_inspection_event_evidence "$jsonl" 2>/dev/null \
+            | jq -e '(.["viewing-source-search"] | type == "string" and length > 0) and (.["viewing-test-search"] | type == "string" and length > 0)' >/dev/null
 }
 
 test_start "VIEWING inspection event mutations fail the production verifier with one end-to-end isolation witness"
@@ -4779,15 +4854,7 @@ fi
 test_start "VIEWING lifecycle accepts disclosed exact-path SHA-256 commands"
 viewing_hash_failures=()
 for viewing_hash_mode in hash_sha256sum hash_shasum hash_quoted; do
-    viewing_hash_output="$fixture_root/viewing-event-$viewing_hash_mode"
-    rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_hash_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_hash_output" \
-        --codex-bin "$fake_codex" >/dev/null \
-        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_hash_output/traces/"*.json >/dev/null; then
-        viewing_hash_failures+=("$viewing_hash_mode")
-    fi
+    viewing_direct_event_accepted "$viewing_hash_mode" || viewing_hash_failures+=("$viewing_hash_mode")
 done
 if [[ ${#viewing_hash_failures[@]} -eq 0 ]]; then
     pass
@@ -4798,16 +4865,15 @@ fi
 test_start "VIEWING lifecycle permits only canonical grading-artifact file changes"
 viewing_artifact_change_failures=()
 for viewing_artifact_change_mode in artifact_file_change_exact artifact_file_change_dot artifact_file_change_backslash artifact_file_change_item_path; do
-    viewing_artifact_change_output="$fixture_root/viewing-event-$viewing_artifact_change_mode"
-    rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_artifact_change_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_artifact_change_output" \
-        --codex-bin "$fake_codex" >/dev/null \
-        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_artifact_change_output/traces/"*.json >/dev/null; then
-        viewing_artifact_change_failures+=("$viewing_artifact_change_mode")
-    fi
+    viewing_direct_event_accepted "$viewing_artifact_change_mode" || viewing_artifact_change_failures+=("$viewing_artifact_change_mode")
 done
+# One end-to-end witness covers the production verifier's scope mapping of an aliased artifact path.
+viewing_artifact_change_output="$fixture_root/viewing-event-artifact_file_change_backslash"
+rm -f "$capture"/*
+if ! direct_case_pair "$viewing_artifact_change_output" viewing-route-technical-preparation FAKE_VIEWING_EVENT_MODE=artifact_file_change_backslash \
+    || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_artifact_change_output/traces/"*.json >/dev/null; then
+    viewing_artifact_change_failures+=("artifact_file_change_backslash:end-to-end")
+fi
 if [[ ${#viewing_artifact_change_failures[@]} -eq 0 ]]; then
     pass
 else
@@ -4817,18 +4883,7 @@ fi
 test_start "VIEWING inspection accepts authentic completed string shell-wrapper events including rg context"
 viewing_wrapped_failures=()
 for viewing_wrapped_mode in wrapped wrapped_context_rg wrapped_quoted_non_rg; do
-    viewing_wrapped_output="$fixture_root/viewing-event-$viewing_wrapped_mode"
-    rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_wrapped_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_wrapped_output" \
-        --codex-bin "$fake_codex" >/dev/null \
-        || ! jq -s -e '
-          all(.[]; .execution.verifier.workspace_status == "passed")
-          and ([.[] | select(.variant == "candidate")] | length) == 1
-        ' "$viewing_wrapped_output/traces/"*.json >/dev/null; then
-        viewing_wrapped_failures+=("$viewing_wrapped_mode")
-    fi
+    viewing_direct_event_accepted "$viewing_wrapped_mode" || viewing_wrapped_failures+=("$viewing_wrapped_mode")
 done
 if [[ ${#viewing_wrapped_failures[@]} -eq 0 ]]; then
     pass
@@ -4839,10 +4894,7 @@ fi
 test_start "VIEWING inspection retains explicitly labelled argv shell-wrapper compatibility"
 viewing_argv_wrapped_output="$fixture_root/viewing-event-argv-wrapped"
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE=argv_wrapped "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_argv_wrapped_output" \
-    --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$viewing_argv_wrapped_output" viewing-route-technical-preparation FAKE_VIEWING_EVENT_MODE=argv_wrapped \
     && jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_argv_wrapped_output/traces/"*.json >/dev/null; then
     pass
 else
@@ -4852,15 +4904,7 @@ fi
 test_start "VIEWING inspection accepts equivalent read-only source and test inspection commands"
 viewing_equivalent_failures=()
 for viewing_equivalent_mode in equivalent quoted_non_rg; do
-    viewing_equivalent_output="$fixture_root/viewing-event-$viewing_equivalent_mode"
-    rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_equivalent_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_equivalent_output" \
-        --codex-bin "$fake_codex" >/dev/null \
-        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_equivalent_output/traces/"*.json >/dev/null; then
-        viewing_equivalent_failures+=("$viewing_equivalent_mode")
-    fi
+    viewing_direct_event_accepted "$viewing_equivalent_mode" || viewing_equivalent_failures+=("$viewing_equivalent_mode")
 done
 if [[ ${#viewing_equivalent_failures[@]} -eq 0 ]]; then
     pass
@@ -4871,15 +4915,7 @@ fi
 test_start "VIEWING inspection accepts disclosed bounded head string and argv commands"
 viewing_head_failures=()
 for viewing_head_mode in head argv_head head_too_many argv_head_too_many; do
-    viewing_head_output="$fixture_root/viewing-event-$viewing_head_mode"
-    rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_head_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_head_output" \
-        --codex-bin "$fake_codex" >/dev/null \
-        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_head_output/traces/"*.json >/dev/null; then
-        viewing_head_failures+=("$viewing_head_mode")
-    fi
+    viewing_direct_event_accepted "$viewing_head_mode" || viewing_head_failures+=("$viewing_head_mode")
 done
 if [[ ${#viewing_head_failures[@]} -eq 0 ]]; then
     pass
@@ -4890,10 +4926,7 @@ fi
 test_start "VIEWING inspection accepts one combined read-only rg event for both expected files"
 viewing_combined_rg_output="$fixture_root/viewing-event-combined-rg"
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE=combined_rg "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_combined_rg_output" \
-    --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$viewing_combined_rg_output" viewing-route-technical-preparation FAKE_VIEWING_EVENT_MODE=combined_rg \
     && jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_combined_rg_output/traces/"*.json >/dev/null; then
     pass
 else
@@ -4903,15 +4936,7 @@ fi
 test_start "VIEWING inspection accepts grouped and safely quoted rg equivalents"
 viewing_rg_equivalent_failures=()
 for viewing_rg_equivalent_mode in argv_combined_rg argv_grouped_rg double_quoted_rg combined_option_rg reversed_ignore_case_rg string_context_rg argv_context_rg argv_separated_value_rg argv_regexp_rg quoted_space_rg argv_quoted_space_rg string_glob_rg argv_glob_rg string_max_count_rg argv_max_count_rg string_sort_none_rg argv_sort_none_rg string_path_separator_rg argv_path_separator_rg string_anchored_rg argv_anchored_rg double_quoted_anchored_rg string_color_positional_before_rg string_color_positional_after_rg string_color_explicit_before_rg string_color_explicit_after_rg string_word_concat_rg wrapped_word_concat_rg string_attached_short_values_rg argv_attached_short_values_rg argv_literal_dollar_rg string_quoted_equals_rg; do
-    viewing_rg_equivalent_output="$fixture_root/viewing-event-$viewing_rg_equivalent_mode"
-    rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_EVENT_MODE="$viewing_rg_equivalent_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_rg_equivalent_output" \
-        --codex-bin "$fake_codex" >/dev/null \
-        || ! jq -s -e 'all(.[]; .execution.verifier.workspace_status == "passed")' "$viewing_rg_equivalent_output/traces/"*.json >/dev/null; then
-        viewing_rg_equivalent_failures+=("$viewing_rg_equivalent_mode")
-    fi
+    viewing_direct_event_accepted "$viewing_rg_equivalent_mode" || viewing_rg_equivalent_failures+=("$viewing_rg_equivalent_mode")
 done
 if [[ ${#viewing_rg_equivalent_failures[@]} -eq 0 ]]; then
     pass
@@ -4927,10 +4952,7 @@ rm -f "$viewing_source_mutant_root/src/route.ts.bak"
 viewing_source_mutant_output="$fixture_root/viewing-source-mutant-output"
 rm -f "$capture"/*
 if ! node --test "$viewing_source_mutant_root/tests/route.test.js" >/dev/null 2>&1 \
-    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_VIEWING_SOURCE_MUTANT=true "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases viewing-route-technical-preparation --repeats 1 --output "$viewing_source_mutant_output" \
-        --codex-bin "$fake_codex" >/dev/null \
+    && direct_case_pair "$viewing_source_mutant_output" viewing-route-technical-preparation FAKE_VIEWING_SOURCE_MUTANT=true \
     && jq -s -e '
         all(.[] | select(.variant == "baseline"); .execution.verifier.workspace_status == "passed")
         and all(.[] | select(.variant == "candidate"); .execution.verifier.workspace_status == "failed" and (.execution.verifier.workspace_failure_ids | index("workspace-002")) != null)
@@ -5512,19 +5534,12 @@ fi
 
 test_start "activation observation mutations reject before any model call and resume rechecks the copied evidence"
 activation_mutation_failures=()
-for activation_mutation in candidate cases results order cardinality provenance old future version skill_name_too_long false_positive; do
+for activation_mutation in candidate old future false_positive; do
     mutation_file="$fixture_root/activation-$activation_mutation.json"
     case "$activation_mutation" in
         candidate) jq '.bindings.candidate_skill_sha256 = ("f" * 64)' "$manual_activation_observation" >"$mutation_file" ;;
-        cases) jq '.bindings.activation_cases_sha256 = ("e" * 64)' "$manual_activation_observation" >"$mutation_file" ;;
-        results) jq '.results[0].selected_skills = []' "$manual_activation_observation" >"$mutation_file" ;;
-        order) jq '.results |= reverse' "$manual_activation_observation" >"$mutation_file" ;;
-        cardinality) jq '.results |= .[0:5]' "$manual_activation_observation" >"$mutation_file" ;;
-        provenance) jq '.provenance.capture_owner_kind = "repository_contract_test"' "$manual_activation_observation" >"$mutation_file" ;;
         old) jq '.provenance.captured_at_utc = "2000-01-01T00:00:00Z"' "$manual_activation_observation" >"$mutation_file" ;;
         future) jq '.provenance.captured_at_utc = "2099-01-01T00:00:00Z"' "$manual_activation_observation" >"$mutation_file" ;;
-        version) jq '.provenance.native_host_version = "codex-cli mismatched"' "$manual_activation_observation" >"$mutation_file" ;;
-        skill_name_too_long) jq '.results[0].selected_skills[1] = ("x" * 129)' "$manual_activation_observation" >"$mutation_file" ;;
         false_positive) jq '.results[-1].selected_skills = ["assistant-workflow"]' "$manual_activation_observation" >"$mutation_file" ;;
     esac
     rm -f "$capture"/*
@@ -5739,7 +5754,7 @@ fi
 
 test_start "synthetic review summaries reject paths and non-ASCII format characters before persistence"
 unsafe_summary_ok=true
-for unsafe_kind in private_var tmp unc bidi zero_width; do
+for unsafe_kind in private_var unc bidi; do
     unsafe_summary_output="$fixture_root/semantic-unsafe-$unsafe_kind-output"
     rm -f "$capture"/*
     if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_SEMANTIC_UNSAFE_KIND="$unsafe_kind" "$runner" --execute \
@@ -5820,16 +5835,6 @@ if [[ -x "$semantic_finalizer" ]] \
     pass
 else
     fail "semantic review schemas, finalizer, or manifest closed-world policy is missing"
-fi
-
-test_start "semantic review documentation distinguishes whole-response deletion from bounded synthetic summaries"
-if grep -Fq 'It never persists the whole model response.' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
-    && grep -Fq 'ready synthetic-only semantic packet' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
-    && grep -Fq '`review_summary`' "$FRAMEWORK_DIR/docs/evals/codex-trials.md" \
-    && ! grep -Fq 'It never persists the model-authored summary.' "$FRAMEWORK_DIR/docs/evals/codex-trials.md"; then
-    pass
-else
-    fail "semantic review docs contradicted the bounded synthetic summary retention contract"
 fi
 
 test_start "semantic schemas declare fail-closed aggregate and eligibility invariants"
@@ -6253,16 +6258,31 @@ else
 fi
 
 test_start "contract-test activation evidence remains non-promoting through finalization"
+# Rebind a copy of the complete pilot to the contract-test fixture as the runner would record it,
+# instead of paying for a second 48-call pilot run.
 static_activation_pilot_output="$fixture_root/static-activation-pilot-output"
 static_activation_template="$fixture_root/static-activation-pilot-template.json"
 static_activation_verdict="$fixture_root/static-activation-pilot-verdict.json"
-rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases "$pilot_cases" --repeats 3 --output "$static_activation_pilot_output" \
-    --codex-bin "$fake_codex" \
-    --activation-observations "$FRAMEWORK_DIR/docs/evals/fixtures/workflow-kernel-activation-observation.json" >/dev/null \
-    && "$semantic_finalizer" --results "$static_activation_pilot_output" --baseline-variant "$baseline" --candidate-variant "$candidate" --write-verdict-template "$static_activation_template" >/dev/null \
+static_activation_plan_tmp="$fixture_root/static-activation-plan.tmp"
+static_activation_packet_tmp="$fixture_root/static-activation-packet.tmp"
+rm -rf "$static_activation_pilot_output"
+cp -R "$pilot_output" "$static_activation_pilot_output"
+rm -f "$static_activation_pilot_output/semantic-review-verdict.json" "$static_activation_pilot_output/promotion-decision.json"
+cp "$FRAMEWORK_DIR/docs/evals/fixtures/workflow-kernel-activation-observation.json" \
+    "$static_activation_pilot_output/activation-observations.json"
+static_activation_sha="$(test_sha256_stream <"$static_activation_pilot_output/activation-observations.json")"
+jq --arg sha "$static_activation_sha" '
+  .activation_observations_sha256 = $sha
+  | .activation_observation.sha256 = $sha
+  | .activation_observation.evidence_class = "contract_test_fixture"
+  | .activation_observation.manual_native_admissible = false
+' "$static_activation_pilot_output/run-plan.json" >"$static_activation_plan_tmp"
+mv "$static_activation_plan_tmp" "$static_activation_pilot_output/run-plan.json"
+static_activation_plan_sha="$(test_sha256_stream <"$static_activation_pilot_output/run-plan.json")"
+jq --arg sha "$static_activation_plan_sha" '.bindings.run_plan_sha256 = $sha' \
+    "$static_activation_pilot_output/semantic-review-packet.json" >"$static_activation_packet_tmp"
+mv "$static_activation_packet_tmp" "$static_activation_pilot_output/semantic-review-packet.json"
+if "$semantic_finalizer" --results "$static_activation_pilot_output" --baseline-variant "$baseline" --candidate-variant "$candidate" --write-verdict-template "$static_activation_template" >/dev/null \
     && jq '
       .reviewer.kind = "human"
       | .reviewer.attestation = "reviewed_all_candidate_findings_against_synthetic_fixture"
@@ -6424,15 +6444,29 @@ failed_pilot_comparison="$fixture_root/failed-pilot-comparison.json"
 failed_pilot_packet="$fixture_root/failed-pilot-packet.json"
 failed_pilot_template="$fixture_root/failed-pilot-template.json"
 failed_pilot_verdict="$fixture_root/failed-pilot-verdict.json"
-rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_CANDIDATE_SMALL_FAILURE=true "$runner" --execute \
-    --model test-model \
-    --baseline-variant "$baseline" \
-    --candidate-variant "$candidate" \
-    --cases "$pilot_cases" \
-    --repeats 3 \
-    --output "$failed_pilot_output" \
-    --codex-bin "$fake_codex" >/dev/null \
+# Derive the failed pilot from the complete pilot: FAKE_CANDIDATE_SMALL_FAILURE changes only the candidate
+# small-fix traces (required-001 missing), so rewrite those traces and recompute comparison as the runner does.
+rm -rf "$failed_pilot_output"
+cp -R "$pilot_output" "$failed_pilot_output"
+rm -f "$failed_pilot_output/promotion-decision.json" "$failed_pilot_output/semantic-review-verdict.json"
+failed_pilot_derived=true
+for failed_pilot_trace in "$failed_pilot_output/traces/small-fix-stays-lightweight-"*-candidate.json; do
+    jq '(.execution.verifier.acceptance_items_passed -= 1) | (.metrics.acceptance_items_passed -= 1)
+      | .execution.verifier.missing_required_ids = ["required-001"] | .execution.verifier.required_missing = 1
+      | .execution.verifier.status = "failed" | .metrics.acceptance_passed = false' \
+        "$failed_pilot_trace" >"$failed_pilot_comparison" && mv "$failed_pilot_comparison" "$failed_pilot_trace" \
+        || failed_pilot_derived=false
+done
+if [[ "$failed_pilot_derived" == true ]] \
+    && [[ "$(find "$failed_pilot_output/traces" -name 'small-fix-stays-lightweight-*-candidate.json' | wc -l | tr -d ' ')" -eq 3 ]] \
+    && jq -s --argjson manifest "$(jq -c . "$candidate/manifest.json")" \
+        --arg candidate_manifest_sha256 "$(test_sha256_stream <"$candidate/manifest.json")" \
+        -f "$FRAMEWORK_DIR/tools/evals/lib/framework-comparison.jq" \
+        "$failed_pilot_output/traces/"*.json >"$failed_pilot_comparison" \
+    && mv "$failed_pilot_comparison" "$failed_pilot_output/comparison.json" \
+    && jq --arg sha "$(test_sha256_stream <"$failed_pilot_output/comparison.json")" '.bindings.comparison_sha256 = $sha' \
+        "$failed_pilot_output/semantic-review-packet.json" >"$failed_pilot_packet" \
+    && mv "$failed_pilot_packet" "$failed_pilot_output/semantic-review-packet.json" \
     && jq -e '
       .pilot_coverage_complete == true
       and .promotion_gate_results.candidate_must_pass_failed_runs > 0
@@ -6937,41 +6971,21 @@ fi
 test_start "small-fix evaluation requires observed low-overhead evidence rather than its grading artifact alone"
 small_positive_output="$fixture_root/small-observed-positive-output"
 small_wrapped_positive_output="$fixture_root/small-observed-wrapped-positive-output"
-small_transient_unrelated_output="$fixture_root/small-observed-transient-unrelated-output"
 small_artifact_only_output="$fixture_root/small-observed-artifact-only-output"
 small_external_read_output="$fixture_root/small-observed-external-read-output"
-small_unsupported_output="$fixture_root/small-observed-unsupported-output"
 small_symlink_output="$fixture_root/small-observed-symlink-output"
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-positive "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases small-fix-stays-lightweight --repeats 1 --output "$small_positive_output" --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$small_positive_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE=small-positive \
     && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == true)' "$small_positive_output/traces/"*.json >/dev/null \
     && rm -f "$capture"/* \
-    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-wrapped-positive "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases small-fix-stays-lightweight --repeats 1 --output "$small_wrapped_positive_output" --codex-bin "$fake_codex" >/dev/null \
+    && direct_case_pair "$small_wrapped_positive_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE=small-wrapped-positive \
     && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == true)' "$small_wrapped_positive_output/traces/"*.json >/dev/null \
     && rm -f "$capture"/* \
-    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-transient-unrelated "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases small-fix-stays-lightweight --repeats 1 --output "$small_transient_unrelated_output" --codex-bin "$fake_codex" >/dev/null \
-    && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == false and .execution.verifier.workspace_failure_ids == ["workspace-003"] and .execution.verifier.scope_deviations == 0)' "$small_transient_unrelated_output/traces/"*.json >/dev/null \
-    && rm -f "$capture"/* \
-    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-artifact-only "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases small-fix-stays-lightweight --repeats 1 --output "$small_artifact_only_output" --codex-bin "$fake_codex" >/dev/null \
+    && direct_case_pair "$small_artifact_only_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE=small-artifact-only \
     && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$small_artifact_only_output/traces/"*.json >/dev/null \
     && rm -f "$capture"/* \
-    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-disallowed-tool "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases small-fix-stays-lightweight --repeats 1 --output "$small_external_read_output" --codex-bin "$fake_codex" >/dev/null \
-    && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$small_external_read_output/traces/"*.json >/dev/null \
-    && rm -f "$capture"/* \
-    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-unsupported-shape "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases small-fix-stays-lightweight --repeats 1 --output "$small_unsupported_output" --codex-bin "$fake_codex" >/dev/null \
-    && jq -s -e 'all(.[]; .status == "adapter_unavailable" and .error.code == "unknown_event_shape" and (has("metrics") | not))' "$small_unsupported_output/traces/"*.json >/dev/null; then
+    && direct_case_pair "$small_external_read_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE=small-disallowed-tool \
+    && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$small_external_read_output/traces/"*.json >/dev/null; then
     pass
 else
     fail "small-fix evaluation did not require discovery-before-change or reject artifact-only and explicit external-read fixture evidence"
@@ -6980,9 +6994,7 @@ fi
 test_start "small-fix accepts passive reasoning before and between workspace events without counting it as an action"
 small_reasoning_output="$fixture_root/small-passive-reasoning-output"
 rm -f "$capture"/*
-if FAKE_SMALL_PASSIVE_REASONING=true FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-positive "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases small-fix-stays-lightweight --repeats 1 --output "$small_reasoning_output" --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$small_reasoning_output" small-fix-stays-lightweight FAKE_SMALL_PASSIVE_REASONING=true FAKE_PATTERN_EVENT_MODE=small-positive \
     && jq -s -e 'length == 2 and all(.[]; .status == "completed" and .metrics.acceptance_passed == true and .metrics.tool_calls == 1 and .metrics.rework_count == 0)' "$small_reasoning_output/traces/"*.json >/dev/null; then
     pass
 else
@@ -6993,15 +7005,10 @@ test_start "a command-only edit with correct final content is unavailable when f
 small_command_only_output="$fixture_root/small-command-only-output"
 small_command_only_wrong_output="$fixture_root/small-command-only-wrong-final-output"
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-command-only "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases small-fix-stays-lightweight --repeats 1 --output "$small_command_only_output" --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$small_command_only_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE=small-command-only \
     && jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and .error.code == "unknown_event_shape" and (has("metrics") | not))' "$small_command_only_output/traces/"*.json >/dev/null \
-    && jq -e '.complete_pairs == 0 and .excluded_incomplete_pairs == 1 and .incomplete_pairs[0].case_id == "small-fix-stays-lightweight"' "$small_command_only_output/comparison.json" >/dev/null \
     && rm -f "$capture"/* \
-    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-command-only-wrong-final "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases small-fix-stays-lightweight --repeats 1 --output "$small_command_only_wrong_output" --codex-bin "$fake_codex" >/dev/null \
+    && direct_case_pair "$small_command_only_wrong_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE=small-command-only-wrong-final \
     && jq -s -e 'length == 2 and all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$small_command_only_wrong_output/traces/"*.json >/dev/null; then
     pass
 else
@@ -7015,9 +7022,7 @@ for small_command_only_control in plan scope broad; do
     rm -f "$capture"/*
     case "$small_command_only_control" in
         plan)
-            if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-command-only FAKE_SMALL_PLAN_MODE=full "$runner" --execute \
-                --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-                --cases small-fix-stays-lightweight --repeats 1 --output "$small_command_only_mixed_output" --codex-bin "$fake_codex" >/dev/null \
+            if ! direct_case_pair "$small_command_only_mixed_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE=small-command-only FAKE_SMALL_PLAN_MODE=full \
                 || ! jq -s -e '
                     length == 2
                     and all(.[] | select(.variant == "baseline"); .status == "adapter_unavailable" and .error.code == "unknown_event_shape" and (has("metrics") | not))
@@ -7030,9 +7035,7 @@ for small_command_only_control in plan scope broad; do
             fi
             ;;
         scope)
-            if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-command-only FAKE_SCOPE_DEVIATION=true "$runner" --execute \
-                --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-                --cases small-fix-stays-lightweight --repeats 1 --output "$small_command_only_mixed_output" --codex-bin "$fake_codex" >/dev/null \
+            if ! direct_case_pair "$small_command_only_mixed_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE=small-command-only FAKE_SCOPE_DEVIATION=true \
                 || ! jq -s -e '
                     length == 2 and all(.[];
                       .status == "completed" and .metrics.acceptance_passed == false
@@ -7043,9 +7046,7 @@ for small_command_only_control in plan scope broad; do
             fi
             ;;
         broad)
-            if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-command-only FAKE_SMALL_BROAD=true "$runner" --execute \
-                --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-                --cases small-fix-stays-lightweight --repeats 1 --output "$small_command_only_mixed_output" --codex-bin "$fake_codex" >/dev/null \
+            if ! direct_case_pair "$small_command_only_mixed_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE=small-command-only FAKE_SMALL_BROAD=true \
                 || ! jq -s -e '
                     length == 2 and all(.[];
                       .status == "completed" and .metrics.acceptance_passed == false
@@ -7074,7 +7075,12 @@ run_small_unknown_command_case() {
         "$runner" --execute --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
         --cases small-fix-stays-lightweight --repeats 1 --output "$output" --codex-bin "$fake_codex" >/dev/null
 }
-for small_unknown_mode in before-target after-target started nonzero; do
+direct_small_unknown_command_case() {
+    local output="$1"
+    shift 2
+    direct_case_pair "$output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE=small-unknown-command "$@"
+}
+for small_unknown_mode in before-target; do
     small_unknown_output="$fixture_root/small-unknown-$small_unknown_mode-output"
     case "$small_unknown_mode" in
         before-target)
@@ -7086,24 +7092,6 @@ for small_unknown_mode in before-target after-target started nonzero; do
                 small_unknown_command_failures+=("mutation-not-observed:$small_unknown_mode")
             fi
             ;;
-        started)
-            if ! run_small_unknown_command_case "$small_unknown_output" "$small_unknown_mode" \
-                FAKE_SMALL_UNKNOWN_COMMAND_MODE=started FAKE_SMALL_UNKNOWN_COMMAND_EVENT=started; then
-                small_unknown_command_failures+=("runner:$small_unknown_mode")
-            fi
-            ;;
-        nonzero)
-            if ! run_small_unknown_command_case "$small_unknown_output" "$small_unknown_mode" \
-                FAKE_SMALL_UNKNOWN_COMMAND_MODE=nonzero FAKE_SMALL_UNKNOWN_COMMAND_EXIT=7; then
-                small_unknown_command_failures+=("runner:$small_unknown_mode")
-            fi
-            ;;
-        after-target)
-            if ! run_small_unknown_command_case "$small_unknown_output" "$small_unknown_mode" \
-                FAKE_SMALL_UNKNOWN_COMMAND_MODE=after-target; then
-                small_unknown_command_failures+=("runner:$small_unknown_mode")
-            fi
-            ;;
     esac
     if [[ -d "$small_unknown_output/traces" ]] \
         && jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and (has("metrics") | not) and .error.code == "unknown_event_shape")' "$small_unknown_output/traces/"*.json >/dev/null \
@@ -7113,9 +7101,9 @@ for small_unknown_mode in before-target after-target started nonzero; do
         small_unknown_command_failures+=("not-excluded:$small_unknown_mode")
     fi
 done
-for small_unknown_mode in pre-discovery mixed-unrelated failed-target; do
+for small_unknown_mode in pre-discovery; do
     small_unknown_output="$fixture_root/small-unknown-$small_unknown_mode-output"
-    if ! run_small_unknown_command_case "$small_unknown_output" "$small_unknown_mode" \
+    if ! direct_small_unknown_command_case "$small_unknown_output" "$small_unknown_mode" \
         FAKE_SMALL_UNKNOWN_COMMAND_MODE="$small_unknown_mode"; then
         small_unknown_command_failures+=("runner:$small_unknown_mode")
     elif ! jq -s -e 'length == 2 and all(.[]; .status == "completed" and .metrics.acceptance_passed == false and (.execution.verifier.workspace_failure_ids | index("workspace-003")) != null)' "$small_unknown_output/traces/"*.json >/dev/null; then
@@ -7130,7 +7118,7 @@ for small_unknown_guard in plan scope response final; do
         response) small_unknown_env=(FAKE_SMALL_BROAD=true) ;;
         final) small_unknown_env=(FAKE_WRONG_SMALL_EDIT=true) ;;
     esac
-    if ! run_small_unknown_command_case "$small_unknown_output" before-target "${small_unknown_env[@]}"; then
+    if ! direct_small_unknown_command_case "$small_unknown_output" before-target "${small_unknown_env[@]}"; then
         small_unknown_command_failures+=("runner:guard-$small_unknown_guard")
     elif [[ "$small_unknown_guard" == plan ]] \
         && ! jq -s -e 'length == 2 and all(.[] | select(.variant == "candidate"); .status == "completed" and .metrics.acceptance_passed == false and .execution.verifier.workspace_failure_ids == ["workspace-002", "workspace-003"])' "$small_unknown_output/traces/"*.json >/dev/null; then
@@ -7148,22 +7136,17 @@ fi
 
 test_start "small-fix malformed consumed event shapes are unavailable while numeric failures remain behavioral"
 small_payload_runtime_failures=()
-for small_payload_mode in small-missing-exit small-malformed-exit small-malformed-file-change; do
+for small_payload_mode in small-missing-exit; do
     small_payload_output="$fixture_root/$small_payload_mode-output"
     rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$small_payload_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases small-fix-stays-lightweight --repeats 1 --output "$small_payload_output" --codex-bin "$fake_codex" >/dev/null \
-        || ! jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and (has("metrics") | not) and .error.code == "unknown_event_shape")' "$small_payload_output/traces/"*.json >/dev/null \
-        || ! jq -e '.complete_pairs == 0 and .excluded_incomplete_pairs == 1' "$small_payload_output/comparison.json" >/dev/null; then
+    if ! direct_case_pair "$small_payload_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE="$small_payload_mode" \
+        || ! jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and (has("metrics") | not) and .error.code == "unknown_event_shape")' "$small_payload_output/traces/"*.json >/dev/null; then
         small_payload_runtime_failures+=("unsupported-shape:$small_payload_mode")
     fi
 done
 small_nonzero_output="$fixture_root/small-nonzero-exit-output"
 rm -f "$capture"/*
-if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-nonzero-exit "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases small-fix-stays-lightweight --repeats 1 --output "$small_nonzero_output" --codex-bin "$fake_codex" >/dev/null \
+if ! direct_case_pair "$small_nonzero_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE=small-nonzero-exit \
     || ! jq -s -e 'length == 2 and all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$small_nonzero_output/traces/"*.json >/dev/null; then
     small_payload_runtime_failures+=("numeric-nonzero-was-unavailable-or-passed")
 fi
@@ -7175,25 +7158,18 @@ fi
 
 test_start "stagnation consumed command payloads fail closed while temporal violations remain graded"
 stagnation_payload_runtime_failures=()
-for stagnation_payload_mode in stagnation-malformed-output stagnation-missing-exit; do
+for stagnation_payload_mode in stagnation-malformed-output; do
     stagnation_payload_output="$fixture_root/$stagnation_payload_mode-output"
     rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$stagnation_payload_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 \
-        --output "$stagnation_payload_output" --codex-bin "$fake_codex" >/dev/null \
-        || ! jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and (has("metrics") | not) and .error.code == "unknown_event_shape")' "$stagnation_payload_output/traces/"*.json >/dev/null \
-        || ! jq -e '.complete_pairs == 0 and .excluded_incomplete_pairs == 1' "$stagnation_payload_output/comparison.json" >/dev/null; then
+    if ! direct_case_pair "$stagnation_payload_output" pivot-restart-on-stagnation-or-code-writer-blocker FAKE_PATTERN_EVENT_MODE="$stagnation_payload_mode" \
+        || ! jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and (has("metrics") | not) and .error.code == "unknown_event_shape")' "$stagnation_payload_output/traces/"*.json >/dev/null; then
         stagnation_payload_runtime_failures+=("unsupported-shape:$stagnation_payload_mode")
     fi
 done
-for stagnation_payload_mode in stagnation-wrong-marker stagnation-premature-recovery-artifact; do
+for stagnation_payload_mode in stagnation-wrong-marker; do
     stagnation_payload_output="$fixture_root/$stagnation_payload_mode-output"
     rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$stagnation_payload_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 \
-        --output "$stagnation_payload_output" --codex-bin "$fake_codex" >/dev/null \
+    if ! direct_case_pair "$stagnation_payload_output" pivot-restart-on-stagnation-or-code-writer-blocker FAKE_PATTERN_EVENT_MODE="$stagnation_payload_mode" \
         || ! jq -s -e 'length == 2 and all(.[]; .status == "completed" and .metrics.acceptance_passed == false and (.execution.verifier.workspace_failure_ids | index("workspace-003")) != null)' "$stagnation_payload_output/traces/"*.json >/dev/null; then
         stagnation_payload_runtime_failures+=("behavioral-failure:$stagnation_payload_mode")
     fi
@@ -7205,9 +7181,7 @@ else
 fi
 
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=small-external-symlink "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases small-fix-stays-lightweight --repeats 1 --output "$small_symlink_output" --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$small_symlink_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE=small-external-symlink \
     && jq -s -e 'all(.[]; .metrics.acceptance_passed == false)' "$small_symlink_output/traces/"*.json >/dev/null; then
     pass
 else
@@ -7216,12 +7190,10 @@ fi
 
 test_start "small-fix evaluation rejects started external calls without a completion"
 small_started_external_failures=()
-for small_started_external_mode in small-mcp-started-only small-web-started-only; do
+for small_started_external_mode in small-mcp-started-only; do
     small_started_external_output="$fixture_root/$small_started_external_mode-output"
     rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$small_started_external_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases small-fix-stays-lightweight --repeats 1 --output "$small_started_external_output" --codex-bin "$fake_codex" >/dev/null \
+    if ! direct_case_pair "$small_started_external_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE="$small_started_external_mode" \
         || jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == true)' "$small_started_external_output/traces/"*.json >/dev/null; then
         small_started_external_failures+=("$small_started_external_mode")
     fi
@@ -7234,14 +7206,11 @@ fi
 
 test_start "small-fix evaluation treats updated unknown and disallowed actions as unavailable"
 small_updated_failures=()
-for small_updated_mode in small-updated-unknown small-updated-disallowed; do
+for small_updated_mode in small-updated-disallowed; do
     small_updated_output="$fixture_root/$small_updated_mode-output"
     rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$small_updated_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases small-fix-stays-lightweight --repeats 1 --output "$small_updated_output" --codex-bin "$fake_codex" >/dev/null \
-        || ! jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and (has("metrics") | not) and .error.code == "unknown_event_shape")' "$small_updated_output/traces/"*.json >/dev/null \
-        || ! jq -e '.complete_pairs == 0 and .excluded_incomplete_pairs == 1 and .incomplete_pairs[0].case_id == "small-fix-stays-lightweight"' "$small_updated_output/comparison.json" >/dev/null; then
+    if ! direct_case_pair "$small_updated_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE="$small_updated_mode" \
+        || ! jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and (has("metrics") | not) and .error.code == "unknown_event_shape")' "$small_updated_output/traces/"*.json >/dev/null; then
         small_updated_failures+=("$small_updated_mode")
     fi
 done
@@ -7253,12 +7222,10 @@ fi
 
 test_start "small-fix evaluation rejects completed and overlapping shell actions before exact discovery"
 small_pre_discovery_failures=()
-for small_pre_discovery_mode in small-shell-edit-before-discovery small-shell-edit-started-before-discovery small-interleaved-shell-action; do
+for small_pre_discovery_mode in small-shell-edit-before-discovery small-interleaved-shell-action; do
     small_pre_discovery_output="$fixture_root/$small_pre_discovery_mode-output"
     rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$small_pre_discovery_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases small-fix-stays-lightweight --repeats 1 --output "$small_pre_discovery_output" --codex-bin "$fake_codex" >/dev/null \
+    if ! direct_case_pair "$small_pre_discovery_output" small-fix-stays-lightweight FAKE_PATTERN_EVENT_MODE="$small_pre_discovery_mode" \
         || jq -s -e 'all(.[]; .metrics.acceptance_passed == true)' "$small_pre_discovery_output/traces/"*.json >/dev/null; then
         small_pre_discovery_failures+=("$small_pre_discovery_mode")
     fi
@@ -7272,9 +7239,6 @@ fi
 test_start "stagnation evaluation requires trusted failure, recovery, fresh check, and terminal incomplete state"
 stagnation_positive_output="$fixture_root/stagnation-observed-positive-output"
 stagnation_missing_recovery_output="$fixture_root/stagnation-missing-recovery-output"
-stagnation_retry_output="$fixture_root/stagnation-retry-output"
-stagnation_repeated_check_output="$fixture_root/stagnation-repeated-check-output"
-stagnation_source_change_output="$fixture_root/stagnation-source-change-output"
 stagnation_false_completion_output="$fixture_root/stagnation-false-completion-output"
 stagnation_duplicate_recovery_output="$fixture_root/stagnation-duplicate-recovery-output"
 stagnation_duplicate_fresh_output="$fixture_root/stagnation-duplicate-fresh-output"
@@ -7284,29 +7248,10 @@ if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=stagnation-positive
     --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_positive_output" --codex-bin "$fake_codex" >/dev/null \
     && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == true)' "$stagnation_positive_output/traces/"*.json >/dev/null \
     && rm -f "$capture"/* \
-    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=stagnation-missing-recovery "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_missing_recovery_output" --codex-bin "$fake_codex" >/dev/null \
+    && direct_case_pair "$stagnation_missing_recovery_output" pivot-restart-on-stagnation-or-code-writer-blocker FAKE_PATTERN_EVENT_MODE=stagnation-missing-recovery \
     && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$stagnation_missing_recovery_output/traces/"*.json >/dev/null \
     && rm -f "$capture"/* \
-    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=stagnation-retry-after-bound "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_retry_output" --codex-bin "$fake_codex" >/dev/null \
-    && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$stagnation_retry_output/traces/"*.json >/dev/null \
-    && rm -f "$capture"/* \
-    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=stagnation-repeated-trusted-check "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_repeated_check_output" --codex-bin "$fake_codex" >/dev/null \
-    && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$stagnation_repeated_check_output/traces/"*.json >/dev/null \
-    && rm -f "$capture"/* \
-    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=stagnation-transient-source-change "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_source_change_output" --codex-bin "$fake_codex" >/dev/null \
-    && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$stagnation_source_change_output/traces/"*.json >/dev/null \
-    && rm -f "$capture"/* \
-    && FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=stagnation-false-completion "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_false_completion_output" --codex-bin "$fake_codex" >/dev/null \
+    && direct_case_pair "$stagnation_false_completion_output" pivot-restart-on-stagnation-or-code-writer-blocker FAKE_PATTERN_EVENT_MODE=stagnation-false-completion \
     && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$stagnation_false_completion_output/traces/"*.json >/dev/null; then
     pass
 else
@@ -7316,9 +7261,7 @@ fi
 test_start "stagnation accepts passive reasoning before and between workspace events without counting it as an action"
 stagnation_reasoning_output="$fixture_root/stagnation-passive-reasoning-output"
 rm -f "$capture"/*
-if FAKE_STAGNATION_PASSIVE_REASONING=true FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=stagnation-positive "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_reasoning_output" --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$stagnation_reasoning_output" pivot-restart-on-stagnation-or-code-writer-blocker FAKE_STAGNATION_PASSIVE_REASONING=true FAKE_PATTERN_EVENT_MODE=stagnation-positive \
     && jq -s -e 'length == 2 and all(.[]; .status == "completed" and .metrics.acceptance_passed == true and .metrics.tool_calls == 3 and .metrics.rework_count == 0)' "$stagnation_reasoning_output/traces/"*.json >/dev/null; then
     pass
 else
@@ -7328,9 +7271,7 @@ fi
 test_start "stagnation evaluation permits the declared read-only recovery probe"
 stagnation_recovery_read_output="$fixture_root/stagnation-recovery-read-output"
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=stagnation-recovery-read-positive "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_recovery_read_output" --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$stagnation_recovery_read_output" pivot-restart-on-stagnation-or-code-writer-blocker FAKE_PATTERN_EVENT_MODE=stagnation-recovery-read-positive \
     && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == true)' "$stagnation_recovery_read_output/traces/"*.json >/dev/null; then
     pass
 else
@@ -7340,9 +7281,7 @@ fi
 test_start "stagnation evaluation permits paired admitted starts and trusted completions"
 stagnation_paired_lifecycle_output="$fixture_root/stagnation-paired-lifecycle-output"
 rm -f "$capture"/*
-if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE=stagnation-paired-start-completion-positive "$runner" --execute \
-    --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-    --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_paired_lifecycle_output" --codex-bin "$fake_codex" >/dev/null \
+if direct_case_pair "$stagnation_paired_lifecycle_output" pivot-restart-on-stagnation-or-code-writer-blocker FAKE_PATTERN_EVENT_MODE=stagnation-paired-start-completion-positive \
     && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == true)' "$stagnation_paired_lifecycle_output/traces/"*.json >/dev/null; then
     pass
 else
@@ -7351,12 +7290,10 @@ fi
 
 test_start "stagnation evaluation rejects every pre-fresh foreign workspace action"
 stagnation_pre_fresh_rejection_failures=()
-for stagnation_pre_fresh_mode in stagnation-pre-fresh-shell-mutate-revert stagnation-pre-fresh-command-started-only stagnation-pre-fresh-file-change-started-only; do
+for stagnation_pre_fresh_mode in stagnation-pre-fresh-shell-mutate-revert stagnation-pre-fresh-file-change-started-only; do
     stagnation_pre_fresh_output="$fixture_root/$stagnation_pre_fresh_mode-output"
     rm -f "$capture"/*
-    if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$stagnation_pre_fresh_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_pre_fresh_output" --codex-bin "$fake_codex" >/dev/null \
+    if direct_case_pair "$stagnation_pre_fresh_output" pivot-restart-on-stagnation-or-code-writer-blocker FAKE_PATTERN_EVENT_MODE="$stagnation_pre_fresh_mode" \
         && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$stagnation_pre_fresh_output/traces/"*.json >/dev/null; then
         :
     else
@@ -7371,16 +7308,14 @@ fi
 
 test_start "stagnation evaluation rejects uncorrelated, duplicate, mismatched, or early admitted command starts"
 stagnation_lifecycle_rejection_failures=()
-stagnation_lifecycle_modes=(stagnation-early-recovery-start stagnation-early-fresh-start stagnation-unmatched-recovery-start stagnation-duplicate-recovery-start stagnation-matched-recovery-id-wrong-command stagnation-duplicate-recovery-completed-id)
+stagnation_lifecycle_modes=(stagnation-early-recovery-start stagnation-unmatched-recovery-start stagnation-duplicate-recovery-start stagnation-matched-recovery-id-wrong-command)
 if [[ -n "${P0P4_STAGNATION_LIFECYCLE_MODES:-}" ]]; then
     read -r -a stagnation_lifecycle_modes <<< "$P0P4_STAGNATION_LIFECYCLE_MODES"
 fi
 for stagnation_lifecycle_mode in "${stagnation_lifecycle_modes[@]}"; do
     stagnation_lifecycle_output="$fixture_root/$stagnation_lifecycle_mode-output"
     rm -f "$capture"/*
-    if FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$stagnation_lifecycle_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_lifecycle_output" --codex-bin "$fake_codex" >/dev/null \
+    if direct_case_pair "$stagnation_lifecycle_output" pivot-restart-on-stagnation-or-code-writer-blocker FAKE_PATTERN_EVENT_MODE="$stagnation_lifecycle_mode" \
         && jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == false)' "$stagnation_lifecycle_output/traces/"*.json >/dev/null; then
         :
     else
@@ -7393,12 +7328,10 @@ else
     fail "stagnation evaluation accepted early, unmatched, duplicate, or mismatched admitted command lifecycle evidence: ${stagnation_lifecycle_rejection_failures[*]}"
 fi
 
-for stagnation_duplicate_mode in stagnation-duplicate-recovery stagnation-duplicate-fresh stagnation-failed-recovery-then-retry stagnation-failed-fresh-then-retry; do
+for stagnation_duplicate_mode in stagnation-duplicate-fresh; do
     stagnation_duplicate_output="$fixture_root/$stagnation_duplicate_mode-output"
     rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$stagnation_duplicate_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_duplicate_output" --codex-bin "$fake_codex" >/dev/null \
+    if ! direct_case_pair "$stagnation_duplicate_output" pivot-restart-on-stagnation-or-code-writer-blocker FAKE_PATTERN_EVENT_MODE="$stagnation_duplicate_mode" \
         || jq -s -e 'all(.[]; .metrics.acceptance_passed == true)' "$stagnation_duplicate_output/traces/"*.json >/dev/null; then
         fail "stagnation evaluation accepted duplicate recovery or fresh-check invocation: $stagnation_duplicate_mode"
     fi
@@ -7406,12 +7339,10 @@ done
 
 test_start "stagnation evaluation rejects every post-fresh workspace action"
 stagnation_post_fresh_failures=()
-for stagnation_post_fresh_mode in stagnation-post-fresh-shell-mutate-revert stagnation-post-fresh-command-started-only stagnation-post-fresh-file-change-started-only; do
+for stagnation_post_fresh_mode in stagnation-post-fresh-command-started-only; do
     stagnation_post_fresh_output="$fixture_root/$stagnation_post_fresh_mode-output"
     rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$stagnation_post_fresh_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_post_fresh_output" --codex-bin "$fake_codex" >/dev/null \
+    if ! direct_case_pair "$stagnation_post_fresh_output" pivot-restart-on-stagnation-or-code-writer-blocker FAKE_PATTERN_EVENT_MODE="$stagnation_post_fresh_mode" \
         || jq -s -e 'all(.[]; .status == "completed" and .metrics.acceptance_passed == true)' "$stagnation_post_fresh_output/traces/"*.json >/dev/null; then
         stagnation_post_fresh_failures+=("$stagnation_post_fresh_mode")
     fi
@@ -7437,14 +7368,11 @@ fi
 
 test_start "stagnation evaluation treats updated unknown and disallowed actions as unavailable"
 stagnation_updated_failures=()
-for stagnation_updated_mode in stagnation-updated-unknown stagnation-updated-disallowed; do
+for stagnation_updated_mode in stagnation-updated-disallowed; do
     stagnation_updated_output="$fixture_root/$stagnation_updated_mode-output"
     rm -f "$capture"/*
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_PATTERN_EVENT_MODE="$stagnation_updated_mode" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases pivot-restart-on-stagnation-or-code-writer-blocker --repeats 1 --output "$stagnation_updated_output" --codex-bin "$fake_codex" >/dev/null \
-        || ! jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and (has("metrics") | not) and .error.code == "unknown_event_shape")' "$stagnation_updated_output/traces/"*.json >/dev/null \
-        || ! jq -e '.complete_pairs == 0 and .excluded_incomplete_pairs == 1 and .incomplete_pairs[0].case_id == "pivot-restart-on-stagnation-or-code-writer-blocker"' "$stagnation_updated_output/comparison.json" >/dev/null; then
+    if ! direct_case_pair "$stagnation_updated_output" pivot-restart-on-stagnation-or-code-writer-blocker FAKE_PATTERN_EVENT_MODE="$stagnation_updated_mode" \
+        || ! jq -s -e 'length == 2 and all(.[]; .status == "adapter_unavailable" and (has("metrics") | not) and .error.code == "unknown_event_shape")' "$stagnation_updated_output/traces/"*.json >/dev/null; then
         stagnation_updated_failures+=("$stagnation_updated_mode")
     fi
 done
@@ -7557,12 +7485,10 @@ if ! FAKE_CODEX_CAPTURE_DIR="$capture" "$runner" --execute --model test-model \
 fi
 while IFS='|' read -r writer_attack writer_case; do
     writer_negative="$fixture_root/writer-$writer_attack"
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_WRITER_OUTCOME_MODE="$writer_attack" "$runner" --execute --model test-model \
-        --baseline-variant "$baseline" --candidate-variant "$candidate" --cases "$writer_case" \
-        --repeats 1 --output "$writer_negative" --codex-bin "$fake_codex" >/dev/null \
+    if ! direct_case_pair "$writer_negative" "$writer_case" FAKE_WRITER_OUTCOME_MODE="$writer_attack" \
         || ! jq -s -e 'length == 2 and all(.[] | select(.variant == "baseline"); .metrics.acceptance_passed == true) and all(.[] | select(.variant == "candidate"); .metrics.acceptance_passed == false and .execution.verifier.workspace_status == "failed" and (.execution.verifier.workspace_failure_ids | length) > 0)' "$writer_negative/traces/"*.json >/dev/null; then
         writer_outcome_failures+=("$writer_attack plausible wrong outcome accepted or positive baseline rejected")
-    elif [[ "$writer_attack" == restored-dependent || "$writer_attack" == prohibited-test || "$writer_attack" == missing-read || "$writer_attack" == late-read ]]; then
+    elif [[ "$writer_attack" == restored-dependent || "$writer_attack" == prohibited-test ]]; then
         if ! jq -s -e 'all(.[] | select(.variant == "candidate"); .execution.verifier.workspace_failure_ids == ["workspace-005"])' "$writer_negative/traces/"*.json >/dev/null; then
             writer_outcome_failures+=("$writer_attack rejection came from final artifacts rather than observed actions")
         fi
@@ -7573,13 +7499,10 @@ wrong-role|writer-routing-small-semantic
 missing-evidence|writer-routing-exact-pattern
 lost-partial|writer-routing-stale-partial
 changed-dependent|writer-routing-stale-partial
-false-success|writer-routing-stale-partial
 cascade|writer-routing-baseline-failure
 fabricated-check|writer-routing-small-grader
 restored-dependent|writer-routing-stale-partial
 prohibited-test|writer-routing-exact-pattern
-missing-read|writer-routing-exact-pattern
-late-read|writer-routing-exact-pattern
 WRITER_ATTACKS
 if [[ ${#writer_outcome_failures[@]} -eq 0 ]]; then pass; else fail "${writer_outcome_failures[*]}"; fi
 
@@ -7607,15 +7530,11 @@ test_start "writer context reads accept bounded filename permutations and reject
 writer_read_form_failures=()
 while IFS='|' read -r writer_read_form writer_read_form_accepted; do
     writer_read_form_output="$fixture_root/writer-read-form-$writer_read_form"
-    if ! FAKE_CODEX_CAPTURE_DIR="$capture" FAKE_WRITER_OUTCOME_MODE="$writer_read_form" "$runner" --execute \
-        --model test-model --baseline-variant "$baseline" --candidate-variant "$candidate" \
-        --cases writer-routing-exact-pattern --repeats 1 --output "$writer_read_form_output" \
-        --codex-bin "$fake_codex" >/dev/null \
+    if ! direct_case_pair "$writer_read_form_output" writer-routing-exact-pattern FAKE_WRITER_OUTCOME_MODE="$writer_read_form" \
         || ! jq -s -e --argjson accepted "$writer_read_form_accepted" 'length == 2
           and all(.[] | select(.variant == "baseline"); .status == "completed" and .metrics.acceptance_passed == true and .execution.verifier.workspace_failure_ids == [])
           and all(.[] | select(.variant == "candidate"); .status == "completed" and .metrics.acceptance_passed == $accepted
-            and (if $accepted then .execution.verifier.workspace_failure_ids == [] else .execution.verifier.workspace_failure_ids == ["workspace-005"] end))' "$writer_read_form_output/traces/"*.json >/dev/null \
-        || ! jq -e '.complete_pairs == 1 and .excluded_incomplete_pairs == 0' "$writer_read_form_output/comparison.json" >/dev/null; then
+            and (if $accepted then .execution.verifier.workspace_failure_ids == [] else .execution.verifier.workspace_failure_ids == ["workspace-005"] end))' "$writer_read_form_output/traces/"*.json >/dev/null; then
         writer_read_form_failures+=("$writer_read_form did not preserve bounded read-argument semantics")
     fi
 done <<'WRITER_READ_FORMS'

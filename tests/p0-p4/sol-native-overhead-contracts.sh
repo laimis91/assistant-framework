@@ -29,22 +29,6 @@ index_load_set_is_bounded() {
     ' "$index_file"
 }
 
-agents_file="$FRAMEWORK_DIR/AGENTS.md"
-agents_word_count="$(wc -w < "$agents_file" | tr -d ' ')"
-test_start "standing Codex guidance is compact and current (AGENTS words=$agents_word_count)"
-standing_guidance_failures=()
-if (( agents_word_count > 450 )); then
-    standing_guidance_failures+=("AGENTS.md words $agents_word_count exceed 450")
-fi
-if rg -qi 'skills are routed by (the )?`?skill-router[.]sh`? hook|`?skill-router[.]sh`?.*UserPromptSubmit.*route prompts to matching skills' "$agents_file"; then
-    standing_guidance_failures+=("AGENTS.md still presents skill-router.sh as normal Codex skill routing")
-fi
-if [[ "${#standing_guidance_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "standing guidance contract failed (${#standing_guidance_failures[@]}): ${standing_guidance_failures[*]}"
-fi
-
 test_start "plugin ships native workflow assets without hook runtime state"
 plugin_root="$FRAMEWORK_DIR/plugins/assistant-framework"
 if [[ -f "$plugin_root/skills/assistant-workflow/SKILL.md" ]] \
@@ -132,25 +116,8 @@ else
 fi
 
 test_start "workflow and review contracts are phase-scoped instead of eagerly loaded"
-workflow_skill="$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"
-review_skill="$FRAMEWORK_DIR/skills/assistant-review/SKILL.md"
 progressive_failures=()
-if rg -qi 'all contracts are mandatory|load and follow .+contracts before acting' "$workflow_skill"; then
-    progressive_failures+=("workflow still eagerly requires every contract")
-fi
-if rg -qi 'read (all |the )?contract files in .contracts/.+before|load and follow .+contracts before' "$review_skill"; then
-    progressive_failures+=("review still eagerly requires every contract")
-fi
-# Roots route to the index and relevant sets. The index owns the actual file
-# mapping; duplicating that mapping in root prose is not a loading requirement.
 for skill_name in assistant-workflow assistant-review; do
-    skill_file="$FRAMEWORK_DIR/skills/$skill_name/SKILL.md"
-    if ! grep -Fq 'contracts/index.yaml' "$skill_file"; then
-        progressive_failures+=("$skill_name does not route through its selector index")
-    fi
-    if ! tr '\n' ' ' < "$skill_file" | grep -Eq 'relevant|applicable|only as needed'; then
-        progressive_failures+=("$skill_name lacks conditional loading guidance")
-    fi
     if ! ruby -ryaml -e '
       index = YAML.load_file(ARGV.fetch(0)).fetch("load_sets")
       current = ARGV.fetch(1) == "assistant-workflow" ? "current_phase" : "current_round"
@@ -166,31 +133,6 @@ if [[ "${#progressive_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "progressive contract loading failed: ${progressive_failures[*]}"
-fi
-
-test_start "completion ceremony is conditional and non-blocking outside applicable work"
-completion_controller="$FRAMEWORK_DIR/skills/assistant-workflow/references/completion-controller.md"
-workflow_phases="$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"
-completion_failures=()
-if rg -qi 'Learning Controller|Reflexion|memory_(reflect|signal|trend)' "$completion_controller"; then
-    completion_failures+=("completion controller retains retired custom-memory behavior")
-fi
-if ! rg -qi 'metrics.*(optional|non-blocking|never a reason to block)|does not make metrics blocking' "$completion_controller"; then
-    completion_failures+=("metrics are not explicitly optional or non-blocking")
-fi
-if ! rg -qi 'manual verification.+(only|required when).*(subjective|external|destructive|UI|explicit)' "$completion_controller"; then
-    completion_failures+=("manual verification is not limited to subjective/external/destructive/UI/explicit acceptance")
-fi
-if ! rg -qi 'small.+(does not require|without).+(task journal|metrics|manual verification)' "$completion_controller"; then
-    completion_failures+=("small completion does not explicitly omit ceremony")
-fi
-if ! rg -qi '(task journal.+(medium\+|cross-session|clarification|harness)|(medium\+|cross-session|clarification|harness).+task journal)' "$workflow_phases"; then
-    completion_failures+=("task journals are not scoped to durable-state cases")
-fi
-if [[ "${#completion_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "conditional completion contract failed: ${completion_failures[*]}"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

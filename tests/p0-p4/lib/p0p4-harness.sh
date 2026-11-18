@@ -139,12 +139,6 @@ finish() {
     fi
 }
 
-count_occurrences() {
-    local pattern="$1"
-    local file="$2"
-    grep -c "$pattern" "$file" 2>/dev/null || true
-}
-
 p0p4_contains_text() {
     local file="$1"
     local expected="$2"
@@ -271,20 +265,6 @@ handoff_return_object_field_has_line() {
     ' "$file"
 }
 
-codewriter_current_task_packet_field_required() {
-    local file="$1"
-    local field="$2"
-    awk -v field="$field" '
-        $0 == "  - name: orchestrator_to_code_writer" { in_handoff = 1; next }
-        in_handoff && /^  - name: / { exit }
-        in_handoff && $0 == "      - name: current_task_packet" { in_packet = 1; next }
-        in_packet && $0 == "          - name: " field { in_field = 1; next }
-        in_field && /required: true/ { found = 1; exit }
-        in_field && /^          - name: / { exit }
-        END { exit found ? 0 : 1 }
-    ' "$file"
-}
-
 codewriter_red_evidence_field_required() {
     local file="$1"
     local field="$2"
@@ -296,20 +276,6 @@ codewriter_red_evidence_field_required() {
         in_red && $0 == "              - name: " field { in_field = 1; next }
         in_field && /required: true/ { found = 1; exit }
         in_field && /^              - name: / { exit }
-        END { exit found ? 0 : 1 }
-    ' "$file"
-}
-
-codewriter_red_evidence_has_line() {
-    local file="$1"
-    local expected="$2"
-    awk -v expected="$expected" '
-        $0 == "  - name: orchestrator_to_code_writer" { in_handoff = 1; next }
-        in_handoff && /^  - name: / { exit }
-        in_handoff && $0 == "      - name: current_task_packet" { in_packet = 1; next }
-        in_packet && $0 == "          - name: red_evidence" { in_red = 1; next }
-        in_red && index($0, expected) { found = 1; exit }
-        in_red && $0 == "          - name: implementation_notes" { exit }
         END { exit found ? 0 : 1 }
     ' "$file"
 }

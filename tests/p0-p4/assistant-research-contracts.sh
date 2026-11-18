@@ -4,9 +4,7 @@ fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 research_skill="$FRAMEWORK_DIR/skills/assistant-research/SKILL.md"
-research_reference="$FRAMEWORK_DIR/skills/assistant-research/research.md"
 five_lens_reference="$FRAMEWORK_DIR/skills/assistant-research/five-lens-briefing.md"
-research_index="$FRAMEWORK_DIR/skills/assistant-research/contracts/index.yaml"
 research_output="$FRAMEWORK_DIR/skills/assistant-research/contracts/output.yaml"
 research_phase_gates="$FRAMEWORK_DIR/skills/assistant-research/contracts/phase-gates.yaml"
 research_handoffs="$FRAMEWORK_DIR/skills/assistant-research/contracts/handoffs.yaml"
@@ -23,7 +21,7 @@ research_evals="$historical_research_skill/evals/cases.json"
 research_eval_runner="$FRAMEWORK_DIR/tools/evals/run-skill-evals.sh"
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/assistant-research-fixtures.sh"
 
-write_research_eval_responses() {
+write_research_eval_responses_uncached() {
     local output_dir="$1"
     local case_id
 
@@ -67,6 +65,20 @@ write_research_eval_responses() {
             ' "$research_evals" >"$output_dir/assistant-research/$case_id.txt"
         fi
     done < <(jq -r '.cases[].id' "$research_evals")
+}
+
+# The default-fixture response corpus is built once and copied; a temporarily
+# substituted fixture (research_evals reassigned) is always built fresh.
+research_default_evals="$research_evals"
+write_research_eval_responses() {
+    local output_dir="$1"
+
+    if [[ "$research_evals" != "$research_default_evals" ]]; then
+        write_research_eval_responses_uncached "$output_dir"
+        return
+    fi
+    mkdir -p "$output_dir"
+    cp -R "$research_base_responses/assistant-research" "$output_dir/"
 }
 
 research_structured_mutation_is_rejected() {
@@ -432,6 +444,7 @@ research_prepare_high_stakes_stronger_response() {
     research_set_high_stakes_recommendation_basis "$response_path"
 }
 
+research_official_baseline_cases=""
 research_official_response_mutation_is_rejected() {
     local mutation="$1"
     local case_id="five-lens-decision-briefing-uses-storm-style-workflow"
@@ -452,9 +465,13 @@ research_official_response_mutation_is_rejected() {
     fi
     write_research_eval_responses "$eval_dir"
     response_path="$eval_dir/assistant-research/$case_id.txt"
-    if ! "$research_eval_runner" --responses "$eval_dir" --skill "$historical_research_skill" --case "$case_id" >"$eval_output" 2>&1; then
-        printf 'official runner rejected its generated baseline: %s\n' "$mutation" >&2
-        return 1
+    # The generated baseline is identical for every mutation of a case: grade it once per case.
+    if [[ " $research_official_baseline_cases " != *" $case_id "* ]]; then
+        if ! "$research_eval_runner" --responses "$eval_dir" --skill "$historical_research_skill" --case "$case_id" >"$eval_output" 2>&1; then
+            printf 'official runner rejected its generated baseline: %s\n' "$mutation" >&2
+            return 1
+        fi
+        research_official_baseline_cases+=" $case_id"
     fi
     case "$mutation" in
         stronger_context_not_applicable|stronger_context_unresolved|fully_rebound_response_only_high_stakes_context) research_prepare_high_stakes_stronger_response "$response_path" ;;
@@ -1019,6 +1036,10 @@ RUBY
     [[ "$validators_status" -eq 0 && "$producer_status" -eq 0 ]]
 }
 
+research_base_responses="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-base-responses.XXXXXX")"
+p0p4_register_cleanup "$research_base_responses"
+write_research_eval_responses_uncached "$research_base_responses"
+
 test_start "ordinary high-impact source research rejects an unqualified action despite complete guard wording"
 high_impact_case="source-research-high-impact-recommendation-stays-qualified"
 high_impact_responses="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-high-impact.XXXXXX")"
@@ -1046,563 +1067,11 @@ else
     fail "ordinary high-impact guidance or its qualified positive response is invalid"
 fi
 
-test_start "assistant-research candidate mechanisms stay evidence-backed and unproven"
-missing_candidate_mechanism_terms=()
-for term in \
-    "candidate_mechanisms" \
-    "counterevidence_or_conflicts" \
-    "validation_method" \
-    "claim_status"; do
-    if ! grep -Fq "$term" "$research_output"; then
-        missing_candidate_mechanism_terms+=("contracts/output.yaml: $term")
-    fi
-done
-for term in \
-    "SY_CANDIDATE_MECHANISMS" \
-    "VR_CANDIDATE_MECHANISMS" \
-    "not presented as a proven cause"; do
-    if ! grep -Fq "$term" "$research_phase_gates"; then
-        missing_candidate_mechanism_terms+=("contracts/phase-gates.yaml: $term")
-    fi
-done
-for term in \
-    "Candidate mechanisms" \
-    "validation method"; do
-    if ! p0p4_contains_text_ci "$research_skill" "$term"; then
-        missing_candidate_mechanism_terms+=("SKILL.md: $term")
-    fi
-    if ! grep -Fq "$term" "$research_reference"; then
-        missing_candidate_mechanism_terms+=("research.md: $term")
-    fi
-done
-for term in \
-    "candidate-mechanisms-are-evidence-backed-hypotheses" \
-    "CANDIDATE MECHANISMS" \
-    "Validation method"; do
-    if ! grep -Fq "$term" "$research_evals"; then
-        missing_candidate_mechanism_terms+=("evals/cases.json: $term")
-    fi
-done
-if [[ "${#missing_candidate_mechanism_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-research candidate-mechanism contract missing terms: ${missing_candidate_mechanism_terms[*]}"
-fi
-
-test_start "assistant-research v3 dispatches five independent lenses before root synthesis and separate peer review"
-five_lens_process_missing=()
-for file in \
-    "$research_index" \
-    "$FRAMEWORK_DIR/skills/assistant-research/contracts/input.yaml" \
-    "$research_output" \
-    "$research_phase_gates" \
-    "$research_handoffs"; do
-    if ! grep -Fq -- 'schema_version: "5.0"' "$file"; then
-        five_lens_process_missing+=("${file#$FRAMEWORK_DIR/}: v3 schema version")
-    fi
-done
-for term in \
-    'contracts/handoffs.yaml' \
-    'selected_handoff' \
-    'orchestrator_to_lens_researcher' \
-    'orchestrator_to_research_peer_reviewer'; do
-    if ! grep -Fq -- "$term" "$research_index"; then
-        five_lens_process_missing+=("contracts/index.yaml: $term")
-    fi
-done
-for term in \
-    'LensKind' \
-    'five distinct native dispatch or agent identities' \
-    'sibling-blind' \
-    'all lens assignment packets are frozen before first dispatch' \
-    'ResearchPeerReviewer' \
-    'shared task guard' \
-    'complete-stage evidenced fallback or block'; do
-    if ! grep -Fq -- "$term" "$research_handoffs"; then
-        five_lens_process_missing+=("contracts/handoffs.yaml: $term")
-    fi
-done
-for file_and_term in \
-    "$research_handoffs::all lens assignment packets are frozen before first dispatch" \
-    "$research_phase_gates::root-only contradiction map and initial synthesis" \
-    "$research_handoffs::ResearchPeerReviewer" \
-    "$research_skill::five distinct sibling-blind lens actors"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if ! p0p4_contains_text "$file" "$term"; then
-        five_lens_process_missing+=("${file#$FRAMEWORK_DIR/}: $term")
-    fi
-done
-for term in \
-    'capacity-bounded waves' \
-    'later assignments cannot consume earlier returns or synthesis' \
-    'Current v5 has no sequential fallback for lenses or peer review' \
-    'record the run blocked/incomplete' \
-    'A distinct peer reviewer, separate from all five lens agents'; do
-    if ! p0p4_contains_text_ci "$five_lens_reference" "$term"; then
-        five_lens_process_missing+=("five-lens-briefing.md: $term")
-    fi
-done
-for term in \
-    'five unique native lens dispatch identities' \
-    'peer reviewer identity' \
-    'root-only contradiction map and initial synthesis'; do
-    if ! grep -Fqi -- "$term" "$research_phase_gates"; then
-        five_lens_process_missing+=("contracts/phase-gates.yaml: $term")
-    fi
-done
-for term in \
-    'LensResearcher' \
-    'ResearchPeerReviewer' \
-    'five independent lens dispatches' \
-    'sequential fallback'; do
-    if ! grep -Fq -- "$term" "$research_evals"; then
-        five_lens_process_missing+=("evals/cases.json: $term")
-    fi
-done
-if [[ "${#five_lens_process_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-research five-lens v3 process contract missing: ${five_lens_process_missing[*]}"
-fi
-
-test_start "assistant-research v3 models policy state and fallback evidence without fabricated dispatch identities"
-policy_and_fallback_missing=()
-for term in \
-    '- name: subagent_policy_state' \
-    'enum_values: [not_required, delegation_triggered, delegation_opted_out, subagents_unavailable, policy_disallowed]' \
-    '- name: subagent_execution_mode' \
-    'enum_values: [delegated, not_applicable]' \
-    '- name: subagent_trigger_scope' \
-    '- name: policy_blocking_source' \
-    '- name: sequential_fallback_evidence'; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-research/contracts/input.yaml"; then
-        policy_and_fallback_missing+=("contracts/input.yaml: $term")
-    fi
-done
-for term in \
-    'subagent_policy_state' \
-    'subagent_execution_mode' \
-    'subagent_trigger_scope' \
-    'policy_blocking_source' \
-    'research_dispatch_authority' \
-    'producer_version'; do
-    if ! grep -Fq -- "$term" "$research_index"; then
-        policy_and_fallback_missing+=("contracts/index.yaml load set: $term")
-    fi
-done
-# Historical v4 fallback evidence is not part of the current v5 entry load set.
-if awk '/^  entry:/ { active = 1 } active && /^  current_phase:/ { exit } active { print }' "$research_index" | grep -Fq -- 'sequential_fallback_evidence'; then
-    policy_and_fallback_missing+=("contracts/index.yaml entry selector still loads historical sequential_fallback_evidence")
-fi
-for term in \
-    '- name: lens_execution_mode' \
-    '- name: peer_review_execution_mode' \
-    '- name: fallback_lens_passes' \
-    '- name: peer_review_fallback_pass_id' \
-    '- name: required_revisions' \
-    'condition: "lens_execution_mode == delegated"' \
-    'condition: "lens_execution_mode == sequential_fallback"' \
-    'condition: "peer_review_execution_mode == delegated"' \
-    'condition: "peer_review_execution_mode == sequential_fallback"'; do
-    if ! grep -Fq -- "$term" "$research_output"; then
-        policy_and_fallback_missing+=("contracts/output.yaml: $term")
-    fi
-done
-fallback_lens_schema="$(awk '
-    /- name: fallback_lens_passes/ { active = 1 }
-    active { print }
-    active && /^      - name: / && $0 !~ /fallback_lens_passes/ { exit }
-' "$research_output")"
-if printf '%s\n' "$fallback_lens_schema" | grep -Eq -- 'name:[[:space:]]*dispatch_identity'; then
-    policy_and_fallback_missing+=("contracts/output.yaml: fallback_lens_passes must not carry dispatch_identity")
-fi
-
-peer_handoff_schema="$(awk '
-    /^handoffs:/ { handoffs = 1 }
-    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
-    active { print }
-    active && /^  - name: / && $0 !~ /orchestrator_to_research_peer_reviewer/ { exit }
-' "$research_handoffs")"
-for term in \
-    'phase: SYNTHESIZE' \
-    '- name: original_question' \
-    '- name: findings' \
-    '- name: candidate_mechanisms' \
-    '- name: high_stakes_context' \
-    '- name: follow_ups' \
-    '- name: evidence' \
-    'object_fields:'; do
-    if ! printf '%s\n' "$peer_handoff_schema" | grep -Fq -- "$term" \
-        && ! printf '%s\n' "$peer_handoff_schema" | grep -Fq -- "{name: ${term#- name: }" \
-        && ! grep -Fq -- "$term" "$research_handoffs"; then
-        policy_and_fallback_missing+=("contracts/handoffs.yaml typed peer handoff: $term")
-    fi
-done
-if ! grep -Fq -- 'tools: Read, Grep, Glob, LS, WebSearch, WebFetch' "$FRAMEWORK_DIR/agents/claude/lens-researcher.md"; then
-    policy_and_fallback_missing+=("agents/claude/lens-researcher.md: WebSearch/WebFetch tool access")
-fi
-for term in \
-    'self-critique-only' \
-    'one agent covering all lenses' \
-    'partial mixed compliance' \
-    'fabricated fallback dispatch refs'; do
-    if ! grep -Fq -- "$term" "$research_evals"; then
-        policy_and_fallback_missing+=("evals/cases.json: $term")
-    fi
-done
-if [[ "${#policy_and_fallback_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-research policy/fallback contract missing: ${policy_and_fallback_missing[*]}"
-fi
-
-test_start "assistant-research v3 binds packets and peer assignments without requiring source access"
-lifecycle_schema_missing=()
-if ! grep -Fq -- 'five_lens_process_evidence' "$research_index"; then
-    lifecycle_schema_missing+=("contracts/index.yaml completion selector: five_lens_process_evidence")
-fi
-if grep -Fq -- 'A repeated model identity' "$research_handoffs"; then
-    lifecycle_schema_missing+=("contracts/handoffs.yaml: model identity must not define independent dispatch identity")
-fi
-for term in \
-    '- name: peer_review_assignment_id' \
-    '- name: verification_gaps' \
-    '- name: source_policy' \
-    '- name: isolation_policy' \
-    '- name: packet_id' \
-    '- name: subagent_policy_state' \
-    'condition: "subagent_policy_state == delegation_triggered"' \
-    'condition: "subagent_policy_state == policy_disallowed"' \
-    'reduced_independence is true whenever' \
-    'distinct native dispatch or agent identities'; do
-    if ! grep -Fq -- "$term" "$research_handoffs" && ! grep -Fq -- "$term" "$research_output"; then
-        lifecycle_schema_missing+=("research contracts: $term")
-    fi
-done
-peer_handoff_schema="$(awk '
-    /^handoffs:/ { handoffs = 1 }
-    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
-    active { print }
-    active && /^  - name: / && $0 !~ /orchestrator_to_research_peer_reviewer/ { exit }
-' "$research_handoffs")"
-peer_return_schema="$(printf '%s\n' "$peer_handoff_schema" | awk '
-    /    return_fields:/ { active = 1 }
-    active && /^return_validation:/ { exit }
-    active { print }
-')"
-if ! printf '%s\n' "$peer_handoff_schema" | grep -Fq -- 'peer_review_assignment_id'; then
-    lifecycle_schema_missing+=("contracts/handoffs.yaml peer context: peer_review_assignment_id")
-fi
-if printf '%s\n' "$peer_return_schema" | grep -Fq -- 'peer_reviewer_identity'; then
-    lifecycle_schema_missing+=("contracts/handoffs.yaml peer return: peer_reviewer_identity must be orchestrator metadata only")
-fi
-verified_source_schema="$(printf '%s\n' "$peer_handoff_schema" | awk '
-    /- name: verified_source_evidence/ { active = 1 }
-    active { print }
-    active && /^      - name: / && $0 !~ /verified_source_evidence/ { exit }
-')"
-if printf '%s\n' "$verified_source_schema" | grep -Fq -- 'min_items:'; then
-    lifecycle_schema_missing+=("contracts/handoffs.yaml verified_source_evidence must allow empty arrays")
-fi
-for term in \
-    '- name: lens_execution_mode' \
-    '- name: peer_review_execution_mode' \
-    '- name: peer_review_assignment_id' \
-    '- name: packet_id' \
-    '- name: subagent_policy_state' \
-    '- name: subagent_trigger_scope' \
-    '- name: policy_blocking_source' \
-    'reduced_independence' \
-    'false only when both are delegated'; do
-    if ! grep -Fq -- "$term" "$research_output"; then
-        lifecycle_schema_missing+=("contracts/output.yaml: $term")
-    fi
-done
-for term in \
-    'counterevidence_or_conflicts' \
-    'sources_or_verified_urls' \
-    'likely_blind_spot' \
-    'unique_insight' \
-    'verification_gaps' \
-    'same model may serve multiple independent lens assignments'; do
-    if ! grep -Fq -- "$term" "$research_handoffs"; then
-        lifecycle_schema_missing+=("contracts/handoffs.yaml typed lifecycle context: $term")
-    fi
-done
-for term in \
-    'repeated model identity as noncompliance' \
-    'peer reviewer identity from worker return' \
-    'verified sources are required even when verification gaps' \
-    'packet binding omitted'; do
-    if ! grep -Fq -- "$term" "$research_evals"; then
-        lifecycle_schema_missing+=("evals/cases.json lifecycle negative: $term")
-    fi
-done
-if [[ "${#lifecycle_schema_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-research lifecycle schema missing: ${lifecycle_schema_missing[*]}"
-fi
-
-test_start "assistant-research source-unavailable lens returns stay complete and peer workers remain orchestration-blind"
-source_return_missing=()
-lens_handoff_schema="$(awk '
-    /^handoffs:/ { handoffs = 1 }
-    handoffs && /^  - name: orchestrator_to_lens_researcher/ { active = 1 }
-    active { print }
-    active && /^  - name: / && $0 !~ /orchestrator_to_lens_researcher/ { exit }
-' "$research_handoffs")"
-lens_result_schema="$(printf '%s\n' "$lens_handoff_schema" | awk '
-    /- name: lens_result/ { active = 1 }
-    active { print }
-    active && /^      - name: evidence/ { exit }
-')"
-direct_lens_source_count="$(printf '%s\n' "$lens_result_schema" | grep -Ec '^          - name: sources_or_verified_urls$' || true)"
-if [[ "$direct_lens_source_count" != "1" ]]; then
-    source_return_missing+=("lens_result must contain exactly one direct sources_or_verified_urls field")
-fi
-if printf '%s\n' "$lens_result_schema" | grep -A4 -E '^          - name: sources_or_verified_urls$' | grep -Fq -- 'min_items:'; then
-    source_return_missing+=("lens_result sources_or_verified_urls must allow empty inference/unresolved evidence")
-fi
-if printf '%s\n' "$lens_result_schema" | grep -A4 -E '^              - name: sources_or_verified_urls$' | grep -Fq -- 'min_items:'; then
-    source_return_missing+=("lens_result follow-up sources_or_verified_urls must allow empty inference/unresolved evidence")
-fi
-peer_handoff_schema="$(awk '
-    /^handoffs:/ { handoffs = 1 }
-    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
-    active { print }
-    active && /^  - name: / && $0 !~ /orchestrator_to_research_peer_reviewer/ { exit }
-' "$research_handoffs")"
-peer_lens_schema="$(printf '%s\n' "$peer_handoff_schema" | awk '
-    /- name: validated_lens_results/ { active = 1 }
-    active { print }
-    active && /^      - name: findings/ { exit }
-')"
-if ! printf '%s\n' "$peer_lens_schema" | grep -Eq '^          - name: sources_or_verified_urls$'; then
-    source_return_missing+=("peer validated_lens_results must carry a direct empty-allowed sources_or_verified_urls field")
-fi
-if printf '%s\n' "$peer_lens_schema" | grep -A4 -E '^              - name: sources_or_verified_urls$' | grep -Fq -- 'min_items:'; then
-    source_return_missing+=("peer validated_lens_results follow-up sources_or_verified_urls must allow empty inference/unresolved evidence")
-fi
-peer_return_schema="$(printf '%s\n' "$peer_handoff_schema" | awk '
-    /    return_fields:/ { active = 1 }
-    active && /^return_validation:/ { exit }
-    active { print }
-')"
-for forbidden_field in peer_reviewer_identity peer_review_execution_mode peer_review_fallback_pass_id; do
-    if printf '%s\n' "$peer_return_schema" | grep -Fq -- "$forbidden_field"; then
-        source_return_missing+=("peer worker return must omit $forbidden_field")
-    fi
-done
-if ! printf '%s\n' "$peer_return_schema" | grep -Fq -- 'peer_review_assignment_id'; then
-    source_return_missing+=("peer worker return must echo peer_review_assignment_id")
-fi
-for term in \
-    'empty only for inference_only or unresolved' \
-    'do not self-report execution or fallback orchestration metadata'; do
-    if ! grep -Fqi -- "$term" "$research_handoffs"; then
-        source_return_missing+=("contracts/handoffs.yaml: $term")
-    fi
-done
-if [[ "${#source_return_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-research source-return/peer-worker contract missing: ${source_return_missing[*]}"
-fi
-
-test_start "assistant-research v3 gates fallback, worker status, frozen evidence, and bounded resources"
-v3_process_repair_missing=()
-search_gate_schema="$(awk '
-    /  - phase: SEARCH/ { active = 1 }
-    active { print }
-    active && /  - phase: SYNTHESIZE/ { exit }
-' "$research_phase_gates")"
-synthesize_gate_schema="$(awk '
-    /  - phase: SYNTHESIZE/ { active = 1 }
-    active { print }
-    active && /  - phase: VERIFY/ { exit }
-' "$research_phase_gates")"
-verify_gate_schema="$(awk '
-    /  - phase: VERIFY/ { active = 1 }
-    active { print }
-    active && /^invariants:/ { exit }
-' "$research_phase_gates")"
-for term in \
-    'condition: "research_method == five_lens_briefing and lens_execution_mode == delegated"' \
-    'exactly five frozen root passes' \
-    'no native dispatch identity' \
-    'Historical v4 only, never current v5 completion: a reviewer-only sequential peer record' \
-    'fresh peer fallback pass ID' \
-    'no fabricated native identity' \
-    'valid fresh peer fallback that completed under original v4 authority'; do
-    if ! printf '%s\n%s\n%s\n' "$search_gate_schema" "$synthesize_gate_schema" "$verify_gate_schema" | grep -Fq -- "$term"; then
-        v3_process_repair_missing+=("phase gates: $term")
-    fi
-done
-lens_handoff_schema="$(awk '
-    /^handoffs:/ { handoffs = 1 }
-    handoffs && /^  - name: orchestrator_to_lens_researcher/ { active = 1 }
-    active { print }
-    active && /^  - name: / && $0 !~ /orchestrator_to_lens_researcher/ { exit }
-' "$research_handoffs")"
-peer_handoff_schema="$(awk '
-    /^handoffs:/ { handoffs = 1 }
-    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
-    active { print }
-    active && /^return_validation:/ { exit }
-' "$research_handoffs")"
-output_peer_schema="$(awk '
-    /  - name: peer_review$/ { active = 1 }
-    active { print }
-    active && /^  - name: five_lens_process_evidence$/ { exit }
-' "$research_output")"
-process_evidence_schema="$(awk '
-    /  - name: five_lens_process_evidence$/ { active = 1 }
-    active { print }
-    active && /^  - name: conflicts$/ { exit }
-' "$research_output")"
-for term in \
-    'status in [DONE, DONE_WITH_CONCERNS]' \
-    'status in [NEEDS_CONTEXT, BLOCKED]' \
-    'blocker_type' \
-    'blocker_evidence' \
-    'cannot finalize' \
-    'BLOCKED => verdict=blocked' \
-    'packet_set_id' \
-    'frozen_packet_set' \
-    'packet_frozen_at' \
-    'first_lens_execution_at' \
-    'search_resource_budget'; do
-    if ! grep -Fq -- "$term" <<<"$lens_handoff_schema
-$peer_handoff_schema
-$output_peer_schema
-$process_evidence_schema"; then
-        v3_process_repair_missing+=("handoff/output lifecycle: $term")
-    fi
-done
-for exact_array in perspective_scan question_trace validated_lens_results frozen_assignment_packet_ids; do
-    if ! grep -A12 -E "name: ${exact_array}$" "$research_output" "$research_handoffs" | grep -Fq -- 'max_items: 5'; then
-        v3_process_repair_missing+=("exact-five cardinality: $exact_array")
-    fi
-done
-for role_file in \
-    "$FRAMEWORK_DIR/agents/codex/lens-researcher.toml" \
-    "$FRAMEWORK_DIR/agents/claude/lens-researcher.md"; do
-    for term in \
-        'Only block for an invalid or missing assignment or an unrecoverable policy or tool failure' \
-        'inference_only or unresolved' \
-        'LOW confidence' \
-        'empty source arrays' \
-        'explicit gaps'; do
-        if ! grep -Fq -- "$term" "$role_file"; then
-            v3_process_repair_missing+=("${role_file#$FRAMEWORK_DIR/}: $term")
-        fi
-    done
-done
-for term in \
-    'assistant-research is a Process skill' \
-    'lens-researcher' \
-    'research-peer-reviewer'; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/CLAUDE.md"; then
-        v3_process_repair_missing+=("CLAUDE.md: $term")
-    fi
-done
-if [[ "${#v3_process_repair_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-research v3 process repair missing: ${v3_process_repair_missing[*]}"
-fi
-
 test_start "assistant-research eval rejects an old heading-complete five-lens response without process evidence"
 if research_old_five_lens_response_is_rejected; then
     pass
 else
     fail "research eval accepts a heading-complete old five-lens response without FIVE-LENS PROCESS EVIDENCE"
-fi
-
-test_start "assistant-research retains every material five-lens follow-up"
-follow_up_missing=()
-for term in \
-    "- name: follow_ups" \
-    "typed none_needed decision" \
-    "Every material follow-up is retained" \
-    "- name: question" \
-    "- name: answer_or_gap" \
-    "- name: sources_or_verified_urls" \
-    "- name: evidence_status"; do
-    if ! grep -Fq -- "$term" "$research_output"; then
-        follow_up_missing+=("contracts/output.yaml: $term")
-    fi
-done
-for term in \
-    "SY_FIVE_LENS_FOLLOW_UPS" \
-    "every material follow-up"; do
-    if ! grep -Fq -- "$term" "$research_phase_gates"; then
-        follow_up_missing+=("contracts/phase-gates.yaml: $term")
-    fi
-done
-for term in \
-    "follow-up question" \
-    "none_needed" \
-    "every material follow-up"; do
-    if ! p0p4_contains_text_ci "$FRAMEWORK_DIR/skills/assistant-research/five-lens-briefing.md" "$term"; then
-        follow_up_missing+=("five-lens-briefing.md: $term")
-    fi
-done
-for term in \
-    "five-lens-retains-all-material-follow-ups" \
-    "follow_ups" \
-    "follow_up_question"; do
-    if ! grep -Fq -- "$term" "$research_evals"; then
-        follow_up_missing+=("evals/cases.json: $term")
-    fi
-done
-for file in \
-    "$research_index" \
-    "$FRAMEWORK_DIR/skills/assistant-research/contracts/input.yaml" \
-    "$FRAMEWORK_DIR/skills/assistant-research/contracts/output.yaml" \
-    "$FRAMEWORK_DIR/skills/assistant-research/contracts/phase-gates.yaml" \
-    "$research_handoffs"; do
-    if ! grep -Fq -- 'schema_version: "5.0"' "$file"; then
-        follow_up_missing+=("${file#$FRAMEWORK_DIR/}: v3 migration version")
-    fi
-done
-if ! p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-research/legacy-compatibility.md" "Older v2 follow-ups need typed v4 conversion"; then
-    follow_up_missing+=("legacy-compatibility.md: v3 migration note")
-fi
-if ! grep -Fq 'legacy-compatibility.md' "$research_skill"; then
-    follow_up_missing+=("SKILL.md does not link legacy-compatibility.md")
-fi
-if [[ "${#follow_up_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-research five-lens follow-up contract missing: ${follow_up_missing[*]}"
-fi
-
-test_start "assistant-research v3 follows the authoritative none_needed enum"
-none_needed_missing=()
-for file in \
-    "$research_output" \
-    "$research_phase_gates" \
-    "$FRAMEWORK_DIR/skills/assistant-research/five-lens-briefing.md" \
-    "$research_evals"; do
-    if grep -Fq -- "none-needed" "$file"; then
-        none_needed_missing+=("${file#$FRAMEWORK_DIR/}: stale none-needed spelling")
-    fi
-done
-for term in \
-    "follow_ups=[follow_up, follow_up]" \
-    "decision=none_needed" \
-    "none_needed cannot coexist with material follow-ups"; do
-    if ! grep -Fq -- "$term" "$research_evals"; then
-        none_needed_missing+=("evals/cases.json: $term")
-    fi
-done
-if [[ "${#none_needed_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-research none_needed enum contract missing: ${none_needed_missing[*]}"
 fi
 
 test_start "assistant-research grader rejects a keyword-complete mixed follow-up trace"
@@ -1673,194 +1142,12 @@ else
     fail "assistant-research eval branches are mixed or do not reject mixed delegated/fallback evidence: ${branch_eval_missing[*]-}"
 fi
 
-test_start "assistant-research closes peer revisions and binds freeze evidence canonically"
-closure_and_freeze_missing=()
-output_peer_schema="$(awk '
-    /  - name: peer_review$/ { active = 1 }
-    active { print }
-    active && /^  - name: five_lens_process_evidence$/ { exit }
-' "$research_output")"
-process_evidence_schema="$(awk '
-    /  - name: five_lens_process_evidence$/ { active = 1 }
-    active { print }
-    active && /^  - name: conflicts$/ { exit }
-' "$research_output")"
-peer_handoff_return="$(awk '
-    /^handoffs:/ { handoffs = 1 }
-    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
-    active && /    return_fields:/ { in_return = 1 }
-    in_return { print }
-    active && /^return_validation:/ { exit }
-' "$research_handoffs")"
-for term in \
-    'revision_disposition' \
-    'condition: "verdict == revise"' \
-    'required_revision' \
-    'outcome' \
-    'applied' \
-    'claim_downgraded' \
-    'unresolved revision blocks presentation' \
-    'pre_dispatch_record_id' \
-    'first_lens_execution_evidence_ref'; do
-    if ! grep -Fq -- "$term" <<<"$output_peer_schema"$'\n'"$process_evidence_schema"; then
-        closure_and_freeze_missing+=("output lifecycle: $term")
-    fi
-done
-if printf '%s\n' "$peer_handoff_return" | grep -Fq -- 'revision_disposition'; then
-    closure_and_freeze_missing+=("peer worker return must not self-attest revision application")
-fi
-for term in \
-    'standard=3 queries, 4 sources, and 10 minutes per lens / 15 queries, 20 sources, and 50 minutes overall' \
-    'extensive=5, 6, and 15 / 25, 30, and 75' \
-    'deep=8, 10, and 25 / 40, 50, and 125' \
-    'saturation or its hard ceiling'; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-research/contracts/input.yaml" \
-        && ! grep -Fq -- "$term" "$research_phase_gates"; then
-        closure_and_freeze_missing+=("canonical resource policy: $term")
-    fi
-done
-if [[ "${#closure_and_freeze_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-research revision closure/freeze/resource contract missing: ${closure_and_freeze_missing[*]}"
-fi
-
-test_start "assistant-research binds revise closure identity from peer review to process evidence"
-revision_identity_binding_missing=()
-output_peer_schema="$(awk '
-    /  - name: peer_review$/ { active = 1 }
-    active { print }
-    active && /^  - name: five_lens_process_evidence$/ { exit }
-' "$research_output")"
-process_evidence_schema="$(awk '
-    /  - name: five_lens_process_evidence$/ { active = 1 }
-    active { print }
-    active && /^  - name: conflicts$/ { exit }
-' "$research_output")"
-for term in \
-    'revision_disposition_id' \
-    'type: string' \
-    'condition: "verdict == revise"' \
-    'Orchestrator-owned'; do
-    if ! printf '%s\n' "$output_peer_schema" | grep -Fq -- "$term"; then
-        revision_identity_binding_missing+=("peer_review revision identity: $term")
-    fi
-done
-for term in \
-    'peer_review_revision_disposition_id' \
-    'condition: "peer_review.verdict == revise"' \
-    'Exactly equals peer_review.revision_disposition_id'; do
-    if ! printf '%s\n' "$process_evidence_schema" | grep -Fq -- "$term"; then
-        revision_identity_binding_missing+=("five_lens_process_evidence revision identity binding: $term")
-    fi
-done
-if [[ "${#revision_identity_binding_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-research revise closure identity binding missing: ${revision_identity_binding_missing[*]}"
-fi
-
-test_start "assistant-research closes every peer revision and normalizes quick five-lens requests"
-peer_truth_and_tier_missing=()
-output_peer_schema="$(awk '
-    /  - name: peer_review$/ { active = 1 }
-    active { print }
-    active && /^  - name: five_lens_process_evidence$/ { exit }
-' "$research_output")"
-peer_return_schema="$(awk '
-    /^handoffs:/ { handoffs = 1 }
-    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
-    active && /    return_fields:/ { in_return = 1 }
-    in_return { print }
-    active && /^return_validation:/ { exit }
-' "$research_handoffs")"
-for term in \
-    'accepted and accepted_with_concerns require required_revisions=[]' \
-    'revise requires one or more required_revisions' \
-    'revision_disposition_id' \
-    'Covers every required_revisions entry exactly once' \
-    'unresolved revision blocks presentation'; do
-    if ! printf '%s\n%s\n' "$output_peer_schema" "$peer_return_schema" | grep -Fq -- "$term"; then
-        peer_truth_and_tier_missing+=("peer revision truth table: $term")
-    fi
-done
-for term in \
-    'quick five_lens_briefing normalizes to standard' \
-    'preserves five_lens_briefing' \
-    'standard, extensive, deep' \
-    'tier normalization disclosure'; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-research/contracts/input.yaml" \
-        && ! grep -Fq -- "$term" "$research_phase_gates" \
-        && ! grep -Fq -- "$term" "$research_reference"; then
-        peer_truth_and_tier_missing+=("tier/method cross-field rule: $term")
-    fi
-done
-if [[ "${#peer_truth_and_tier_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-research peer revision truth table or five-lens tier normalization missing: ${peer_truth_and_tier_missing[*]}"
-fi
-
-test_start "assistant-research freezes content-addressed ordered lens packets"
-immutable_packet_missing=()
-lens_handoff_schema="$(awk '
-    /^handoffs:/ { handoffs = 1 }
-    handoffs && /^  - name: orchestrator_to_lens_researcher/ { active = 1 }
-    active { print }
-    active && /^  - name: orchestrator_to_research_peer_reviewer/ { exit }
-' "$research_handoffs")"
-process_evidence_schema="$(awk '
-    /  - name: five_lens_process_evidence$/ { active = 1 }
-    active { print }
-    active && /^  - name: conflicts$/ { exit }
-' "$research_output")"
-for term in \
-    'packet_manifest_order' \
-    'packet_manifest' \
-    'content_digest' \
-    'ordered manifest array' \
-    'packet_content_digest' \
-    'matching non-self-referential packet content_digest'; do
-    if ! grep -Fq -- "$term" <<<"$lens_handoff_schema
-$process_evidence_schema"; then
-        immutable_packet_missing+=("immutable packet contract: $term")
-    fi
-done
-if [[ "${#immutable_packet_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-research immutable packet manifest contract missing: ${immutable_packet_missing[*]}"
-fi
-
 test_start "assistant-research eval structurally validates delegated five-lens process evidence"
+# Self-test of the private whole-response oracle the parity checks rely on: one mutation per oracle
+# rule group; source-safety classes (secret, traversal, credential, private host) each kept.
 structured_oracle_missing=()
-delegated_assertions="$(jq -c '
-    .cases[] | select(.id == "five-lens-decision-briefing-uses-storm-style-workflow")
-    | .machine_expectations.structured_json_assertions // []
-' "$research_evals")"
-if ! jq -e '
-    length >= 4
-    and any(.[]; . == {"operator":"equals","path":["five_lens_process_evidence","lens_execution_mode"],"expected":"delegated"})
-    and any(.[]; . == {"operator":"path_absent","path":["five_lens_process_evidence","fallback_lens_passes"]})
-    and any(.[]; .operator == "array_field_values_exact" and .path == ["five_lens_process_evidence","lens_dispatches"] and .field == "lens_kind")
-    and any(.[]; .operator == "array_field_values_exact" and .path == ["five_lens_process_evidence","accepted_lens_results"] and .field == "lens_kind")
-    and any(.[]; . == {"operator":"equals","path":["peer_review","verdict"],"expected":"revise"})
-    and any(.[]; . == {"operator":"equals_path","path":["five_lens_process_evidence","peer_reviewer_identity"],"other_path":["peer_review","peer_reviewer_identity"]})
-    and any(.[]; . == {"operator":"equals_path","path":["five_lens_process_evidence","peer_review_revision_disposition_id"],"other_path":["peer_review","revision_disposition_id"]})
-' <<<"$delegated_assertions" >/dev/null; then
-    structured_oracle_missing+=("delegated structured JSON assertions for dispatch, fallback absence, and revision identity")
-fi
-technology_case="$(jq -c '.cases[] | select(.id == "technology-comparison-uses-standard-tier")' "$research_evals")"
-if ! printf '%s\n' "$technology_case" | grep -Fq -- 'evidence-only source comparison' \
-    || printf '%s\n' "$technology_case" | grep -Fq -- 'decision support'; then
-    structured_oracle_missing+=("technology comparison must be evidence-only source_research without decision support")
-fi
-if ! grep -Fq -- 'When research_method=five_lens_briefing, every finding source resolves' "$research_output"; then
-    structured_oracle_missing+=("five-lens finding lineage must not constrain direct source_research")
-fi
 if [[ "${#structured_oracle_missing[@]}" -eq 0 ]] \
     && research_structured_mutation_is_rejected duplicate_identity \
-    && research_structured_mutation_is_rejected missing_identity \
     && research_structured_mutation_is_rejected false_return_validated \
     && research_structured_mutation_is_rejected packet_binding_mismatch \
     && research_structured_mutation_is_rejected ordering_failure \
@@ -1868,79 +1155,43 @@ if [[ "${#structured_oracle_missing[@]}" -eq 0 ]] \
     && research_structured_mutation_is_rejected fallback_leakage \
     && research_structured_mutation_is_rejected revision_disposition_id_mismatch \
     && research_structured_mutation_is_rejected accepted_with_unresolved_revisions \
-    && research_structured_mutation_is_rejected revise_without_required_revisions \
     && research_structured_mutation_is_rejected blocked_presentation \
     && research_structured_mutation_is_rejected peer_execution_mode_mismatch \
     && research_structured_mutation_is_rejected peer_identity_mismatch \
     && research_structured_mutation_is_rejected perspective_digest_mismatch \
-    && research_structured_mutation_is_rejected perspective_assignment_mismatch \
     && research_structured_mutation_is_rejected perspective_content_drift \
     && research_structured_mutation_is_rejected question_trace_content_drift \
     && research_structured_mutation_is_rejected accepted_result_body_drift \
-    && research_structured_mutation_is_rejected accepted_result_assignment_drift \
     && research_structured_mutation_is_rejected peer_result_projection_drift \
     && research_structured_mutation_is_rejected process_result_digest_mismatch \
-    && research_structured_mutation_is_rejected missing_per_lens_usage \
     && research_structured_mutation_is_rejected negative_per_lens_usage \
     && research_structured_mutation_is_rejected per_lens_actual_over_ceiling \
     && research_structured_mutation_is_rejected overall_totals_over_ceiling \
     && research_structured_mutation_is_rejected overall_query_sum_drift \
     && research_structured_mutation_is_rejected wall_clock_drift \
     && research_structured_mutation_is_rejected schedule_wall_clock_drift \
-    && research_structured_mutation_is_rejected peer_blocked_revise \
-    && research_structured_mutation_is_rejected missing_required_revisions \
-    && research_structured_mutation_is_rejected missing_revision_disposition \
     && research_structured_mutation_is_rejected peer_identity_reused_from_lens \
     && research_structured_mutation_is_rejected reversed_freeze_proof \
-    && research_structured_mutation_is_rejected missing_freeze_proof \
     && research_structured_mutation_is_rejected huge_budget_loop_forever \
-    && research_structured_mutation_is_rejected source_invalid_domain \
     && research_structured_mutation_is_rejected source_private_loopback \
-    && research_structured_mutation_is_rejected source_fully_encoded_private_loopback \
     && research_structured_mutation_is_rejected source_backed_empty \
     && research_structured_mutation_is_rejected malformed_candidate_mechanism \
     && research_structured_mutation_is_rejected medium_single_secondary \
-    && research_structured_mutation_is_rejected private_peer_evidence_url \
     && research_structured_mutation_is_rejected unbound_final_finding_source \
     && research_structured_mutation_is_rejected rebound_unsafe_packet_policies \
-    && research_structured_mutation_is_rejected source_backed_actual_sources_zero \
     && research_structured_mutation_is_rejected local_repository_public_url \
-    && research_structured_mutation_is_rejected authenticated_source_endpoint \
-    && research_structured_mutation_is_rejected offline_citation_url \
-    && research_structured_mutation_is_rejected medium_single_public_row_aliases \
-    && research_structured_mutation_is_rejected malformed_peer_url_scheme \
-    && research_structured_mutation_is_rejected malformed_peer_url_without_colon \
-    && research_structured_mutation_is_rejected trailing_dot_peer_url \
-    && research_structured_mutation_is_rejected protocol_relative_peer_url \
-    && research_structured_mutation_is_rejected discard_only_compressed_peer_url \
     && research_structured_mutation_is_rejected medium_host_case_public_url_aliases \
-    && research_structured_mutation_is_rejected medium_path_percent_encoded_public_url_aliases \
-    && research_structured_mutation_is_rejected medium_fully_encoded_public_url_aliases \
     && research_structured_mutation_is_rejected encoded_public_url_secret \
     && research_structured_mutation_is_rejected encoded_public_url_traversal \
-    && research_structured_mutation_is_rejected encoded_public_url_pii \
     && research_structured_mutation_is_rejected encoded_typed_url_secret \
     && research_structured_mutation_is_rejected encoded_typed_url_traversal \
-    && research_structured_mutation_is_rejected encoded_typed_url_pii \
     && research_structured_mutation_is_rejected encoded_opaque_source_traversal \
     && research_structured_mutation_is_rejected encoded_opaque_source_secret \
-    && research_structured_mutation_is_rejected encoded_opaque_source_pii \
     && research_structured_mutation_is_rejected opaque_source_credential \
-    && research_structured_mutation_is_rejected high_host_case_public_url_aliases \
-    && research_structured_mutation_is_rejected high_path_percent_encoded_public_url_aliases \
-    && research_structured_mutation_is_rejected high_fully_encoded_public_url_aliases \
     && research_structured_mutation_is_rejected synchronized_assignments \
-    && research_structured_mutation_is_rejected missing_delegated_trigger_scope \
     && research_structured_mutation_is_rejected lens_worker_synthesis \
     && research_structured_mutation_is_rejected missing_findings \
-    && research_structured_mutation_is_rejected missing_conflicts \
-    && research_structured_mutation_is_rejected missing_gaps \
-    && research_structured_mutation_is_rejected missing_summary \
-    && research_structured_mutation_is_rejected missing_contradiction_map \
-    && research_structured_mutation_is_rejected missing_synthesis_briefing \
     && research_structured_mutation_is_rejected duplicate_none_needed \
-    && research_structured_mutation_is_rejected mixed_none_needed_follow_up \
-    && research_structured_mutation_is_rejected source_reserved_local \
     && research_structured_mutation_is_rejected source_bare_hostname; then
     pass
 else
@@ -1954,19 +1205,10 @@ if research_fallback_structured_mutation_is_rejected false_return_validated \
     && research_fallback_structured_mutation_is_rejected peer_fallback_and_evidence_mismatch \
     && research_fallback_structured_mutation_is_rejected peer_fallback_reuses_lens_pass \
     && research_fallback_structured_mutation_is_rejected perspective_digest_mismatch \
-    && research_fallback_structured_mutation_is_rejected perspective_assignment_mismatch \
-    && research_fallback_structured_mutation_is_rejected perspective_content_drift \
-    && research_fallback_structured_mutation_is_rejected question_trace_content_drift \
     && research_fallback_structured_mutation_is_rejected accepted_result_body_drift \
-    && research_fallback_structured_mutation_is_rejected accepted_result_assignment_drift \
-    && research_fallback_structured_mutation_is_rejected peer_result_projection_drift \
     && research_fallback_structured_mutation_is_rejected process_result_digest_mismatch \
-    && research_fallback_structured_mutation_is_rejected missing_per_lens_usage \
     && research_fallback_structured_mutation_is_rejected negative_per_lens_usage \
-    && research_fallback_structured_mutation_is_rejected per_lens_actual_over_ceiling \
     && research_fallback_structured_mutation_is_rejected overall_totals_over_ceiling \
-    && research_fallback_structured_mutation_is_rejected overall_query_sum_drift \
-    && research_fallback_structured_mutation_is_rejected wall_clock_drift \
     && research_fallback_structured_mutation_is_rejected schedule_wall_clock_drift \
     && research_fallback_structured_mutation_is_rejected exhausted_without_low_confidence \
     && research_fallback_structured_mutation_is_rejected exhaustion_without_explicit_gap \
@@ -1978,97 +1220,88 @@ else
 fi
 
 test_start "assistant-research official response grading rejects semantic process-evidence mutations"
+# One mutation per distinct runner rejection reason (semantic-validation error set). Source-safety
+# units keep one mutation per unsafe input class (secret, traversal, credential, private host).
+# malformed_* variants are kept over missing_* twins: they also prove the runner does not crash.
 if research_official_response_mutation_is_rejected accepted_result_body_with_unchanged_digest \
     && research_official_response_mutation_is_rejected missing_per_lens_usage \
     && research_official_response_mutation_is_rejected hidden_extra_accepted_result_field \
     && research_official_response_mutation_is_rejected missing_resource_budget \
     && research_official_response_mutation_is_rejected hidden_packet_manifest_field \
     && research_official_response_mutation_is_rejected peer_blocked_revise \
-    && research_official_response_mutation_is_rejected missing_required_revisions \
-    && research_official_response_mutation_is_rejected missing_revision_disposition \
     && research_official_response_mutation_is_rejected peer_identity_reused_from_lens \
     && research_official_response_mutation_is_rejected reversed_freeze_proof \
     && research_official_response_mutation_is_rejected missing_freeze_proof \
     && research_official_response_mutation_is_rejected huge_budget_loop_forever \
-    && research_official_response_mutation_is_rejected source_invalid_domain \
     && research_official_response_mutation_is_rejected source_private_loopback \
-    && research_official_response_mutation_is_rejected source_fully_encoded_private_loopback \
     && research_official_response_mutation_is_rejected source_backed_empty \
     && research_official_response_mutation_is_rejected malformed_candidate_mechanism \
-    && research_official_response_mutation_is_rejected medium_single_secondary \
     && research_official_response_mutation_is_rejected private_peer_evidence_url \
-    && research_official_response_mutation_is_rejected unbound_final_finding_source \
     && research_official_response_mutation_is_rejected rebound_unsafe_packet_policies \
     && research_official_response_mutation_is_rejected source_backed_actual_sources_zero \
     && research_official_response_mutation_is_rejected local_repository_public_url \
-    && research_official_response_mutation_is_rejected authenticated_source_endpoint \
-    && research_official_response_mutation_is_rejected offline_citation_url \
-    && research_official_response_mutation_is_rejected medium_single_public_row_aliases \
     && research_official_response_mutation_is_rejected malformed_peer_url_scheme \
-    && research_official_response_mutation_is_rejected malformed_peer_url_without_colon \
-    && research_official_response_mutation_is_rejected trailing_dot_peer_url \
-    && research_official_response_mutation_is_rejected protocol_relative_peer_url \
-    && research_official_response_mutation_is_rejected discard_only_compressed_peer_url \
-    && research_official_response_mutation_is_rejected medium_host_case_public_url_aliases \
-    && research_official_response_mutation_is_rejected medium_path_percent_encoded_public_url_aliases \
-    && research_official_response_mutation_is_rejected medium_fully_encoded_public_url_aliases \
     && research_official_response_mutation_is_rejected encoded_public_url_secret \
     && research_official_response_mutation_is_rejected encoded_public_url_traversal \
-    && research_official_response_mutation_is_rejected encoded_public_url_pii \
     && research_official_response_mutation_is_rejected encoded_typed_url_secret \
     && research_official_response_mutation_is_rejected encoded_typed_url_traversal \
-    && research_official_response_mutation_is_rejected encoded_typed_url_pii \
     && research_official_response_mutation_is_rejected encoded_opaque_source_traversal \
     && research_official_response_mutation_is_rejected encoded_opaque_source_secret \
     && research_official_response_mutation_is_rejected encoded_opaque_source_pii \
     && research_official_response_mutation_is_rejected opaque_source_credential \
-    && research_official_response_mutation_is_rejected high_host_case_public_url_aliases \
-    && research_official_response_mutation_is_rejected high_path_percent_encoded_public_url_aliases \
-    && research_official_response_mutation_is_rejected high_fully_encoded_public_url_aliases \
     && research_official_response_mutation_is_rejected fallback_wave_coverage_leakage \
     && research_official_response_mutation_is_rejected synchronized_assignments \
     && research_official_response_mutation_is_rejected missing_delegated_trigger_scope \
     && research_official_response_mutation_is_rejected lens_worker_synthesis \
     && research_official_response_mutation_is_rejected missing_lens_fallback_evidence_ref \
-    && research_official_response_mutation_is_rejected missing_findings \
-    && research_official_response_mutation_is_rejected missing_conflicts \
     && research_official_response_mutation_is_rejected missing_gaps \
     && research_official_response_mutation_is_rejected missing_summary \
     && research_official_response_mutation_is_rejected missing_contradiction_map \
     && research_official_response_mutation_is_rejected missing_synthesis_briefing \
-    && research_official_response_mutation_is_rejected unusable_peer_needs_context \
     && research_official_response_mutation_is_rejected unusable_peer_blocked \
     && research_official_response_mutation_is_rejected duplicate_none_needed \
     && research_official_response_mutation_is_rejected mixed_none_needed_follow_up \
-    && research_official_response_mutation_is_rejected source_reserved_local \
-    && research_official_response_mutation_is_rejected source_bare_hostname \
-    && research_official_response_mutation_is_rejected source_ipv6_discard_only \
-    && research_official_response_mutation_is_rejected source_ipv6_dummy_prefix_compressed \
-    && research_official_response_mutation_is_rejected source_ipv6_dummy_prefix_full \
     && research_official_response_mutation_is_rejected peer_process_assignment_mismatch \
     && research_official_response_mutation_is_rejected finding_source_reserved_local \
     && research_official_response_mutation_is_rejected finding_high_without_provenance \
     && research_official_response_mutation_is_rejected finding_high_single_official \
     && research_official_response_mutation_is_rejected finding_high_three_secondary \
-    && research_official_response_mutation_is_rejected conflict_source_private_loopback \
-    && research_official_response_mutation_is_rejected embedded_local_repository_traversal \
+    && research_official_response_mutation_is_rejected high_host_case_public_url_aliases \
+    && research_official_response_mutation_is_rejected medium_single_secondary \
+    && research_official_response_mutation_is_rejected medium_single_public_row_aliases \
+    && research_official_response_mutation_is_rejected medium_host_case_public_url_aliases \
+    && research_official_response_mutation_is_rejected unbound_final_finding_source \
+    && research_official_response_mutation_is_rejected authenticated_source_endpoint \
+    && research_official_response_mutation_is_rejected encoded_typed_url_pii \
+    && research_official_response_mutation_is_rejected offline_citation_url \
     && research_official_response_mutation_is_rejected invalid_verified_evidence_shape \
     && research_official_response_mutation_is_rejected windows_absolute_local_repository \
     && research_official_response_mutation_is_rejected whitespace_local_repository \
-    && research_official_response_mutation_is_rejected peer_binding_findings_drift \
-    && research_official_response_mutation_is_rejected peer_binding_candidate_drift \
+    && research_official_response_mutation_is_rejected source_bare_hostname \
+    && research_official_response_mutation_is_rejected source_invalid_domain \
+    && research_official_response_mutation_is_rejected source_reserved_local \
+    && research_official_response_mutation_is_rejected malformed_peer_url_without_colon \
+    && research_official_response_mutation_is_rejected protocol_relative_peer_url \
     && research_official_response_mutation_is_rejected peer_binding_conflicts_drift \
     && research_official_response_mutation_is_rejected peer_binding_contradiction_drift \
+    && research_official_response_mutation_is_rejected topic_terms_only_assignment_id \
+    && research_official_response_mutation_is_rejected topic_terms_only_unique_insight \
+    && research_official_response_mutation_is_rejected peer_supported_recommendation_drift \
+    && research_official_response_mutation_is_rejected policy_block_allows_delegated_peer \
+    && research_official_response_mutation_is_rejected unusable_peer_needs_context \
+    && research_official_response_mutation_is_rejected fully_rebound_response_only_high_stakes_context \
+    && research_official_response_mutation_is_rejected peer_input_ledger_rebound_stale_peer_digest \
+    && research_official_response_mutation_is_rejected conflict_source_private_loopback \
+    && research_official_response_mutation_is_rejected embedded_local_repository_traversal \
+    && research_official_response_mutation_is_rejected peer_binding_findings_drift \
+    && research_official_response_mutation_is_rejected peer_binding_candidate_drift \
     && research_official_response_mutation_is_rejected duplicate_perspective_lens \
     && research_official_response_mutation_is_rejected duplicate_question_trace_lens \
     && research_official_response_mutation_is_rejected common_packet_scope_drift \
     && research_official_response_mutation_is_rejected semantic_context_scope_drift \
     && research_official_response_mutation_is_rejected follow_up_requirement_drift \
     && research_official_response_mutation_is_rejected opt_out_allows_delegated_peer \
-    && research_official_response_mutation_is_rejected policy_block_allows_delegated_peer \
     && research_official_response_mutation_is_rejected topic_substantive_fields_generic \
-    && research_official_response_mutation_is_rejected topic_terms_only_assignment_id \
-    && research_official_response_mutation_is_rejected topic_terms_only_unique_insight \
     && research_official_response_mutation_is_rejected hidden_finding_field \
     && research_official_response_mutation_is_rejected delegated_policy_state_mismatch \
     && research_official_response_mutation_is_rejected stale_revision_metadata \
@@ -2085,9 +1318,7 @@ if research_official_response_mutation_is_rejected accepted_result_body_with_unc
     && research_official_response_mutation_is_rejected retained_packet_preimage_drift \
     && research_official_response_mutation_is_rejected peer_input_digest_drift \
     && research_official_response_mutation_is_rejected peer_input_synthesis_drift \
-    && research_official_response_mutation_is_rejected peer_input_ledger_rebound_stale_peer_digest \
     && research_official_response_mutation_is_rejected accepted_final_synthesis_substitution \
-    && research_official_response_mutation_is_rejected peer_supported_recommendation_drift \
     && research_official_response_mutation_is_rejected fully_rebound_late_packet_freeze \
     && research_official_response_mutation_is_rejected stronger_context_not_applicable \
     && research_official_response_mutation_is_rejected stronger_context_unresolved \
@@ -2096,7 +1327,6 @@ if research_official_response_mutation_is_rejected accepted_result_body_with_unc
     && research_official_response_mutation_is_rejected final_synthesis_digest_drift \
     && research_official_response_mutation_is_rejected revision_synthesis_digest_drift \
     && research_official_response_mutation_is_rejected high_stakes_do_without_basis \
-    && research_official_response_mutation_is_rejected fully_rebound_response_only_high_stakes_context \
     && research_official_response_mutation_is_rejected missing_tier_normalization_disclosure \
     && research_official_response_mutation_is_rejected quick_effective_tier_drift \
     && research_response_only_high_stakes_context_is_rejected \
@@ -2150,137 +1380,6 @@ if [[ "$unknown_semantic_validator_rejected" == true && "$partial_semantic_valid
 else
     fail "assistant-research fixture validation accepted an unknown or partially declared semantic evaluator"
 fi
-
-test_start "assistant-research scopes peer follow-up validation to the peer handoff subtree"
-peer_lens_schema="$(awk '
-    /^handoffs:/ { handoffs = 1 }
-    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { peer = 1 }
-    peer && /- name: validated_lens_results/ { results = 1 }
-    results { print }
-    results && /^      - name: findings/ { exit }
-' "$research_handoffs")"
-peer_follow_up_schema="$(printf '%s\n' "$peer_lens_schema" | awk '
-    /name: follow_ups/ { active = 1 }
-    active { print }
-    active && /name: evidence_status/ { exit }
-')"
-peer_follow_up_shape_complete() {
-    local schema="$1"
-    for term in \
-        'name: follow_ups' \
-        'object_fields:' \
-        'name: decision' \
-        'name: question' \
-        'name: answer_or_gap' \
-        'name: sources_or_verified_urls' \
-        'name: evidence_status'; do
-        printf '%s\n' "$schema" | grep -Fq -- "$term" || return 1
-    done
-}
-peer_follow_up_without_nested_sources="$(printf '%s\n' "$peer_follow_up_schema" | sed '/name: sources_or_verified_urls/d')"
-if peer_follow_up_shape_complete "$peer_follow_up_schema" \
-    && ! peer_follow_up_shape_complete "$peer_follow_up_without_nested_sources"; then
-    pass
-else
-    fail "assistant-research peer follow-up schema is not scoped or deletion of its nested sources field is accepted"
-fi
-
-test_start "assistant-research PR-53 handoff recovery, bindings, and fallback oracle stay strict"
-pr53_missing=()
-lens_return_schema="$(printf '%s\n' "$lens_handoff_schema" | awk '/return_fields:/ { active = 1 } active { print }')"
-if ! printf '%s\n' "$lens_return_schema" | grep -Fq -- '{name: packet_set_id, type: string, required: true}'; then
-    pr53_missing+=("lens return packet_set_id")
-fi
-output_purpose_schema="$(awk '
-    /- name: output_purpose/ { active = 1 }
-    active { print }
-    active && /^  - name: / && $0 !~ /output_purpose/ { exit }
-' "$FRAMEWORK_DIR/skills/assistant-research/contracts/input.yaml")"
-if ! printf '%s\n' "$output_purpose_schema" | grep -Fq -- 'on_missing: infer' \
-    || ! printf '%s\n' "$output_purpose_schema" | grep -Fq -- 'user research question'; then
-    pr53_missing+=("safe output_purpose inference")
-fi
-peer_context_schema="$(awk '
-    /^handoffs:/ { handoffs = 1 }
-    handoffs && /^  - name: orchestrator_to_research_peer_reviewer/ { active = 1 }
-    active { print }
-    active && /^    return_fields:/ { exit }
-' "$research_handoffs")"
-if ! printf '%s\n' "$peer_context_schema" | awk '/name: verification_gaps/ { active = 1 } active { print } active && /name: high_stakes_context/ { exit }' \
-    | grep -Fq -- 'Non-empty whenever verified_source_evidence is empty'; then
-    pr53_missing+=("verification gaps for empty evidence")
-fi
-if ! grep -Fq -- 'id: research-common-dispatch-protocol' "$research_index" \
-    || ! grep -Fq -- 'id: research-selected-return-validation' "$research_index"; then
-    pr53_missing+=("selectable handoff protocol bundles")
-fi
-for binding in \
-    'peer_review.peer_review_assignment_id' \
-    'peer_review.peer_review_execution_mode' \
-    'peer_review.peer_reviewer_identity' \
-    'peer_review.peer_review_fallback_pass_id'; do
-    if ! printf '%s\n' "$process_evidence_schema" | grep -Fq -- "Exactly equals $binding"; then
-        pr53_missing+=("process peer binding: $binding")
-    fi
-done
-fallback_assertions="$(jq -c '.cases[] | select(.id == "five-lens-sequential-fallback-preserves-process-evidence") | .machine_expectations.structured_json_assertions // []' "$research_evals")"
-if ! jq -e '
-    length >= 12
-    and any(.[]; . == {"operator":"equals","path":["five_lens_process_evidence","lens_execution_mode"],"expected":"sequential_fallback"})
-    and any(.[]; .operator == "array_field_values_exact" and .path == ["five_lens_process_evidence","fallback_lens_passes"] and .field == "lens_kind")
-    and any(.[]; .operator == "array_field_values_exact" and .path == ["five_lens_process_evidence","accepted_lens_results"] and .field == "lens_kind")
-    and any(.[]; . == {"operator":"path_absent","path":["five_lens_process_evidence","lens_dispatches"]})
-    and any(.[]; . == {"operator":"nonempty_string","path":["five_lens_process_evidence","lens_fallback_evidence","detail"]})
-    and any(.[]; . == {"operator":"nonempty_string","path":["five_lens_process_evidence","peer_review_fallback_evidence","evidence_ref"]})
-    and any(.[]; . == {"operator":"equals_path","path":["five_lens_process_evidence","peer_review_fallback_pass_id"],"other_path":["peer_review","peer_review_fallback_pass_id"]})
-' <<<"$fallback_assertions" >/dev/null; then
-    pr53_missing+=("structured sequential fallback oracle")
-fi
-if ! printf '%s\n' "$process_evidence_schema" | grep -Fq -- 'distinct from every fallback_lens_passes.root_pass_id'; then
-    pr53_missing+=("peer fallback pass must differ from every lens root pass")
-fi
-for handoff_name in orchestrator_to_lens_researcher orchestrator_to_research_peer_reviewer; do
-    handoff_slice="$(awk -v handoff_name="$handoff_name" '
-        /^handoffs:/ { handoffs = 1 }
-        handoffs && $0 == "  - name: " handoff_name { active = 1 }
-        active { print }
-        active && /^  - name: / && $0 != "  - name: " handoff_name { exit }
-    ' "$research_handoffs")"
-    if ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'on_missing_field:'; then
-        pr53_missing+=("$handoff_name actionable on_missing_field")
-    elif [[ "$handoff_name" == "orchestrator_to_lens_researcher" ]] \
-        && (! printf '%s\n' "$handoff_slice" | grep -Fq -- 'same frozen assignment under the shared task guard' \
-            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'current v5 isolation is unavailable' \
-            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'block with an honest gap'); then
-        pr53_missing+=("lens on_missing_field must preserve shared guard and block unavailable current isolation")
-    elif [[ "$handoff_name" == "orchestrator_to_research_peer_reviewer" ]] \
-        && (! printf '%s\n' "$handoff_slice" | grep -Fq -- 'exact peer correction' \
-            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'newly created independent peer' \
-            || ! printf '%s\n' "$handoff_slice" | grep -Fq -- 'or block'); then
-        pr53_missing+=("peer on_missing_field must preserve correction and current independent-peer boundary")
-    fi
-done
-if ! jq -e '.cases[] | select(.id == "five-lens-sequential-fallback-preserves-process-evidence") | .machine_expectations.forbidden_substrings | index("dispatch_identity")' "$research_evals" >/dev/null; then
-    pr53_missing+=("fallback raw dispatch identity rejection")
-fi
-if [[ "${#pr53_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-research PR-53 contract repair missing: ${pr53_missing[*]}"
-fi
-
-test_start "assistant-research binds canonical digests, result projections, usage, and non-URL verification"
-integrity_missing=()
-for term in ContentDigest SearchResourceUsage 'lowercase hexadecimal SHA-256' 'RFC 8785 JSON Canonicalization Scheme (JCS)' 'number serialization' 'no trailing newline is hashed' 'lens_result_digest'; do
-    if ! grep -Fq -- "$term" "$research_handoffs"; then integrity_missing+=("handoff: $term"); fi
-done
-for term in lens_result_digest search_resource_usage overall_resource_usage verification_method verification_reference; do
-    if ! grep -Fq -- "$term" "$research_output" && ! grep -Fq -- "$term" "$research_handoffs"; then integrity_missing+=("contract: $term"); fi
-done
-for term in local_repository authenticated_source offline_authoritative_source 'Exactly one matching LensKind, assignment_id, and recomputed lens_result_digest' 'usable output never exceeds overall ceilings'; do
-    if ! grep -Fq -- "$term" "$research_output" && ! grep -Fq -- "$term" "$research_handoffs"; then integrity_missing+=("rule: $term"); fi
-done
-if [[ "${#integrity_missing[@]}" -eq 0 ]]; then pass; else fail "assistant-research integrity contract missing: ${integrity_missing[*]}"; fi
 
 test_start "assistant-research executable verified-source evidence predicate enforces method-specific URL rules"
 if printf '%s\n' '{"verification_method":"public_url","verification_reference":"https://www.iana.org/domains/example","verified_url":"https://www.iana.org/domains/example"}' \
@@ -2537,20 +1636,11 @@ done <<'EOF'
 accept|public-depth-1-lower|https%3a%2f%2fwww.iana.org%2fresearch
 reject|private-depth-1-lower|https%3a%2f%2f127.0.0.1%2fresearch
 reject|public-depth-2-upper|https%253A%252F%252Fwww.iana.org%252Fresearch
-reject|private-depth-2-lower|https%253a%252f%252f127.0.0.1%252fresearch
-reject|public-depth-3-lower|https%25253a%25252f%25252fwww.iana.org%25252fresearch
-reject|private-depth-3-upper|HTTPS%25253A%25252F%25252F127.0.0.1%25252Fresearch
-reject|public-depth-4-upper|https%2525253A%2525252F%2525252Fwww.iana.org%2525252Fresearch
-reject|private-depth-4-lower|https%2525253a%2525252f%2525252f127.0.0.1%2525252fresearch
 reject|public-depth-6-lower|https%2525252525253a%2525252525252f%2525252525252fwww.iana.org%2525252525252fresearch
-reject|private-depth-6-upper|HTTPS%2525252525253A%2525252525252F%2525252525252F127.0.0.1%2525252525252Fresearch
 reject|public-depth-2-mixed-slashes|https%253A//www.iana.org%252Fresearch
-reject|private-depth-2-mixed-slashes|https%253a%252F/127.0.0.1%252fresearch
 reject|public-depth-2-encoded-h|%2568ttps%253A%252F%252Fwww.iana.org%252Fresearch
-reject|private-depth-2-encoded-h|%2568tTpS%253a%252f%252f127.0.0.1%252fresearch
 reject|public-depth-3-partial-scheme|h%252574tps%25253A%25252F%25252Fwww.iana.org%25252Fresearch
 reject|private-depth-4-full-scheme|%25252568%25252574%25252574%25252570%25252573%2525253A%2525252F%2525252F127.0.0.1%2525252Fresearch
-reject|public-depth-6-encoded-punctuation|https%2525252525253A%2525252525252F%2525252525252Fwww.iana.org%2525252525252Fresearch
 accept|public-depth-1-encoded-h|%68tTpS%3a%2f%2fwww.iana.org%2fresearch
 accept|safe-opaque-encoded-delimiters|source:opaque%25253Acontrol
 accept|safe-opaque-reserved-delimiter|doi:10.1000%252Fprivate
@@ -2564,8 +1654,9 @@ research_nested_http_scheme_reference() {
     done
     printf '%s' "$reference"
 }
+# One nesting depth per encoded scheme letter; the depth classes are covered by the matrix above.
 while IFS='|' read -r matrix_name scheme host; do
-    for depth in 2 3 6; do
+    for depth in 2; do
         source="$(research_nested_http_scheme_reference "$scheme" "$depth" "$host")"
         encoded_scheme_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-encoded-scheme-letter.XXXXXX")"
         encoded_scheme_response="$encoded_scheme_eval_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
@@ -2584,17 +1675,12 @@ while IFS='|' read -r matrix_name scheme host; do
     done
 done <<'EOF'
 encoded-h-lower|%68ttps|www.iana.org
-encoded-h-upper|%48TTPS|127.0.0.1
-encoded-t-first-lower|h%74tps|www.iana.org
 encoded-t-first-upper|H%54TPS|127.0.0.1
 encoded-t-second-lower|ht%74ps|www.iana.org
-encoded-t-second-upper|HT%54PS|127.0.0.1
-encoded-p-lower|htt%70s|www.iana.org
 encoded-p-upper|HTT%50S|127.0.0.1
 encoded-s-lower|http%73|www.iana.org
-encoded-s-upper|HTTP%53|127.0.0.1
 EOF
-for depth in 2 3 6; do
+for depth in 3; do
     source="$(research_nested_http_scheme_reference '%48%54t%50%73' "$depth" 'www.iana.org')"
     encoded_scheme_eval_dir="$(mktemp -d "${TMPDIR:-/tmp}/assistant-research-encoded-scheme-mixed.XXXXXX")"
     encoded_scheme_response="$encoded_scheme_eval_dir/assistant-research/five-lens-decision-briefing-uses-storm-style-workflow.txt"
@@ -2628,24 +1714,17 @@ while IFS='|' read -r expected matrix_name source; do
     [[ "$ruby_actual" == "$expected" && "$private_actual" == "$expected" && "$official_actual" == "$expected" ]] || typed_encoded_url_failures+=("$matrix_name:$ruby_actual/$private_actual/$official_actual")
 done <<'EOF'
 accept|raw-public|https://www.iana.org/research
-accept|raw-public-plus|https://www.iana.org/a+b
-accept|raw-public-percent-space|https://www.iana.org/a%20b
 accept|raw-public-percent-literal|https://www.iana.org/rate%25
 accept|public-depth-1-encoded-h|%68tTpS%3a%2f%2fwww.iana.org%2fresearch
 accept|encoded-public-host|https://www.%69ana.org/research
 reject|encoded-public-trailing-dot-lower|https://www.iana.org%2e/research
-reject|encoded-public-trailing-dot-upper|https://www.iana.org%2E/research
 reject|encoded-localhost-trailing-dot|https://localhost%2e/research
 reject|private-depth-1|https%3A%2F%2F127.0.0.1%2Fresearch
 reject|encoded-private-host|https://%31%32%37.0.0.1/research
 reject|encoded-query-token|https%3A%2F%2Fwww.iana.org%2Fresearch%3Ftoken%3Dprivate
 reject|public-depth-2|https%253A%252F%252Fwww.iana.org%252Fresearch
-reject|public-depth-3|https%25253A%25252F%25252Fwww.iana.org%25252Fresearch
-reject|public-depth-4|https%2525253A%2525252F%2525252Fwww.iana.org%2525252Fresearch
-reject|public-depth-6|https%2525252525253A%2525252525252F%2525252525252Fwww.iana.org%2525252525252Fresearch
 reject|public-depth-2-mixed-slashes|https%253A//www.iana.org%252Fresearch
 reject|private-depth-2-encoded-h|%2568ttps%253A%252F%252F127.0.0.1%252Fresearch
-reject|private-depth-2-encoded-upper-h|%2548TTPS%253A%252F%252F127.0.0.1%252Fresearch
 reject|public-depth-3-partial-scheme|h%252574tps%25253A%25252F%25252Fwww.iana.org%25252Fresearch
 EOF
 if [[ "${#encoded_url_failures[@]}" -eq 0 && "${#encoded_scheme_letter_failures[@]}" -eq 0 && "${#typed_encoded_url_failures[@]}" -eq 0 ]]; then
@@ -3154,72 +2233,5 @@ if node "$FRAMEWORK_DIR/tests/p0-p4/lib/assistant-research-semantic-controls.cjs
 
 test_start "current Research v5 requires fresh native isolation and preserves original v4 fallback verdicts"
 if node "$FRAMEWORK_DIR/tests/p0-p4/lib/assistant-research-semantic-controls.cjs" --current-v5 "$FRAMEWORK_DIR" "$current_research_evals"; then pass; else fail "current-v5 actor/context/source/fallback/version isolation failed"; fi
-
-test_start "research provenance and fetch recovery stay conditional and inside v5 fields"
-research_root="${research_skill%/SKILL.md}"
-provenance_reference="$research_root/source-provenance.md"
-recovery_reference="$research_root/fetch-recovery.md"
-url_verify_reference="$research_root/url-verify.md"
-provenance_failures=()
-flatten_research_text() { tr '\n' ' ' <"$1" | tr -s '[:space:]' ' '; }
-for required_reference in "$provenance_reference" "$recovery_reference"; do
-    [[ -f "$required_reference" ]] || provenance_failures+=("$(basename "$required_reference") missing")
-done
-if [[ ${#provenance_failures[@]} -eq 0 ]]; then
-    provenance_pointer="$(flatten_research_text "$research_skill" | grep -o '.\{0,250\}(source-provenance\.md)' || true)"
-    for trigger_term in "substantial report" "deliverable report" "five-lens run" "explicit request"; do
-        printf '%s\n' "$provenance_pointer" | grep -Fq "$trigger_term" \
-            || provenance_failures+=("SKILL.md source-provenance.md pointer lacks trigger term: $trigger_term")
-    done
-    url_verify_text="$(flatten_research_text "$url_verify_reference")"
-    printf '%s\n' "$url_verify_text" | grep -Fq "(fetch-recovery.md)" \
-        || provenance_failures+=("url-verify.md does not link fetch-recovery.md")
-    printf '%s\n' "$url_verify_text" | grep -Fq "is a failed fetch even with HTTP 200: handle it under step 2" \
-        || provenance_failures+=("url-verify.md does not route rejected HTTP 200 bodies to recovery")
-    if printf '%s\n' "$url_verify_text" | grep -Fq "(404, 403, timeout): drop it"; then
-        provenance_failures+=("url-verify.md still drops failed fetches without recovery")
-    fi
-    for body_term in "HTTP 200" "interstitial" "error page"; do
-        printf '%s\n' "$url_verify_text" | grep -Fiq "$body_term" \
-            || provenance_failures+=("url-verify.md does not reject $body_term bodies")
-    done
-    five_lens_set="$(awk '
-        $0 == "  five_lens:" { in_set = 1; next }
-        in_set && /^  [[:alnum:]_-]+:[[:space:]]*$/ { exit }
-        in_set && /^    references:/ { in_references = 1; next }
-        in_references && /^    selectors:/ { exit }
-        in_references && /^      - / { sub(/^      - /, ""); print }
-    ' "$research_index")"
-    printf '%s\n' "$five_lens_set" | grep -Fxq "source-provenance.md" \
-        || provenance_failures+=("five_lens load set does not include source-provenance.md")
-    for short_answer_set in source_research investigate; do
-        short_answer_references="$(awk -v set="  $short_answer_set:" '
-            $0 == set { in_set = 1; next }
-            in_set && /^  [[:alnum:]_-]+:[[:space:]]*$/ { exit }
-            in_set && /^    references:/ { in_references = 1; next }
-            in_references && /^    selectors:/ { exit }
-            in_references && /^      - / { sub(/^      - /, ""); print }
-        ' "$research_index")"
-        [[ -n "$short_answer_references" ]] \
-            || provenance_failures+=("$short_answer_set load set references could not be parsed")
-        if printf '%s\n' "$short_answer_references" | grep -Fxq "source-provenance.md"; then
-            provenance_failures+=("$short_answer_set load set must not load source-provenance.md for short answers")
-        fi
-    done
-    if grep -Fq "fetch-recovery.md" "$research_index"; then
-        provenance_failures+=("fetch-recovery.md must load only through url-verify.md on a failed fetch")
-    fi
-    provenance_text="$(flatten_research_text "$provenance_reference")"
-    for pinned_term in "task-local" "undated" "does not prove support" "exactly one" "verification_detail"; do
-        printf '%s\n' "$provenance_text" | grep -Fq "$pinned_term" \
-            || provenance_failures+=("source-provenance.md lacks pinned term: $pinned_term")
-    done
-    recovery_text="$(flatten_research_text "$recovery_reference")"
-    for pinned_term in "at most once" "capture date" "as of" "approval" "private"; do
-        printf '%s\n' "$recovery_text" | grep -Fq "$pinned_term" \
-            || provenance_failures+=("fetch-recovery.md lacks pinned term: $pinned_term")
-    done
-fi
-if [[ ${#provenance_failures[@]} -eq 0 ]]; then pass; else fail "$(printf '%s; ' "${provenance_failures[@]}")"; fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

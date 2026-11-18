@@ -4,7 +4,6 @@ fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 source "$P0P4_SUITE_DIR/workflow-basics-contracts.sh"
-source "$P0P4_SUITE_DIR/workflow-evidence-spine-contracts.sh"
 source "$P0P4_SUITE_DIR/adaptive-execution-contracts.sh"
 source "$P0P4_SUITE_DIR/tdd-contracts.sh"
 source "$P0P4_SUITE_DIR/task-packet-contracts.sh"

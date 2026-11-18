@@ -36,4 +36,4 @@ python3 tools/skills/check-skill-containment.py
 ./tests/test-p0-p4-contracts.sh
 ```
 
-Do not weaken permission prompts or destructive-operation safeguards. C# code targets modern .NET and follows the existing Clean Architecture style. Tests use descriptive names and Arrange-Act-Assert where applicable.
+Add a contract check only when it fails for a defect a user or maintainer would notice (structure, safety, contract consistency, eval grading); do not add checks that only pin wording in a skill file (`docs/specs/contract-test-cleanup.md` R-TC-1). Do not weaken permission prompts or destructive-operation safeguards. C# code targets modern .NET and follows the existing Clean Architecture style. Tests use descriptive names and Arrange-Act-Assert where applicable.

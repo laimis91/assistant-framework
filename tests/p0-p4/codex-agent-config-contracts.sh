@@ -118,53 +118,6 @@ else
     fail "Codex model/effort contract violations: ${matrix_failures[*]}"
 fi
 
-test_start "Codex operating stances are compact and role-specific"
-stance_failures=()
-while IFS='|' read -r agent role_anchor; do
-    file="$agent_dir/$agent.toml"
-    [[ -f "$file" ]] || continue
-    heading_count="$(grep -c '^## Operating stance$' "$file" || true)"
-    stance="$(awk '
-        /^## Operating stance$/ { in_stance = 1; next }
-        in_stance && /^## / { exit }
-        in_stance { print }
-    ' "$file")"
-    bullet_count="$(printf '%s\n' "$stance" | grep -c '^- ' || true)"
-    nonblank_count="$(printf '%s\n' "$stance" | grep -c '[^[:space:]]' || true)"
-    word_count="$(printf '%s\n' "$stance" | wc -w | tr -d '[:space:]')"
-
-    if [[ "$heading_count" != "1" ]]; then
-        stance_failures+=("$agent: expected exactly one Operating stance heading")
-    fi
-    if (( bullet_count < 2 || bullet_count > 4 || nonblank_count != bullet_count )); then
-        stance_failures+=("$agent: stance must contain only 2-4 nonblank bullet lines")
-    fi
-    if (( word_count > 100 )); then
-        stance_failures+=("$agent: stance exceeds 100 words")
-    fi
-    if ! printf '%s\n' "$stance" | grep -Fqi -- "$role_anchor"; then
-        stance_failures+=("$agent: missing role anchor '$role_anchor'")
-    fi
-done <<'EOF'
-architect|trade-off
-builder-tester|repeatable
-code-mapper|paths
-code-reviewer|correctness
-code-writer|smallest
-explorer|evidence
-intelligent-writer|smallest
-lens-researcher|independent
-mechanical-writer|smallest
-qa-evaluator|acceptance
-research-peer-reviewer|independent
-reviewer|compatibility
-EOF
-if [[ "${#stance_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "Codex Operating stance contract violations: ${stance_failures[*]}"
-fi
-
 test_start "Canonical and compatibility reviewers share configuration and review posture"
 canonical_reviewer="$agent_dir/code-reviewer.toml"
 compatibility_reviewer="$agent_dir/reviewer.toml"
@@ -176,79 +129,6 @@ if [[ "$(toml_quoted_value model "$canonical_reviewer")" == "$(toml_quoted_value
     pass
 else
     fail "reviewer must mirror code-reviewer model/effort and both must say 'Review the work, not the author.'"
-fi
-
-test_start "Canonical instruction block keeps one adaptive main stance without subagent role configuration"
-lean_guidance_failures=()
-guidance_label="docs/instruction-block.md"
-guidance_source="$(mktemp)"
-p0p4_register_cleanup "$guidance_source"
-sed -n '/<!-- instruction-block:start -->/,/<!-- instruction-block:end -->/p' "$FRAMEWORK_DIR/$guidance_label" >"$guidance_source" 2>/dev/null || true
-if [[ ! -s "$guidance_source" ]]; then
-    lean_guidance_failures+=("$guidance_label: missing the marked instruction block")
-fi
-if grep -Eq 'gpt-5\.6-(luna|terra|sol)|model_reasoning_effort' "$guidance_source"; then
-    lean_guidance_failures+=("$guidance_label: embeds subagent model/effort guidance")
-fi
-if [[ "$(grep -Fc -- '## Operating stance' "$guidance_source")" != "1" ]]; then
-    lean_guidance_failures+=("$guidance_label: expected exactly one adaptive Operating stance heading")
-fi
-for stance_anchor in \
-    "Implement and verify directly when useful, at every size/risk." \
-    "Formal plan, code, finding-closure and acceptance reviews use newly created independent agents" \
-    "Keep orchestration proportional"; do
-    if ! grep -Fq -- "$stance_anchor" "$guidance_source"; then
-        lean_guidance_failures+=("$guidance_label: missing adaptive stance anchor '$stance_anchor'")
-    fi
-done
-if grep -Fq -- 'Review the work, not the author.' "$guidance_source"; then
-    lean_guidance_failures+=("$guidance_label: embeds subagent-specific personality guidance")
-fi
-while IFS= read -r guidance_bullet; do
-    guidance_bullet="${guidance_bullet#- }"
-    guidance_bullet_words="$(wc -w <<<"$guidance_bullet" | tr -d '[:space:]')"
-    if (( guidance_bullet_words > 32 )); then
-        lean_guidance_failures+=("$guidance_label: guidance bullet exceeds 32 words: $guidance_bullet")
-    fi
-done < <(
-    awk '
-        /^## Operating stance$/ { in_guidance = 1 }
-        in_guidance && /^<!-- .*AGENTS_MD.*END/ { exit }
-        in_guidance && /^- / { print }
-    ' "$guidance_source"
-)
-for deferred_detail in \
-    "The orchestrator owns framework state files" \
-    "Do not infer that subagents are unavailable" \
-    "use direct fallback only after"; do
-    if grep -Fq -- "$deferred_detail" "$guidance_source"; then
-        lean_guidance_failures+=("$guidance_label: global guidance must defer '$deferred_detail' mechanics to assistant-workflow")
-    fi
-done
-if [[ "${#lean_guidance_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "Canonical instruction block must keep only the compact main stance: ${lean_guidance_failures[*]}"
-fi
-
-test_start "Project AGENTS guidance stays repository-specific instead of repeating global workflow policy"
-project_guidance_failures=()
-for duplicate_anchor in \
-    "Route requests through installed skill descriptions" \
-    "Keep work proportional to risk" \
-    "Preserve unrelated user changes" \
-    "never hardcode secrets or log PII"; do
-    if grep -Fq -- "$duplicate_anchor" "$FRAMEWORK_DIR/AGENTS.md"; then
-        project_guidance_failures+=("AGENTS.md repeats global policy '$duplicate_anchor'")
-    fi
-done
-if ! grep -Fq -- 'Root `skills/assistant-*` directories are the editable source of truth.' "$FRAMEWORK_DIR/AGENTS.md"; then
-    project_guidance_failures+=("AGENTS.md must identify root assistant skills as the editable source of truth")
-fi
-if [[ "${#project_guidance_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "project AGENTS must contain repository-specific guidance: ${project_guidance_failures[*]}"
 fi
 
 test_start "Codex agent smoke helper is fixed-scope and metadata-only"

@@ -17,27 +17,6 @@ pilot_repeats="$(jq -r '.pilot_repeats' "$manifest")"
 pilot_pairs_expected=$((pilot_cases_count * pilot_repeats))
 pilot_runs_expected=$((pilot_pairs_expected * 2))
 
-test_start "Terra pilot includes preparation and pending-Pack cases across eight cases"
-if jq -e '
-    .pilot_cases == [
-      "small-fix-stays-lightweight",
-      "stale-journal-yields-to-current-evidence",
-      "requirements-map-through-completion",
-      "ordinary-medium-bounded-executor",
-      "seeded-code-review-regressions",
-      "medium-final-handoff-is-reconstructable",
-      "viewing-route-technical-preparation",
-      "pending-architecture-pack-verification"
-    ]
-    and .pilot_repeats == 3
-    and ((.pilot_cases | length) * .pilot_repeats) == 24
-    and ((.pilot_cases | length) * .pilot_repeats * 2) == 48
-  ' "$manifest" >/dev/null; then
-    pass
-else
-    fail "the promotion profile omits repository-grounded preparation or pending-Pack pilot coverage"
-fi
-
 test_start "native activation evidence is hash-bound and contract fixtures cannot promote"
 activation_schema="$FRAMEWORK_DIR/docs/evals/fixtures/workflow-kernel-activation-observation.contract.json"
 activation_fixture="$FRAMEWORK_DIR/docs/evals/fixtures/workflow-kernel-activation-observation.json"
@@ -70,33 +49,6 @@ if [[ -f "$activation_schema" && -f "$activation_fixture" ]] \
     pass
 else
     fail "native activation evidence contract or non-promoting fixture is missing: ${missing_activation_terms[*]}"
-fi
-
-test_start "medium handoff fixture declares the complete ordered repair workflow"
-if jq -e '
-    .cases[]
-    | select(.id == "medium-final-handoff-is-reconstructable")
-    | .ordered_workflow_sequence == [
-        "implementation_completed",
-        "focused_test_passed",
-        "first_trusted_review_failed",
-        "source_repaired",
-        "focused_revalidation_passed",
-        "fresh_trusted_review_passed",
-        "final_handoff_written"
-      ]
-      and ((.setup_context | join(" ")) | contains(".assistant-eval/review-evidence.json"))
-      and ((.setup_context | join(" ")) | contains("closed-world"))
-      and ((.setup_context | join(" ")) | contains("first_review"))
-      and ((.setup_context | join(" ")) | contains("repair"))
-      and ((.setup_context | join(" ")) | contains("revalidation"))
-      and ((.setup_context | join(" ")) | contains("fresh_review"))
-      and ((.pass_criteria | join(" ") | ascii_downcase) | test("fail.*repair.*revalidat.*fresh.*pass.*handoff"))
-      and ((.fail_signals | join(" ") | ascii_downcase) | test("skip.*failed review|handoff.*before.*fresh review"))
-  ' "$fixture" >/dev/null; then
-    pass
-else
-    fail "the pilot handoff case does not yet require implementation -> test -> failed review -> repair -> revalidation -> clean review -> handoff"
 fi
 
 test_start "trusted workspace verifier checks bounded review evidence and ephemeral event order"
@@ -173,31 +125,6 @@ else
     pass
 fi
 
-test_start "eval guide documents the closed-world review evidence schema"
-documented_review_keys=(
-    schema_version
-    defect_id
-    first_review
-    pre_repair_source_hash
-    defect_present_before_repair
-    repair
-    post_repair_source_hash
-    defect_present_after_repair
-    revalidation
-    fresh_review
-)
-missing_documented_review_keys=()
-for term in "${documented_review_keys[@]}"; do
-    if ! grep -Fq "$term" "$eval_readme"; then
-        missing_documented_review_keys+=("$term")
-    fi
-done
-if [[ ${#missing_documented_review_keys[@]} -gt 0 ]]; then
-    fail "docs/evals/README.md omits review evidence keys: ${missing_documented_review_keys[*]}"
-else
-    pass
-fi
-
 test_start "fake adapter proves each ordered-workflow omission is rejected"
 fake_failures=()
 for term in \
@@ -261,19 +188,6 @@ if rg -i "$claim_pattern" "$readme" "$eval_readme" >/dev/null; then
     fi
 else
     pass
-fi
-
-test_start "README and eval guide retain exact eight-case, 48-run, 24-pair activation-gated accounting"
-if grep -Fq 'eight-case' "$readme" \
-    && grep -Fq '48 calls / 24 pairs' "$readme" \
-    && grep -Fq "manifest remains historical comparison data" "$eval_readme" \
-    && grep -Fq "newly authorized exact pilot completes" "$eval_readme" \
-    && grep -Fq "${pilot_runs_expected}/${pilot_runs_expected} runs and ${pilot_pairs_expected}/${pilot_pairs_expected} pairs" "$eval_readme" \
-    && grep -Fq 'manual_native_observation' "$eval_readme" \
-    && grep -Fq 'contract_test_fixture' "$eval_readme"; then
-    pass
-else
-    fail "published evaluation accounting or native-activation non-promotion boundary drifted"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"
