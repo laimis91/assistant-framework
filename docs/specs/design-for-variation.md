@@ -1,6 +1,6 @@
 # Design standard: SOLID structure and pattern machinery
 
-Status: **Accepted** by the user 2026-11-18, including D-DV-1 to D-DV-4; D-DV-5 added after independent review. Implemented on branch `feature/design-for-variation`. Behavioural evaluation run 2026-11-18 (see [Behavioural evaluation](#behavioural-evaluation)); the cases were revised afterwards and a rerun of the revised cases is owed.
+Status: **Accepted** by the user 2026-11-18, including D-DV-1 to D-DV-4; D-DV-5 added after independent review. Implemented on branch `feature/design-for-variation`. Behavioural evaluation run 2026-11-18 (see [Behavioural evaluation](#behavioural-evaluation)); the revised cases were rerun the same day. The review skill's loading of `review-principles.md` and one CSV sample remain open.
 Source: user requests of 2026-11-05 and 2026-11-18. The user's M1 game build came out with enums and switch statements choosing behaviour although assistant-workflow was active. A follow-up session had to plan a refactor.
 
 ## Problem and intended outcome
@@ -64,7 +64,26 @@ Revisions made after the run, so that grading checks behaviour:
 - The required strings `solid-principles.md`, "differ only in" and "second format" were removed because they test wording. The forbidden string `enum PathShape {` became `public enum PathShape`, which also catches the brace on the next line.
 - The writing guide's refactor-before-extending section now says not to offer extending the type code as an alternative; if the user declines the refactor, state what each later kind will cost and follow their decision.
 
-Regrading the saved isolated answers against the revised cases gives 3/4 with the change and 1/4 without, matching the reading above; the review enum case has no comparable answers. A rerun of the revised cases needs fresh authorization.
+Regrading the saved isolated answers against the revised cases gives 3/4 with the change and 1/4 without, matching the reading above; the review enum case has no comparable answers. 
+### Rerun of the revised cases
+
+Same method and model, run 2026-11-18 under fresh authorization; ten calls cost $4.75. The transcript audit found one invalid sample. The change-arm CSV subject searched `/private/tmp`, found the eval's own case file, which sat under the same folder, and read it. The other nine read nothing outside their run folders.
+
+| Case | With change | Without change |
+|---|---|---|
+| `build-refactors-enum-before-adding-kind` | Pass: refactor to one class per kind first, then Runner. If the user declines, it states the later cost and offers no switch patch | Fail: appends `Runner = 3` and adds a case to each switch |
+| `plan-records-extension-points-table` | Values as data and an extension point table with a revisit condition; grader fail only because the heading is singular | Fail: values as data, no table |
+| `review-flags-single-variant-machinery` | Pass: removes the machinery, keeps the interface | Grader pass, but the answer deletes `IExportFormat` too, a fail signal no string covers |
+| `review-detects-enum-extension-traps` | Fail: calls the diff a clean extension of the existing pattern | Fail: the same |
+| `build-csv-export-uses-interface-without-machinery` | Invalid: subject read the case file | Fail: one concrete CSV writer, no interface |
+
+Read against pass criteria, the change produced the intended design in three cases where the baseline did not. Both arms missed the type-code finding in the review enum case. Neither review answer loaded `review-principles.md`; the review skill says to apply "matching" principles, and the reviewer did not treat a payment diff as matching. The change-arm review read `csharp-review.md`, `review-checklists.md` and `review-rubric.md` instead.
+
+Open items:
+
+- The review skill should load `review-principles.md` for every code review, as the workflow now loads the writing guide. This is a skill change and needs its own approval and rerun.
+- The CSV change-arm sample must be rerun with eval files kept outside `/private/tmp`.
+- `plan-records-extension-points-table` should require "Extension point" (singular matches both), and `review-flags-single-variant-machinery` could forbid "Delete `IExportFormat`".
 
 ## Owners
 
