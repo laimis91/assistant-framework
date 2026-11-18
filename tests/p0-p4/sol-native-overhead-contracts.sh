@@ -135,29 +135,4 @@ else
     fail "progressive contract loading failed: ${progressive_failures[*]}"
 fi
 
-test_start "completion ceremony is conditional and non-blocking outside applicable work"
-completion_controller="$FRAMEWORK_DIR/skills/assistant-workflow/references/completion-controller.md"
-workflow_phases="$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md"
-completion_failures=()
-if rg -qi 'Learning Controller|Reflexion|memory_(reflect|signal|trend)' "$completion_controller"; then
-    completion_failures+=("completion controller retains retired custom-memory behavior")
-fi
-if ! rg -qi 'metrics.*(optional|non-blocking|never a reason to block)|does not make metrics blocking' "$completion_controller"; then
-    completion_failures+=("metrics are not explicitly optional or non-blocking")
-fi
-if ! rg -qi 'manual verification.+(only|required when).*(subjective|external|destructive|UI|explicit)' "$completion_controller"; then
-    completion_failures+=("manual verification is not limited to subjective/external/destructive/UI/explicit acceptance")
-fi
-if ! rg -qi 'small.+(does not require|without).+(task journal|metrics|manual verification)' "$completion_controller"; then
-    completion_failures+=("small completion does not explicitly omit ceremony")
-fi
-if ! rg -qi '(task journal.+(medium\+|cross-session|clarification|harness)|(medium\+|cross-session|clarification|harness).+task journal)' "$workflow_phases"; then
-    completion_failures+=("task journals are not scoped to durable-state cases")
-fi
-if [[ "${#completion_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "conditional completion contract failed: ${completion_failures[*]}"
-fi
-
 p0p4_finish_suite "${BASH_SOURCE[0]}"

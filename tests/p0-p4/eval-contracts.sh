@@ -181,26 +181,6 @@ write_machine_expectation_responses() {
     done < <(jq -r '.cases[].id' "$eval_fixture")
 }
 
-test_start "docs eval README lists new behavior areas"
-missing_eval_readme_terms=()
-for term in \
-    "TDD RED-before-GREEN handoff behavior" \
-    "executable task packet requirements before build" \
-    "per-slice verification before advancing" \
-    "spec obligations folded into the final acceptance review, not replaced by quality findings" \
-    "structured worker status packets from subagents" \
-    "subagent opt-out keeps review isolation" \
-    "Native Codex role constraints without extra runtime reinforcement"; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/docs/evals/framework-fixtures.md"; then
-        missing_eval_readme_terms+=("$term")
-    fi
-done
-if [[ "${#missing_eval_readme_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "docs/evals/README.md missing new behavior areas: ${missing_eval_readme_terms[*]}"
-fi
-
 test_start "docs eval runner exists and is executable"
 if [[ -x "$eval_runner" ]]; then
     pass

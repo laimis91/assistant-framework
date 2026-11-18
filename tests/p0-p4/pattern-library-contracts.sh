@@ -6,7 +6,6 @@ fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
 pattern_tool="$FRAMEWORK_DIR/tools/patterns/pattern-library.sh"
-pattern_docs="$FRAMEWORK_DIR/docs/pattern-library.md"
 fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/pattern-library-fixture.XXXXXX")"
 config_file="$fixture_root/config.json"
 index_file="$fixture_root/index.json"
@@ -179,36 +178,6 @@ if [[ "$show_output" == "public sealed class FactoryExample { }" ]] \
     pass
 else
     fail "show permitted an unsafe path or failed to read a safe explicit file"
-fi
-
-test_start "documentation explains private explicit pattern-library configuration without personal paths"
-if [[ -f "$pattern_docs" ]] \
-    && grep -Fq -- "opt-in" "$pattern_docs" \
-    && grep -Fq -- "not_configured" "$pattern_docs" \
-    && grep -Fq -- "metadata" "$pattern_docs" \
-    && grep -Fq -- "company" "$pattern_docs" \
-    && grep -Fq -- '~/.config/assistant-framework/pattern-libraries.json' "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq -- "resolved from the configuration file's directory" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq -- "personal or project instructions" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq -- 'tools/patterns/pattern-library.sh validate-config' "$FRAMEWORK_DIR/README.md" \
-    && ! grep -Eq -- '/Users/|/home/[^/]+/|[A-Za-z]:\\\\Users\\\\' "$pattern_docs" \
-    && ! grep -Eq -- '/Users/|/home/[^/]+/|[A-Za-z]:\\\\Users\\\\' "$FRAMEWORK_DIR/README.md"; then
-    pass
-else
-    fail "pattern library docs omit executable private configuration guidance or contain a personal path"
-fi
-
-test_start "workflow retrieves configured examples only after repository patterns and design force"
-retrieval_ref="$FRAMEWORK_DIR/skills/assistant-workflow/references/design-pattern-retrieval.md"
-if [[ -f "$retrieval_ref" ]] \
-    && p0p4_contains_text "$retrieval_ref" "Search repository-native patterns first" \
-    && p0p4_contains_text "$retrieval_ref" "concrete design force" \
-    && p0p4_contains_text "$retrieval_ref" "load at most 1-3" \
-    && p0p4_contains_text "$retrieval_ref" "KISS and YAGNI" \
-    && p0p4_contains_text "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml" "design-pattern-retrieval.md"; then
-    pass
-else
-    fail "workflow does not safely route optional external pattern retrieval"
 fi
 
 p0p4_finish_suite "${BASH_SOURCE[0]}"

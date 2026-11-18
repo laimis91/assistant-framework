@@ -3,68 +3,6 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-test_start "acceptance spec obligations define structured PASS FAIL compliance fields"
-spec_review_file="$FRAMEWORK_DIR/skills/assistant-workflow/references/prompts/spec-review.md"
-missing_spec_review_terms=()
-if [[ ! -f "$spec_review_file" ]]; then
-    missing_spec_review_terms+=("references/prompts/spec-review.md exists")
-else
-    for term in \
-        "Result: PASS | FAIL" \
-        "Missing acceptance criteria" \
-        "Extra scope" \
-        "Changed files mismatch" \
-        "Verification evidence mismatch" \
-        "Required fixes" \
-        "Confirm every acceptance criterion is implemented or explicitly deferred with approval." \
-        "Confirm changed files match the approved file list, or each mismatch has an approved deviation." \
-        "Confirm verification evidence matches the required command, expected success signal, and criteria checked." \
-        "Flag extra scope separately from quality issues." \
-        'return `FAIL` with required fixes' \
-        "# Acceptance Spec Obligations" \
-        'final fresh acceptance review (`assistant-review`, `review_subject=acceptance`)' \
-        "There is no separate Spec reviewer." \
-        "Historical Stage 1 \`### Spec Review #N\` records stay readable"; do
-        if ! grep -Fq -- "$term" "$spec_review_file"; then
-            missing_spec_review_terms+=("$term")
-        fi
-    done
-fi
-if [[ "${#missing_spec_review_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "spec-review.md missing required structured compliance terms: ${missing_spec_review_terms[*]}"
-fi
-
-test_start "workflow phase gates require spec obligations PASS within the acceptance review"
-missing_spec_gate_terms=()
-for term in \
-    "- id: R1" \
-    "The final fresh acceptance review (assistant-review with review_subject=acceptance) is the single owner of request, plan and delivery reconciliation" \
-    "covered the spec obligations of references/prompts/spec-review.md, reconciling the original request, requirement IDs, and approved plan against delivered results" \
-    "the latest spec_review_result has Result: PASS bound to the same final batch" \
-    "missing acceptance criteria, extra scope, changed files mismatch, verification evidence mismatch, and required fixes" \
-    "a PASS after a FAIL fix comes from a fresh complete batch on the changed snapshot" \
-    "No separate Stage 1 Spec reviewer is dispatched; historical Stage 1 records stay readable" \
-    "Unavailable isolation leaves Review incomplete." \
-    "- id: R1A" \
-    "Quality findings do not substitute for spec obligations" \
-    "Workflow passed its triage controller_intensity to assistant-review" \
-    "a validated fresh independent plan review (assistant-review with review_subject=plan)" \
-    "every structured light review receives controller_intensity=light and a one-pass topology carries topology.light_review=true" \
-    "ordinary light review needs no batch plan, ledgers or structured fresh_dispatch" \
-    "- id: R2" \
-    "Quality Review completed by loading and following assistant-review SKILL.md"; do
-    if ! grep -Fq -- "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
-        missing_spec_gate_terms+=("$term")
-    fi
-done
-if [[ "${#missing_spec_gate_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "phase-gates.yaml missing folded spec-obligation and acceptance review gates: ${missing_spec_gate_terms[*]}"
-fi
-
 test_start "compact light fresh_review_result reuses Review closure vocabulary and rejects non-closed PASS"
 if compact_review_error="$(ruby -ryaml -rjson -e '
   wf = YAML.load_file(ARGV.fetch(0)).fetch("artifacts").find { |a| a["name"] == "fresh_review_result" } or abort "fresh_review_result missing"

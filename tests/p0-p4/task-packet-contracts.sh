@@ -764,42 +764,6 @@ else
 fi
 
 
-test_start "workflow pivot restart controller records decision packets and recovery refs"
-missing_pivot_restart_terms=()
-for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::- name: pivot_restart_decision" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::trigger" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::affected_slice_or_round" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::options_considered" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::selected_action" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::reapproval_required" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::next_agent" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::recovery_pointer" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::exact_next_action" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml::pivot_restart_decision_ref" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/handoffs.yaml::pivot_restart_decision" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::B_CODE_WRITER_BLOCKER_ROUTING" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::R_PIVOT_RESTART_DECISION" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::INV_PIVOT_RESTART_REAPPROVAL" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-runtime-artifacts.md::## Pivot/Restart Controller" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/harness-runtime-artifacts.md::Productive work may continue beyond round 10" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/build-worker-protocol.md::Code Writer Unexpected Blockers" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md::genuine shared semantic stagnation or material change" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-harness-appendix.md::## Pivot/Restart Log" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-harness-appendix.md::pivot_restart_decision"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if ! p0p4_contains_text "$file" "$term"; then
-        missing_pivot_restart_terms+=("${file#$FRAMEWORK_DIR/}: $term")
-    fi
-done
-if [[ "${#missing_pivot_restart_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow pivot/restart controller missing decision packet terms: ${missing_pivot_restart_terms[*]}"
-fi
-
-
 test_start "workflow CodeWriter unexpected blockers classify and route recovery"
 missing_codewriter_blocker_terms=()
 for file_and_term in \

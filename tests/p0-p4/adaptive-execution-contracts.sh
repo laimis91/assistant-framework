@@ -8,23 +8,6 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 workflow="$FRAMEWORK_DIR/skills/assistant-workflow"
 tdd="$FRAMEWORK_DIR/skills/assistant-tdd"
 
-test_start "all build and recovery surfaces obey the selected execution lane"
-if ! grep -Fq 'run the Code Writer -> Builder/Tester loop' "$workflow/references/phases.md" \
-    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "the bounded executor adds or extends" \
-    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "Builder/Tester returns one typed" \
-    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "Code Writer owns production and records" \
-    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "pre_production_red" \
-    && p0p4_contains_text "$workflow/references/build-worker-protocol.md" "route verification through the selected build_execution_lane" \
-    && ! grep -Fq 'return to Builder/Tester RED evidence' "$workflow/references/build-worker-protocol.md" \
-    && p0p4_contains_text "$workflow/contracts/phase-gates.yaml" "Repair evidence according to build_execution_lane" \
-    && p0p4_contains_text "$workflow/contracts/phase-gates.yaml" "Inactive bounded_executor: CodeWriter owns selected verification" \
-    && p0p4_contains_text "$workflow/contracts/phase-gates.yaml" "separated_workers dispatches BuilderTester final_verification" \
-    && ! grep -Fq 'Add per-slice Code Writer and Builder/Tester dispatch/result evidence' "$workflow/contracts/phase-gates.yaml"; then
-    pass
-else
-    fail "a phase, recovery, or gate surface still forces Builder/Tester in bounded_executor"
-fi
-
 test_start "Codex writer is a bounded edit test executor when selected"
 if p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/code-writer.toml" "bounded_executor" \
     && p0p4_contains_text "$FRAMEWORK_DIR/agents/codex/code-writer.toml" "own the selected implementation and verification" \

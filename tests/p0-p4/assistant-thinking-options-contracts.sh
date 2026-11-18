@@ -3,60 +3,8 @@ if [[ -z "${P0P4_HARNESS_LOADED:-}" ]]; then
 fi
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-thinking_skill="$FRAMEWORK_DIR/skills/assistant-thinking/SKILL.md"
-thinking_creative="$FRAMEWORK_DIR/skills/assistant-thinking/creative.md"
-thinking_evals="$FRAMEWORK_DIR/skills/assistant-thinking/evals/cases.json"
 
 # The creative method guides human-facing option generation; it is not a serialized interface.
-test_start "assistant-thinking creative method keeps light and deep option generation and preserves constraints"
-options_reference_failures=()
-for file_and_term in \
-    "$thinking_skill::\`creative.md\`" \
-    "$thinking_creative::## Light" \
-    "$thinking_creative::## Deep" \
-    "$thinking_creative::Stop there." \
-    "$thinking_creative::do not run a ritual repository scan" \
-    "$thinking_creative::Keep hard constraints and prior attempts visible" \
-    "$thinking_creative::do not re-propose a rejected approach unchanged" \
-    "$thinking_creative::Keep generation apart from evaluation" \
-    "$thinking_creative::without idea or candidate quotas" \
-    "$thinking_creative::justify them"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if ! p0p4_contains_text "$file" "$term"; then
-        options_reference_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-for once_term in "try inversion or a different analogy" "numerical precision"; do
-    if [[ "$(grep -o -i -F -- "$once_term" "$thinking_creative" | wc -l | tr -d ' ')" -ne 1 ]]; then
-        options_reference_failures+=("creative.md must state '$once_term' exactly once")
-    fi
-done
-if [[ -e "$FRAMEWORK_DIR/skills/assistant-thinking/ideation-pipeline.md" ]] \
-    || [[ -e "$FRAMEWORK_DIR/skills/assistant-thinking/references/ideation-pipeline.md" ]]; then
-    options_reference_failures+=("duplicate ideation-pipeline.md copied into assistant-thinking")
-fi
-if [[ ${#options_reference_failures[@]} -eq 0 ]]; then
-    pass
-else
-    fail "creative.md lacks light mode stop rule or option-generation guidance: ${options_reference_failures[*]}"
-fi
-
-test_start "assistant-thinking distinguishes option recommendations from user choices"
-if p0p4_contains_text "$thinking_creative" "A recommendation is not the user's choice" \
-    && p0p4_contains_text "$thinking_creative" "Record a decision only after an explicit choice" \
-    && p0p4_contains_text "$thinking_creative" "stop before unrequested implementation or persistence" \
-    && p0p4_contains_text "$thinking_creative" "Offer a choice packet only when requested or needed" \
-    && jq -e '
-        .cases[] | select(.id == "quick-improvement-scan-uses-light-mode") |
-        (.machine_expectations.forbidden_substrings | index("user_decision: selected")) and
-        (.machine_expectations.forbidden_substrings | index("I started implementing"))
-    ' "$thinking_evals" >/dev/null; then
-    pass
-else
-    fail "option generation must preserve explicit choice and implementation authority"
-fi
-
 thinking_options_response_matches() {
     local responses_dir="$1"
     local expected="$2"

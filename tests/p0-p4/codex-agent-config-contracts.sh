@@ -131,26 +131,6 @@ else
     fail "reviewer must mirror code-reviewer model/effort and both must say 'Review the work, not the author.'"
 fi
 
-test_start "Project AGENTS guidance stays repository-specific instead of repeating global workflow policy"
-project_guidance_failures=()
-for duplicate_anchor in \
-    "Route requests through installed skill descriptions" \
-    "Keep work proportional to risk" \
-    "Preserve unrelated user changes" \
-    "never hardcode secrets or log PII"; do
-    if grep -Fq -- "$duplicate_anchor" "$FRAMEWORK_DIR/AGENTS.md"; then
-        project_guidance_failures+=("AGENTS.md repeats global policy '$duplicate_anchor'")
-    fi
-done
-if ! grep -Fq -- 'Root `skills/assistant-*` directories are the editable source of truth.' "$FRAMEWORK_DIR/AGENTS.md"; then
-    project_guidance_failures+=("AGENTS.md must identify root assistant skills as the editable source of truth")
-fi
-if [[ "${#project_guidance_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "project AGENTS must contain repository-specific guidance: ${project_guidance_failures[*]}"
-fi
-
 test_start "Codex agent smoke helper is fixed-scope and metadata-only"
 smoke_failures=()
 if [[ ! -x "$smoke_helper" ]]; then

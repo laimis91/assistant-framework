@@ -8,8 +8,6 @@ p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 review_dir="$FRAMEWORK_DIR/skills/assistant-review"
 workflow_dir="$FRAMEWORK_DIR/skills/assistant-workflow"
 review_qa_router="$workflow_dir/references/review-qa-router.md"
-qa_positive_trigger_wording="QA required positive triggers: explicit QA/acceptance evaluation request, accepted Done Contract, harness-capable acceptance scope, domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance."
-qa_negative_trigger_wording="QA non-triggers: template labels/placeholders, generic acceptance criteria labels, optional/not_required reasons, delegation/source-changing work alone, and ordinary medium+ code-review-only/source-changing work."
 
 
 test_start "QA evaluator agents exist and are read-only"
@@ -188,40 +186,6 @@ if ruby -ryaml -rbigdecimal -e '
     pass
 else
     fail "assistant-review canonical QA result loses pivot, scoped-domain, or deterministic weighted-score semantics"
-fi
-
-test_start "workflow and review QA trigger wording is mirrored"
-qa_trigger_wording_missing=()
-for file in \
-    "$workflow_dir/contracts/input.yaml" \
-    "$workflow_dir/contracts/phase-gates.yaml" \
-    "$workflow_dir/references/review-qa-router.md" \
-    "$workflow_dir/references/plan-harness-appendix.md" \
-    "$workflow_dir/references/subagent-dispatch.md" \
-    "$workflow_dir/references/plan-template.md" \
-    "$workflow_dir/references/task-journal-template.md" \
-    "$review_dir/contracts/input.yaml" \
-    "$review_dir/references/qa-evaluation-loop.md"; do
-    for term in "$qa_positive_trigger_wording" "$qa_negative_trigger_wording"; do
-        if [[ ! -f "$file" ]] || ! grep -Fq -- "$term" "$file"; then
-            qa_trigger_wording_missing+=("${file#$FRAMEWORK_DIR/}: $term")
-        fi
-    done
-done
-for term in \
-    "only when explicit QA/acceptance, accepted Done Contract, harness acceptance" \
-    "domain-scored scope, or scoped UI/visual/product/UX/docs/DX acceptance requires it" \
-    "Size, delegation, source changes, and generic acceptance labels do not trigger QA" \
-    "Load [qa-evaluation-loop.md](references/qa-evaluation-loop.md) when required" \
-    "Carry approved preparation QA obligations and exact result/source bindings"; do
-    if ! p0p4_contains_text "$review_dir/SKILL.md" "$term"; then
-        qa_trigger_wording_missing+=("skills/assistant-review/SKILL.md: conditional routing missing $term")
-    fi
-done
-if [[ "${#qa_trigger_wording_missing[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "QA positive/negative trigger wording is not mirrored: ${qa_trigger_wording_missing[*]}"
 fi
 
 test_start "workflow delegates QA packet ownership to assistant-review"

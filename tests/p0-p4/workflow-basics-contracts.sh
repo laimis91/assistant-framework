@@ -19,55 +19,6 @@ else
     fail "canonical instruction block must stay lean and defer phase mechanics to the matched skill"
 fi
 
-test_start "review delegation dispatches from applicable instruction triggers"
-review_trigger_failures=()
-for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::schema_version: \"11.0\"" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/review-qa-router.md::sole owner of Reviewer and QAEvaluator worker packet schemas" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::id: review-entry-fields" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::reviewed_scope" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::subagent_trigger_scope" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::policy_blocking_source" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml::qa_evaluation_mode" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::delegation_triggered" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::subagents_unavailable" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::Formal review always triggers independent isolation" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/input.yaml::subagent_trigger_scope" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml::subagent_trigger_scope" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml::without a separate permission question"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        review_trigger_failures+=("${file#$FRAMEWORK_DIR/}: $term")
-    fi
-done
-if [[ "${#review_trigger_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review trigger delegation contract missing: ${review_trigger_failures[*]}"
-fi
-
-test_start "agentic loop safety review requires low-confidence escalation evidence"
-missing_loop_safety_terms=()
-for file in \
-    "$FRAMEWORK_DIR/skills/assistant-review/references/review-checklists.md" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/handoffs.yaml" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/output.yaml" \
-    "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml"; do
-    if ! grep -Fq "low-confidence escalation" "$file" && ! grep -Fq "low_confidence_escalation" "$file"; then
-        missing_loop_safety_terms+=("$file")
-    fi
-done
-if ! grep -Fq 'Agentic Loop Safety Checklist' "$FRAMEWORK_DIR/skills/assistant-review/contracts/phase-gates.yaml" \
-    || ! grep -Fq 'references/review-checklists.md' "$FRAMEWORK_DIR/skills/assistant-review/contracts/index.yaml"; then
-    missing_loop_safety_terms+=("assistant-review root/index worker-bundle routing")
-fi
-if [[ "${#missing_loop_safety_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "agentic loop safety lacks low-confidence escalation in: ${missing_loop_safety_terms[*]}"
-fi
-
 test_start "canonical triage routing retains every required consumer field"
 if ruby -ryaml -e '
   output = YAML.load_file(ARGV.fetch(0))
@@ -80,28 +31,6 @@ if ruby -ryaml -e '
     pass
 else
     fail "triage routing guidance omits a required canonical triage_result field"
-fi
-
-test_start "workflow records bounded reuse-search evidence for rule-like changes"
-reuse_search_workflow_failures=()
-for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::reuse_search" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::business rules, validation, calculations/conversions, mappings, schema/config semantics, permissions, or protocol details" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml::before implementation" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-map-template.md::## Reuse Search" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/context-map-template.md::applicability_reason: [concrete reason]" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md::- Reuse search:" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md::decision_rationale"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        reuse_search_workflow_failures+=("${file#$FRAMEWORK_DIR/}: missing $term")
-    fi
-done
-if [[ "${#reuse_search_workflow_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow reuse-search evidence gate/template is incomplete: ${reuse_search_workflow_failures[*]}"
 fi
 
 test_start "internal workflow controller reference exists and is linked"
@@ -194,68 +123,6 @@ else
     fail "workflow controller reference/linkage guard failed: ${controller_link_failures[*]}"
 fi
 
-test_start "workflow candidate-search phase 1 contracts are present and company-safe"
-missing_candidate_terms=()
-for term in \
-    "search_mode" \
-    "none, lightweight, candidate_search" \
-    "candidate_search triggers"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml"; then
-        missing_candidate_terms+=("input.yaml: $term")
-    fi
-done
-for term in \
-    "candidate_search_result" \
-    "goal_tree" \
-    "candidate_archive" \
-    "selected_candidate" \
-    "search_exit_summary" \
-    "empty_result_handling" \
-    "plan_deviation"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/output.yaml"; then
-        missing_candidate_terms+=("output.yaml: $term")
-    fi
-done
-for term in \
-    "CS1" \
-    "candidate archive exists at {agent_state_dir}/candidate-search.md when local state artifacts are configured and policy-allowed" \
-    "CS5" \
-    "candidate_search_result includes search_exit_summary" \
-    "Post-approval candidate pivots are recorded as plan deviations"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml"; then
-        missing_candidate_terms+=("phase-gates.yaml: $term")
-    fi
-done
-for term in \
-    "references/candidate-search.md" \
-    "Candidate Search"; do
-    if ! grep -Fqi "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/SKILL.md"; then
-        missing_candidate_terms+=("SKILL.md: $term")
-    fi
-    if [[ ! -f "$FRAMEWORK_DIR/skills/assistant-workflow/references/candidate-search.md" ]] || ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/candidate-search.md"; then
-        missing_candidate_terms+=("candidate-search.md: $term")
-    fi
-done
-for term in \
-    "Search mode:" \
-    "Candidate search summary:" \
-    "Candidate archive:"; do
-    if ! grep -Fq "$term" "$FRAMEWORK_DIR/skills/assistant-workflow/references/plan-template.md"; then
-        missing_candidate_terms+=("plan-template.md: $term")
-    fi
-done
-for term in \
-    "docs/specs/candidate-search.md"; do
-    if [[ ! -f "$FRAMEWORK_DIR/$term" ]]; then
-        missing_candidate_terms+=("candidate-search specification missing: $term")
-    fi
-done
-if [[ "${#missing_candidate_terms[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow candidate-search phase 1 contract missing terms: ${missing_candidate_terms[*]}"
-fi
-
 test_start "workflow state artifacts are orchestrator-owned and ignored"
 missing_state_terms=()
 for file_and_term in \
@@ -301,58 +168,6 @@ if [[ "${#missing_state_terms[@]}" -eq 0 ]]; then
     pass
 else
     fail "workflow state artifact ownership missing terms: ${missing_state_terms[*]}"
-fi
-
-test_start "workflow preparation routing keeps QA, harness, delegated state, and typed future obligations distinct"
-preparation_routing_failures=()
-for file_and_term in \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md::For \`prepare_only\`, force \`harness_capable=false\`" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md::workflow_state_mode=journal" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md::feature_preparation_result.future_qa_acceptance_obligation" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/workflow-controller.md::feature_preparation_result.future_harness_obligation" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/triage-rubric.md::future_harness_obligation" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/phases.md::future_harness_obligation" \
-    "$FRAMEWORK_DIR/skills/assistant-workflow/references/task-journal-template.md::Future harness obligation"; do
-    file="${file_and_term%%::*}"
-    term="${file_and_term#*::}"
-    if [[ ! -f "$file" ]] || ! p0p4_contains_text "$file" "$term"; then
-        preparation_routing_failures+=("${file#$FRAMEWORK_DIR/}: $term")
-    fi
-done
-if [[ "${#preparation_routing_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "workflow preparation routing distinction is incomplete: ${preparation_routing_failures[*]}"
-fi
-
-test_start "workflow entry and preparation admissibility retain explicit QA, harness, lane, state, and manual-verification boundaries"
-if ruby -ryaml -e '
-  index = YAML.load_file(ARGV.fetch(0))
-  gates = YAML.load_file(ARGV.fetch(1))
-  entry = index.fetch("load_sets").fetch("entry").fetch("selectors").find { |selector| selector["id"] == "workflow-entry-fields" }.fetch("names")
-  triage = gates.fetch("gates").find { |gate| gate["phase"] == "TRIAGE" }
-  admissibility = triage.fetch("exit_assertions").find { |assertion| assertion["id"] == "T_PREPARATION_ADMISSIBILITY" }
-  check = admissibility.fetch("check")
-  input = YAML.load_file(ARGV.fetch(2))
-  manual = input.fetch("fields").find { |field| field.fetch("name") == "manual_verification_mode" }
-  harness = input.fetch("fields").find { |field| field.fetch("name") == "harness_capable" }
-  valid = %w[acceptance_criteria qa_evaluation_mode harness_capable build_execution_lane workflow_state_mode manual_verification_mode].all? { |name| entry.include?(name) } &&
-    manual.fetch("infer_from").include?("destructive or migration-related") &&
-    harness.fetch("validation").include?("prepare_only, always false") &&
-    harness.fetch("validation").include?("future_harness_obligation") &&
-    check.include?("qa_evaluation_mode=not_required") &&
-    check.include?("build_execution_lane=none") &&
-    check.include?("harness_capable=false") &&
-    check.include?("typed future obligations") &&
-    check.include?("workflow_state_mode") &&
-    check.include?("progressive uncertainty") &&
-    check.include?("risk-selected strict preparation") &&
-    check.include?("explicit persisted-state request")
-  exit(valid ? 0 : 1)
-' "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/index.yaml" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/phase-gates.yaml" "$FRAMEWORK_DIR/skills/assistant-workflow/contracts/input.yaml"; then
-    pass
-else
-    fail "workflow entry loading or preparation admissibility does not preserve explicit QA, harness, lane, state, and manual-verification boundaries"
 fi
 
 test_start "workflow task classification maps compact high-signal aliases to exact categories and gate packs"

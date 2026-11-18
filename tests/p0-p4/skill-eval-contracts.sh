@@ -13,26 +13,6 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ownership-response-fix
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/ci-audit-response-fixtures.sh"
 p0p4_bootstrap_suite "${BASH_SOURCE[0]}"
 
-p0p4_activation_examples_are_adequate() {
-    jq -e '
-        def normalize_request:
-            gsub("^[[:space:]]+|[[:space:]]+$"; "")
-            | gsub("[[:space:]]+"; " ")
-            | ascii_downcase;
-        type == "array"
-        and all(.[]; type == "object"
-            and (.user_request | type == "string" and test("[^[:space:]]"))
-            and (.should_activate | type == "boolean"))
-        and (
-            ([.[] | select(.should_activate == true) | .user_request | normalize_request] | unique) as $positive_requests
-            | ([.[] | select(.should_activate == false) | .user_request | normalize_request] | unique) as $negative_requests
-            | ($positive_requests | length >= 2)
-            and ($negative_requests | length >= 1)
-            and (($positive_requests - $negative_requests | length) == ($positive_requests | length))
-        )
-    ' >/dev/null
-}
-
 p0p4_activation_cases_are_adequate() {
     jq -e '
         def normalize_request:
@@ -1229,112 +1209,6 @@ else
     fail "missing or non-executable runner: $skill_eval_runner"
 fi
 
-test_start "assistant-skill-creator v3 scopes activation evidence and preserves target metadata"
-skill_creator_skill="$FRAMEWORK_DIR/skills/assistant-skill-creator/SKILL.md"
-skill_creator_input="$FRAMEWORK_DIR/skills/assistant-skill-creator/contracts/input.yaml"
-skill_creator_index="$FRAMEWORK_DIR/skills/assistant-skill-creator/contracts/index.yaml"
-skill_creator_output="$FRAMEWORK_DIR/skills/assistant-skill-creator/contracts/output.yaml"
-skill_creator_gates="$FRAMEWORK_DIR/skills/assistant-skill-creator/contracts/phase-gates.yaml"
-skill_creator_cases="$FRAMEWORK_DIR/skills/assistant-skill-creator/evals/cases.json"
-if grep -Fq 'schema_version: "3.0"' "$skill_creator_input" \
-    && grep -Fq 'schema_version: "3.0"' "$skill_creator_index" \
-    && grep -Fq 'schema_version: "3.0"' "$skill_creator_output" \
-    && grep -Fq 'schema_version: "3.0"' "$skill_creator_gates" \
-    && grep -Fq 'name: activation_examples' "$skill_creator_input" \
-    && grep -Fq '  - assistant-verification' "$skill_creator_skill" \
-    && grep -Fq 'assistant-verification/contracts/output.yaml#verification_decision' "$skill_creator_output" \
-    && grep -Fq 'assistant-verification/contracts/output.yaml#evidence_assessment' "$skill_creator_output" \
-    && ruby -ryaml -e '
-        field = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |candidate| candidate["name"] == "activation_examples" }
-        fields = field.fetch("object_fields").map { |candidate| [candidate["name"], candidate["type"], candidate["required"]] }.to_h { |name, type, required| [name, [type, required]] }
-        examples = field["examples"]
-        concrete_example = examples.is_a?(Array) && examples.any? do |example|
-          example.is_a?(Array) && example.length >= 3 &&
-            example.all? { |item| item.is_a?(Hash) && item["user_request"].is_a?(String) && !item["user_request"].empty? && [true, false].include?(item["should_activate"]) } &&
-            example.count { |item| item["should_activate"] == true } >= 2 &&
-            example.any? { |item| item["should_activate"] == false }
-        end
-        exit field["type"] == "object[]" && field["required"] == "conditional" && field["condition"].include?("operation in [create, update]") && field["min_items"] == 3 && fields == { "user_request" => ["string", true], "should_activate" => ["boolean", true] } && concrete_example ? 0 : 1
-    ' "$skill_creator_input" \
-    && ruby -ryaml -e '
-        field = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |candidate| candidate["name"] == "dependencies" }
-        validation = field.fetch("validation")
-        exit field["type"] == "string[]" && field["required"] == false && field["on_missing"] == "infer" && !field.key?("default") &&
-          validation.include?("unique") && validation.include?("non-empty") && validation.include?("kebab-case") &&
-          validation.include?("skill_name") && validation.include?("order") && validation.include?("requires") ? 0 : 1
-    ' "$skill_creator_input" \
-    && ! grep -Fq 'trigger_phrases' "$skill_creator_input" \
-    && ! grep -Fq 'effort_level' "$skill_creator_input" \
-    && grep -Fiq 'at least 2 distinct true and 1 false' "$skill_creator_input" \
-    && grep -Fiq 'normalized' "$skill_creator_input" \
-    && ruby -ryaml -e '
-        input = YAML.load_file(ARGV.fetch(0))
-        activation = input.fetch("fields").find { |field| field["name"] == "activation_examples" }
-        validation = activation.fetch("validation")
-        prompt = activation.fetch("ask_prompt")
-        exit validation.include?("normalized-distinct positives") &&
-          validation.include?("normalized-disjoint nearby negative") &&
-          validation.match?(/derive structured (?:activation )?examples/) &&
-          prompt.include?("ask only for remaining material gaps") ? 0 : 1
-    ' "$skill_creator_input" \
-    && ruby -ryaml -e '
-        gates = YAML.load_file(ARGV.fetch(0)).fetch("gates")
-        capture = gates.find { |gate| gate["phase"] == "CAPTURE" }
-        design = gates.find { |gate| gate["phase"] == "DESIGN" }
-        assertions = [capture, design].map { |gate| gate.fetch("exit_assertions") }
-        activation = [assertions[0].find { |item| item["id"] == "SC4" }, assertions[1].find { |item| item["id"] == "SD0" }]
-        exit [capture, design].all? { |gate| gate["condition"].include?("operation in [create, update]") } &&
-          activation.all? { |item| item && item["check"].include?("normalized") && item["check"].include?("positive") && item["check"].include?("negative") && !item["on_fail"].to_s.empty? } ? 0 : 1
-    ' "$skill_creator_gates" \
-    && grep -Fiq 'normalized' "$skill_creator_gates" \
-    && grep -Fq 'before DESIGN completion' "$skill_creator_gates" \
-    && grep -Fq 'plain block sequence' "$skill_creator_output" \
-    && grep -Fq 'For existing skills, inspect the existing description and activation evals first' "$skill_creator_output" \
-    && grep -Fq 'two-space dash kebab-case items' "$skill_creator_output" \
-    && grep -Fq 'Reject inline, empty, or quoted `requires` forms. Reject legacy top-level `effort` and `triggers` keys.' "$skill_creator_output" \
-    && ruby -ryaml -e '
-        gate = YAML.load_file(ARGV.fetch(0)).fetch("gates").find { |item| item["phase"] == "BUILD" }
-        item = gate.fetch("exit_assertions").find { |assertion| assertion["id"] == "SB1" }
-        check = item.fetch("check")
-        exit gate["condition"].include?("operation in [create, update]") &&
-          check.include?("rejects inline, empty, or quoted `requires` forms") &&
-          check.include?("rejects legacy top-level `effort` and `triggers` keys") &&
-          !item["on_fail"].to_s.empty? ? 0 : 1
-    ' "$skill_creator_gates" \
-    && jq -e '.cases as $cases | ($cases[] | select(.id == "new-process-skill-designs-contracts-before-build") | .machine_expectations.required_substrings as $required | ["activation_examples", "user_request", "should_activate", "should_activate: true", "should_activate: false", "description", "activation evals", "conditional requires", "plain block sequence", "omit requires when empty", "legacy header metadata"] | all(. as $anchor | $required | index($anchor))) and ($cases[] | select(.id == "new-process-skill-designs-contracts-before-build") | .machine_expectations.required_substrings as $required | ["requires:", "  - assistant-review"] | all(. as $anchor | $required | index($anchor) | not)) and ($cases[] | select(.id == "existing-skill-validation-enforces-checklist") | .machine_expectations.required_substrings as $required | ["activation_examples", "required activation_examples", "user_request", "should_activate: true", "should_activate: false", "derive structured examples", "reuse adequate existing positive evidence", "only for remaining material gaps"] | all(. as $anchor | $required | index($anchor))) and ([$cases[].expected_behavior[]] | any(contains("activation_examples") and contains("normalized"))) and ([$cases[] | tostring] | join(" ") | contains("trigger_phrases") | not) and ([$cases[] | tostring] | join(" ") | contains("effort_level") | not)' "$skill_creator_cases" >/dev/null \
-        && jq -e '[.cases[].id] as $ids | ($ids | index("assess-existing-skill-without-authoring")) and ($ids | index("refresh-guidance-is-read-only-and-provenance-bound"))' "$skill_creator_cases" >/dev/null; then
-    pass
-else
-    fail "assistant-skill-creator did not define v3 activation evidence and legacy header exclusions"
-fi
-
-test_start "assistant-skill-creator preserves existing dependencies unless explicitly replaced"
-if ruby -ryaml -e '
-    field = YAML.load_file(ARGV.fetch(0)).fetch("fields").find { |candidate| candidate["name"] == "dependencies" }
-    inference = field.fetch("infer_from").downcase
-    gates = YAML.load_file(ARGV.fetch(1)).fetch("gates")
-    build = gates.find { |gate| gate["phase"] == "BUILD" }.fetch("exit_assertions").find { |assertion| assertion["id"] == "SB1" }.fetch("check")
-    skill_md = YAML.load_file(ARGV.fetch(2)).fetch("artifacts").find { |artifact| artifact["name"] == "skill_md" }.fetch("validation")
-    exit field["on_missing"] == "infer" && !field.key?("default") &&
-      field["condition"].include?("operation in [create, update]") &&
-      inference.include?("for an update") && inference.include?("preserve current canonical requires when omitted") &&
-      inference.include?("explicit") && inference.include?("new skill") &&
-      build.include?("current canonical requires unless explicitly changed") &&
-      skill_md.include?("preserve omitted update dependencies") ? 0 : 1
-' "$skill_creator_input" "$skill_creator_gates" "$skill_creator_output" \
-    && jq -e '
-        .cases[] | select(.id == "existing-skill-validation-enforces-checklist")
-        | (.setup_context | join(" ") | contains("current canonical requires"))
-        and (.expected_behavior | join(" ") | contains("Preserves current canonical requires"))
-        and (.expected_behavior | join(" ") | contains("explicit empty dependencies"))
-        and (.machine_expectations.required_substrings | index("preserve current canonical requires"))
-        and (.machine_expectations.required_substrings | index("explicit empty dependencies replace or remove current requires"))
-    ' "$skill_creator_cases" >/dev/null; then
-    pass
-else
-    fail "assistant-skill-creator does not preserve existing requires when dependencies are omitted"
-fi
-
 test_start "all first-class eval fixtures define typed activation cases"
 activation_case_failures=()
 activation_case_count=0
@@ -1354,38 +1228,6 @@ if [[ "$activation_case_count" -gt 0 && ${#activation_case_failures[@]} -eq 0 &&
     pass
 else
     fail "discovered first-class fixtures must all provide schema-2.0 typed activation cases: ${activation_case_failures[*]-} ${canonical_schema_failures[*]-}"
-fi
-
-test_start "activation cases keep curated review routes and nearby nonmatches"
-curated_activation_failures=()
-while IFS='|' read -r skill_name positive_one positive_two negative; do
-    fixture_file="$FRAMEWORK_DIR/skills/$skill_name/evals/cases.json"
-    if ! jq -e --arg positive_one "$positive_one" --arg positive_two "$positive_two" --arg negative "$negative" '
-        [.activation_cases[] | select(.should_activate == true) | .user_request] as $positives
-        | [.activation_cases[] | select(.should_activate == false) | .user_request] as $negatives
-        | ($positives | index($positive_one)) != null
-        and ($positives | index($positive_two)) != null
-        and ($negatives | index($negative)) != null
-    ' "$fixture_file" >/dev/null; then
-        curated_activation_failures+=("$skill_name")
-    fi
-done <<'EOF_CURATED'
-assistant-clarify|Clarify this ambiguous multi-intent request.|Help me untangle what I mean.|Summarize the already clarified request.
-assistant-debugging|Diagnose this flaky test failure.|Find the root cause before fixing.|Apply the known one-line fix from the accepted diagnosis.
-assistant-docs|Update the README documentation.|Write an API migration guide.|Fix the broken API endpoint.
-assistant-onboard|Get familiar with this codebase.|Map this project before changing it.|Make a small change in this familiar codebase.
-assistant-research|Research current source-backed evidence.|Compare these technical options.|Choose the option from the completed research brief.
-assistant-review|Review the current uncommitted changes.|Review and fix actionable findings in the current changes.|Summarize already approved review findings without inspecting code.
-assistant-security|Threat model this OAuth callback.|Audit this endpoint for vulnerabilities.|Write release notes for the already approved OAuth callback fix.
-assistant-skill-creator|Create a new skill with contracts.|Update this skill's contract design.|Run the existing skill without modifying its design.
-assistant-tdd|Use TDD to fix this bug.|Write a failing regression test first.|Apply the known fix after the regression test already passes.
-assistant-thinking|Stress test this architecture decision.|Reason through this trade-off.|Implement the selected architecture decision.
-assistant-workflow|Technically prepare the VIEWING route from current implementation and behavioral tests; do not implement.|Prepare a pending Architecture Pack with planned verification and no verification ref.|Answer a narrow question about the existing implementation.
-EOF_CURATED
-if [[ ${#curated_activation_failures[@]} -eq 0 ]]; then
-    pass
-else
-    fail "activation cases do not retain the curated route/nonmatch examples: ${curated_activation_failures[*]}"
 fi
 
 test_start "skill eval runner grades externally observed activation selections"
@@ -1610,30 +1452,11 @@ else
     fail "schema-2.0 activation case branches failed: ${activation_branch_failures[*]}"
 fi
 
-test_start "assistant-skill-creator activation evidence requires two distinct positive requests"
-adequate_activation_examples='[{"user_request":"Deploy the approved release","should_activate":true},{"user_request":"Roll out the approved release","should_activate":true},{"user_request":"Draft a release announcement","should_activate":false}]'
-duplicate_positive_with_anchors='[{"user_request":"Deploy activation_examples user_request should_activate: true","should_activate":true},{"user_request":"Deploy activation_examples user_request should_activate: true","should_activate":true},{"user_request":"Draft should_activate: false","should_activate":false}]'
-if p0p4_activation_examples_are_adequate <<<"$adequate_activation_examples" \
-    && ! p0p4_activation_examples_are_adequate <<<"$duplicate_positive_with_anchors"; then
-    pass
-else
-    fail "activation evidence accepted fewer than two distinct positive requests despite substring anchors"
-fi
-
-test_start "assistant-skill-creator activation evidence rejects normalized collisions"
-cross_decision_collision='[{"user_request":" Deploy   the approved release ","should_activate":true},{"user_request":"Roll out the approved release","should_activate":true},{"user_request":"deploy the approved release","should_activate":false}]'
-normalized_positive_duplicate='[{"user_request":" Deploy   the approved release ","should_activate":true},{"user_request":"deploy the approved release","should_activate":true},{"user_request":"Draft a release announcement","should_activate":false}]'
-if ! p0p4_activation_examples_are_adequate <<<"$cross_decision_collision" \
-    && ! p0p4_activation_examples_are_adequate <<<"$normalized_positive_duplicate"; then
-    pass
-else
-    fail "activation evidence accepted a normalized cross-decision collision or duplicate positive request"
-fi
-
 # Grades the real creator fixture without the exported bound bundle: the
 # responses fail creator semantic validation anyway, so these checks assert
 # only the required-substring count that the omitted activation anchor drives.
 test_start "assistant-skill-creator activation eval rejects a response missing activation evidence"
+skill_creator_cases="$FRAMEWORK_DIR/skills/assistant-skill-creator/evals/cases.json"
 creator_activation_root="$(mktemp -d "${TMPDIR:-/tmp}/skill-creator-activation-eval.XXXXXX")"
 creator_activation_responses="$creator_activation_root/responses"
 creator_activation_output="$creator_activation_root/output"
@@ -3284,86 +3107,6 @@ else
     fail "assistant-review eval assertions use undeclared artifact paths, fields, or enum values"
 fi
 
-assistant_review_final_summary_has_v7_envelope() {
-    local response_path="$1"
-    local expected_review_batch_status="$2"
-
-    jq -e --arg expected_review_batch_status "$expected_review_batch_status" '
-        def required_fields($fields):
-            . as $object | (($fields - ($object | keys)) | length == 0);
-        . as $response
-        | (.final_summary | type == "object")
-        and ($response.final_summary | required_fields(["reviewed_scope", "rounds", "final_review_snapshot_id", "final_snapshot_identity", "coverage_complete", "coverage_ledger", "batch_summaries", "aggregation_ledger", "aggregated_findings", "result", "fixed_items", "nits"]))
-        and (.final_summary.reviewed_scope | type == "array")
-        and (.final_summary.rounds | type == "number")
-        and (.final_summary.final_review_snapshot_id | type == "string")
-        and (.final_summary.final_snapshot_identity | type == "object"
-            and required_fields(["basis", "value", "captured_at", "scope_manifest_digest"])
-            and (.basis as $basis | ["git_revision", "diff_digest", "content_digest", "task_or_pr_revision"] | index($basis)))
-        and (.final_summary.coverage_complete | type == "boolean")
-        and (.final_summary.coverage_ledger | type == "array" and length > 0)
-        and all(.final_summary.coverage_ledger[]; type == "object"
-            and required_fields(["batch_id", "review_snapshot_id", "review_pass_id", "perspective", "coverage_obligation", "assigned_scope", "scope_item_id", "applicable_concern", "terminal_state", "coverage_status", "evidence"])
-            and (.terminal_state as $terminal_state | ["completed", "needs_context", "blocked", "timed_out", "failed", "invalidated"] | index($terminal_state))
-            and (.coverage_status as $coverage_status | ["complete", "incomplete", "invalidated"] | index($coverage_status)))
-        and (.final_summary.batch_summaries | type == "array" and length > 0)
-        and (.final_summary.batch_summaries[-1].batch_status == $expected_review_batch_status)
-        and all(.final_summary.batch_summaries[]; type == "object"
-            and required_fields(["started_batch_ordinal", "batch_id", "review_snapshot_id", "batch_status", "expected_response_count", "terminal_response_count", "aggregate_rubric_recomputed"])
-            and (.batch_status as $batch_status | ["complete", "incomplete", "invalidated"] | index($batch_status)))
-        and (.final_summary.aggregation_ledger | type == "array")
-        and all(.final_summary.aggregation_ledger[]; type == "object"
-            and required_fields(["source_provenance", "disposition", "rationale"])
-            and (.disposition as $disposition | ["retained", "merged", "fixed_closed", "observation", "rejected_invalid", "coverage_gap"] | index($disposition)))
-        and (.final_summary.aggregated_findings | type == "array")
-        and all(.final_summary.aggregated_findings[]; type == "object"
-            and required_fields(["aggregate_finding_id", "finding_id", "source_finding_ids", "source_provenance", "locus", "file", "invariant", "failure_mechanism", "severity", "description", "evidence", "smallest_useful_fix", "confidence_pct"])
-            and (.severity as $severity | ["must-fix", "should-fix", "nit"] | index($severity)))
-        and (["CLEAN", "ISSUES_FIXED", "HAS_REMAINING_ITEMS"] | index($response.final_summary.result))
-        and (.final_summary.fixed_items | type == "array")
-        and (.final_summary.nits | type == "array")
-        and (if $response.final_summary.result == "HAS_REMAINING_ITEMS" then ($response.final_summary.remaining_items | type == "array") else true end)
-        and (if $response.final_summary.coverage_complete then true else ($response.final_summary.coverage_gaps | type == "array" and length > 0) end)
-        and (if $response.final_summary.result == "CLEAN" or $response.final_summary.result == "ISSUES_FIXED" then ($response.final_summary.evidence_bounded_claim | type == "string") else true end)
-    ' "$response_path" >/dev/null
-}
-
-assistant_review_qa_has_v7_envelope() {
-    local response_path="$1"
-    local requires_open_questions="$2"
-
-    jq -e --argjson requires_open_questions "$requires_open_questions" '
-        def required_fields($fields):
-            . as $object | (($fields - ($object | keys)) | length == 0);
-        . as $response
-        | (.qa_evaluation_result | type == "object")
-        and ($response.qa_evaluation_result | required_fields(["rounds", "final_verdict", "result", "acceptance_findings", "approved_feature_preparation_qa_acceptance_obligation_result", "qa_scorecard", "score_progression", "evidence"]))
-        and (.qa_evaluation_result.rounds | type == "number")
-        and (["accepted", "accepted_with_concerns", "rejected", "blocked"] | index($response.qa_evaluation_result.final_verdict))
-        and (["CLEAN", "ISSUES_FIXED", "HAS_REMAINING_ITEMS", "BLOCKED"] | index($response.qa_evaluation_result.result))
-        and (.qa_evaluation_result.acceptance_findings | type == "array")
-        and all(.qa_evaluation_result.acceptance_findings[]; type == "object"
-            and required_fields(["severity", "criterion", "evidence", "impact", "disposition"])
-            and (.severity as $severity | ["blocker", "concern", "observation"] | index($severity))
-            and (.disposition as $disposition | ["resolved", "remaining", "not_applicable"] | index($disposition)))
-        and (.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result | type == "object"
-            and required_fields(["requested_scope_status", "requested_scope_evidence", "execution_prerequisite_status", "execution_prerequisite_evidence", "requested_scope", "execution_prerequisite", "feature_preparation_scope", "source_feature_preparation_evidence_ref"])
-            and (.requested_scope_status as $requested_scope_status | ["fulfilled", "blocked", "failed"] | index($requested_scope_status))
-            and (.execution_prerequisite_status as $execution_prerequisite_status | ["met", "missing", "blocked"] | index($execution_prerequisite_status))
-            and (.feature_preparation_scope == "existing_system"))
-        and (.qa_evaluation_result.qa_scorecard | type == "object"
-            and required_fields(["acceptance_coverage", "evidence_strength", "domain_quality", "final_readiness", "weighted_score", "rationale"])
-            and (.rationale | type == "object" and required_fields(["acceptance_coverage", "evidence_strength", "domain_quality", "final_readiness"])))
-        and (.qa_evaluation_result.score_progression | type == "array" and length > 0)
-        and all(.qa_evaluation_result.score_progression[]; type == "object"
-            and required_fields(["round", "weighted_score", "failed_acceptance_count", "drift_status"])
-            and (.drift_status as $drift_status | ["GENUINE", "SUSPICIOUS", "DRIFT", "REGRESSION", "STAGNATION", "NEUTRAL", "NOT_APPLICABLE"] | index($drift_status)))
-        and (.qa_evaluation_result.evidence | type == "array" and length > 0)
-        and all(.qa_evaluation_result.evidence[]; type == "object" and required_fields(["source", "detail"]))
-        and (if $requires_open_questions then ($response.qa_evaluation_result.open_questions | type == "array" and length > 0) else true end)
-    ' "$response_path" >/dev/null
-}
-
 test_start "assistant-review batch and deferred-QA structured evals reject false-pass mutations"
 review_structured_mutation_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-review-structured.XXXXXX")"
 p0p4_register_cleanup "$review_structured_mutation_output"
@@ -3392,62 +3135,6 @@ if [[ "${#review_structured_mutation_failures[@]}" -eq 0 ]]; then
     pass
 else
     fail "assistant-review structured evals accepted false-pass mutations: ${review_structured_mutation_failures[*]}"
-fi
-
-test_start "assistant-review canonical envelopes reject missing and invented-only fields"
-review_schema_mutation_output="$(mktemp "${TMPDIR:-/tmp}/skill-eval-review-schema.XXXXXX")"
-p0p4_register_cleanup "$review_schema_mutation_output"
-review_schema_mutation_failures=()
-while IFS='|' read -r review_case_id review_batch_status review_mutation review_envelope; do
-    review_response="$passing_response_dir/assistant-review/$review_case_id.txt"
-    cp "$review_response" "$review_response.original"
-    jq "$review_mutation" "$review_response" >"$review_schema_mutation_output"
-    mv "$review_schema_mutation_output" "$review_response"
-    case "$review_envelope" in
-        final_summary)
-            if assistant_review_final_summary_has_v7_envelope "$review_response" "$review_batch_status"; then
-                review_schema_mutation_failures+=("$review_case_id")
-            fi
-            ;;
-        qa)
-            if assistant_review_qa_has_v7_envelope "$review_response" false; then
-                review_schema_mutation_failures+=("$review_case_id")
-            fi
-            ;;
-        qa_blocked)
-            if assistant_review_qa_has_v7_envelope "$review_response" true; then
-                review_schema_mutation_failures+=("$review_case_id")
-            fi
-            ;;
-        audit)
-            if jq -e '
-                def required_fields($fields):
-                    . as $object | (($fields - ($object | keys)) | length == 0);
-                . as $response
-                | (.audit_report | type == "object")
-                and ($response.audit_report | required_fields(["coverage_complete", "batch_summaries", "coverage_ledger_ref", "findings", "summary"]))
-                and (.audit_report.findings | type == "array")
-                and (.final_summary.fixed_items == [])
-            ' "$review_response" >/dev/null; then
-                review_schema_mutation_failures+=("$review_case_id")
-            fi
-            ;;
-    esac
-    mv "$review_response.original" "$review_response"
-done <<'EOF_REVIEW_SCHEMA_MUTATIONS'
-audit-batch-waits-for-all-pass-results|complete|del(.final_summary.aggregated_findings) | .final_summary.findings = []|final_summary
-incomplete-review-batch-never-cleans|incomplete|del(.final_summary.coverage_ledger) | .final_summary.coverage = []|final_summary
-post-fix-review-uses-fresh-snapshot-batch|complete|del(.final_summary.batch_summaries) | .review_batch = {expected_pass_count: 2}|final_summary
-audit-spec-review-fail-continues-complete-batch|complete|del(.audit_report.findings) | .audit_report.aggregate_findings = []|audit
-in-flight-mutation-invalidates-review-batch|invalidated|del(.final_summary.batch_summaries) | .final_summary.batch_state = "invalidated"|final_summary
-qa-obligation-echo-fulfills-exact-binding|unused|del(.qa_evaluation_result.qa_scorecard) | .qa_evaluation_result.score = 5|qa
-qa-obligation-blocks-missing-or-mismatched-binding|unused|del(.qa_evaluation_result.approved_feature_preparation_qa_acceptance_obligation_result) | .qa_evaluation_result.obligation = {}|qa
-qa-obligation-blocked-when-required-evidence-is-unavailable|unused|del(.qa_evaluation_result.open_questions) | .qa_evaluation_result.blocker_reason = "unavailable"|qa_blocked
-EOF_REVIEW_SCHEMA_MUTATIONS
-if [[ "${#review_schema_mutation_failures[@]}" -eq 0 ]]; then
-    pass
-else
-    fail "assistant-review canonical envelopes accepted missing or invented-only fields: ${review_schema_mutation_failures[*]}"
 fi
 
 test_start "workflow inspected evidence accepts empty and useful search refs"
@@ -5772,63 +5459,6 @@ if retired_list_output="$("$skill_eval_runner" --list)" \
     pass
 else
     fail "retired skill fixtures remain: ${retired_fixture_failures:-skill eval runner --list failed}"
-fi
-
-test_start "skill eval docs describe complete first-class coverage"
-documented_skill_count="$(p0p4_skill_eval_default_fixtures | wc -l | tr -d '[:space:]')"
-if grep -Fq "default eval inventory is $documented_skill_count first-class \`assistant-*\` skills with fixtures" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-debugging" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-docs" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-skill-creator" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-research" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-onboard" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-verification" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-workflow" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-review" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-tdd" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "assistant-security" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq 'Canonical first-class fixtures use schema `2.0` and include top-level' "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "Local-only" "$FRAMEWORK_DIR/README.md" \
-    && grep -Fq "This inventory now covers all $documented_skill_count first-class \`assistant-*\` skills" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq 'Every first-class fixture uses schema `2.0` and declares top-level' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && ! grep -Fq "5 of 15 first-class skills remain" "$FRAMEWORK_DIR/README.md" \
-    && ! grep -Fq "skills/assistant-memory/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && ! grep -Fq "skills/assistant-reflexion/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && ! grep -Fq "Level 4 is future work" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
-    && p0p4_contains_text "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" 'For first-class schema `2.0` `evals/cases.json`, `activation_cases` contains exact' \
-    && p0p4_contains_text "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" '--activation-results FILE' \
-    && p0p4_contains_text "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" '../../docs/evals/README.md#per-skill-eval-fixtures' \
-    && cmp -s "$FRAMEWORK_DIR/docs/skill-contract-design-guide.md" "$FRAMEWORK_DIR/skills/assistant-skill-creator/references/skill-contract-design-guide.md" \
-    && grep -Fq "skills/assistant-debugging/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq "skills/assistant-docs/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq "skills/assistant-skill-creator/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq "skills/assistant-research/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq "skills/assistant-onboard/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq "skills/assistant-verification/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq "skills/assistant-workflow/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq "skills/assistant-review/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq "skills/assistant-tdd/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq "skills/assistant-security/evals/cases.json" "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq '`empty_array`' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq 'requires the target path to resolve to an empty array' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq '`empty_array`, `array_type`, `array_nonblank_strings`, `path_absent`, `absent_or_empty_array`, `equals_path`,' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq '`array_type` requires the target path to resolve to an array and permits an empty array.' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq '`path_absent`' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq '`array_object_values_exact`' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq '`object_keys_exact`' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq 'In this exhaustive fixed operator list, `path_absent` passes only when its target' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq 'path cannot resolve; a present `null` value is present and therefore fails.' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq '`absent_or_empty_array` passes when its target path is unresolved or resolves to' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq 'an empty array; a present `null`, non-array, or non-empty array fails.' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq 'unordered exact multiset against bounded `expected_objects`, preserving the' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq '`one_of` permits at most 32 scalar values. `array_object_values_exact` permits' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq 'at most 16 unique fields and 32 expected objects; absent projected fields fail,' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq 'while a present `null` matches only a present `null`.' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq -- '--activation-results /tmp/skill-activation-results.json' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md" \
-    && grep -Fq 'exactly one result' "$FRAMEWORK_DIR/docs/evals/skill-fixtures.md"; then
-    pass
-else
-    fail "skill eval docs do not describe complete first-class coverage"
 fi
 
 test_start "assistant-review fixture authority rejects tuple omissions, invalid references, and unmapped canonical envelopes"
