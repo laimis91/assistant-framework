@@ -1,6 +1,6 @@
 # Design standard: SOLID structure and pattern machinery
 
-Status: **Accepted** by the user 2026-11-18, including D-DV-1 to D-DV-4; D-DV-5 added after independent review. Implemented on branch `feature/design-for-variation`. Behavioural evaluation run 2026-11-18 (see [Behavioural evaluation](#behavioural-evaluation)); the revised cases were rerun the same day. The review loading gap it found was fixed afterwards; a rerun of the review cases and the invalid CSV sample is owed.
+Status: **Accepted** by the user 2026-11-18, including D-DV-1 to D-DV-4; D-DV-5 added after independent review. Implemented on branch `feature/design-for-variation`. Behavioural evaluation run 2026-11-18 (see [Behavioural evaluation](#behavioural-evaluation)); the revised cases were rerun the same day. The review loading gap it found was fixed and the review cases rerun; the CSV change-arm sample still has no valid answer.
 Source: user requests of 2026-11-05 and 2026-11-18. The user's M1 game build came out with enums and switch statements choosing behaviour although assistant-workflow was active. A follow-up session had to plan a refactor.
 
 ## Problem and intended outcome
@@ -85,7 +85,19 @@ Fixed after the rerun:
 - `csharp-review.md` "Fit" says an enum, string code or flag that selects behaviour is not a pattern to match.
 - `plan-records-extension-points-table` requires "Extension point", which also matches the plural heading.
 
-Still open: rerun both review cases and the CSV change-arm sample, with eval files kept outside `/private/tmp`; this needs fresh authorization.
+### Rerun after the review loading fix
+
+Run 2026-11-18 under fresh authorization, one call at a time, with eval files outside `/private/tmp`; five calls cost $2.06. No subject read a file outside its run folder.
+
+| Case | With change | Without change |
+|---|---|---|
+| `review-detects-enum-extension-traps` | Pass on reading: loads `review-principles.md`, rates the four extended switches must-fix under "Behaviour selection and machinery", recommends an `IPaymentProvider` seam with fees as data, and leaves `LogLevel` alone. The grader misses "must-fix" because the answer writes it with a non-breaking hyphen (U+2011) | Fail: no design finding; checks switch fall-through and naming |
+| `review-flags-single-variant-machinery` | Pass: loads `review-principles.md`, removes the machinery, keeps the interface | Fail: missing "machinery" |
+| `build-csv-export-uses-interface-without-machinery` | No answer: the subject listed every file under `/private/tmp` and hit the $0.90 cap. It read `solid-principles.md` first | Not rerun; the earlier isolated baseline answer had no interface |
+
+Across the isolated runs, the change produced the intended design in every case with a valid answer, and the baseline in none. Each result is one sample on `deepseek-flash`.
+
+Still open: the CSV change-arm sample, and grader handling of Unicode hyphens.
 
 ## Owners
 
