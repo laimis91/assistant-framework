@@ -1151,4 +1151,28 @@ else
     fail "stale-journal workspace failures are not traceable through bounded verifier ids"
 fi
 
+test_start "instruction eval cases keep every required and forbidden substring"
+# The baseline is the eval oracle's assertion list. A case that loses a required or
+# forbidden substring grades weaker without any other check failing, so a change to
+# either list must update the baseline in the same commit. Regenerate it with:
+#   jq -S '[.cases[] | {key: .id, value: {required_substrings: .machine_expectations.required_substrings, forbidden_substrings: .machine_expectations.forbidden_substrings}}] | from_entries' \
+#     docs/evals/framework-instruction-cases.json >tests/p0-p4/fixtures/framework-instruction-substrings.json
+substring_baseline="$FRAMEWORK_DIR/tests/p0-p4/fixtures/framework-instruction-substrings.json"
+if substring_drift="$(jq -r --slurpfile baseline "$substring_baseline" '
+    ([.cases[] | {key: .id, value: {required_substrings: .machine_expectations.required_substrings, forbidden_substrings: .machine_expectations.forbidden_substrings}}] | from_entries) as $current
+    | $baseline[0] as $expected
+    | (([.cases[].id] | group_by(.) | map(select(length > 1) | "duplicate case id: \(.[0])"))
+      + [$expected | to_entries[] | .key as $id | .value | to_entries[] | .key as $kind | (.value // [])[]
+        | . as $s | select((($current[$id][$kind]) // []) | any(.[]; . == $s) | not)
+        | "\($id) \($kind) lost: \(.)"]
+      + [$current | to_entries[] | .key as $id | .value | to_entries[] | .key as $kind | (.value // [])[]
+        | . as $s | select((($expected[$id][$kind]) // []) | any(.[]; . == $s) | not)
+        | "\($id) \($kind) not in baseline: \(.)"])
+    | .[]
+' "$eval_fixture")" && [[ -z "$substring_drift" ]]; then
+    pass
+else
+    fail "instruction eval substrings differ from tests/p0-p4/fixtures/framework-instruction-substrings.json: ${substring_drift:-jq failed on the eval cases or the baseline}"
+fi
+
 p0p4_finish_suite "${BASH_SOURCE[0]}"

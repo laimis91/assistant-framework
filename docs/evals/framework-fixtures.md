@@ -213,6 +213,14 @@ Each case includes `machine_expectations.required_substrings` and
 observable substrings for deterministic local checks. Required substrings must
 appear in the captured response, and forbidden substrings must not appear.
 
+`tests/p0-p4/fixtures/framework-instruction-substrings.json` records both arrays
+for every case. The contract suite fails when a case gains or loses a required
+or forbidden substring relative to it, so a case cannot lose an assertion
+unnoticed. When you change either array on
+purpose, regenerate the record in the same commit with the `jq` command in the
+check "instruction eval cases keep every required and forbidden substring" in
+`tests/p0-p4/eval-contracts.sh`.
+
 The response grader is intentionally heuristic/local grading. It checks for
 missing files, empty responses, exact fail-signal phrase hits where useful,
 missing required substrings, and forbidden substring hits. These deterministic

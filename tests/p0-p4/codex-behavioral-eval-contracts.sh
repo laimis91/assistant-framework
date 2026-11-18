@@ -2313,6 +2313,22 @@ else
     fail "canonical smoke and pilot coverage was not enforced before model execution"
 fi
 
+test_start "shipped workflow-kernel manifest satisfies the runner's promotion contract"
+# The runner hard-codes the smoke and pilot case lists. A trimmed or reordered list in
+# the shipped manifest would make every promotion run fail at start-up.
+shipped_manifest_error="$fixture_root/shipped-manifest-error.txt"
+trimmed_manifest="$fixture_root/trimmed-pilot-manifest.json"
+jq '.pilot_cases |= .[:-1]' "$historical_kernel_manifest" >"$trimmed_manifest"
+if bash -c 'source "$1"; CANDIDATE_MANIFEST="$2"; validate_candidate_manifest' _ \
+        "$runner_function_lib" "$historical_kernel_manifest" 2>"$shipped_manifest_error" \
+    && ! bash -c 'source "$1"; CANDIDATE_MANIFEST="$2"; validate_candidate_manifest' _ \
+        "$runner_function_lib" "$trimmed_manifest" 2>"$fixture_root/trimmed-manifest-error.txt" \
+    && grep -Fq 'Candidate manifest does not match' "$fixture_root/trimmed-manifest-error.txt"; then
+    pass
+else
+    fail "shipped workflow-kernel manifest does not match the runner's smoke and pilot contract: $(cat "$shipped_manifest_error")"
+fi
+
 test_start "runner never derives or executes a context reporter from baseline input"
 hostile_baseline="$fixture_root/hostile-baseline-root"
 hostile_candidate="$fixture_root/hostile-candidate"
