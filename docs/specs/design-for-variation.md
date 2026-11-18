@@ -1,6 +1,6 @@
 # Design standard: SOLID structure and pattern machinery
 
-Status: **Accepted** by the user 2026-11-18, including D-DV-1 to D-DV-4; D-DV-5 added after independent review. Implemented on branch `feature/design-for-variation`. Behavioural evaluation run 2026-11-18 (see [Behavioural evaluation](#behavioural-evaluation)); the revised cases were rerun the same day. The review loading gap it found was fixed and the review cases rerun; the CSV change-arm sample still has no valid answer.
+Status: **Accepted** by the user 2026-11-18, including D-DV-1 to D-DV-4; D-DV-5 added after independent review. Implemented on branch `feature/design-for-variation`. Behavioural evaluation run 2026-11-18 (see [Behavioural evaluation](#behavioural-evaluation)); the revised cases were rerun the same day. The review loading gap it found was fixed and the review cases and the CSV change-arm sample were rerun.
 Source: user requests of 2026-11-05 and 2026-11-18. The user's M1 game build came out with enums and switch statements choosing behaviour although assistant-workflow was active. A follow-up session had to plan a refactor.
 
 ## Problem and intended outcome
@@ -99,7 +99,13 @@ Across the isolated runs, the change produced the intended design in every case 
 
 Afterwards, `tools/evals/lib/skill-eval-grade.sh` was changed to match text against a copy of the response with U+2010 to U+2015 and U+2212 written as "-", so the review answer above now grades as a pass. Structured JSON and semantic validators still read the original. `run-framework-instruction-evals.sh` and `run-codex-framework-evals.sh` keep raw matching.
 
-Still open: the CSV change-arm sample.
+### CSV change-arm sample
+
+Four attempts were needed. Two hit the cost cap with no answer. Two read eval case files elsewhere under `/private/tmp`, because the runner's `--allowedTools Read,Grep,Glob` let those tools reach any path. The fourth used `--permission-mode dontAsk` without blanket approval, with the plugin copy added as a working directory and a $1.50 cap. Every tool call stayed inside its run folder, and it cost $0.52.
+
+The answer reads `solid-principles.md`, writes `IExportFormat` with one `CsvExportFormat`, explicitly omits a format enum, registry, factory, query parameter and flag, and records the export format in a table with the guide's four columns and the revisit condition "a second format is requested". It passes on reading. The grader fails it on the required string "extension points", because the table has no heading. The earlier isolated baseline answer had no interface.
+
+With this sample, every valid change-arm answer across the five cases produced the intended design, and no baseline answer did. Future runs should use the sandboxed runner; the earlier isolated runs relied on transcript audits instead.
 
 ## Owners
 
