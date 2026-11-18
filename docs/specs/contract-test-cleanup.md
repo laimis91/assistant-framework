@@ -1,6 +1,6 @@
 # Contract test cleanup
 
-Status: **Accepted** by the user 2026-11-17, with decisions D-TC-1 to D-TC-6 as recommended. Slices A–D implemented 2026-11-18 in one pull request; the runtime target (D-TC-3) and the checks proposed for deletion are open decisions, see Implementation notes. Revised the same day after an independent review (5 major, 10 minor, 1 nit findings), all addressed below. Baseline: main 487b8d3.
+Status: **Accepted** by the user 2026-11-17, with decisions D-TC-1 to D-TC-6 as recommended. Slices A–D implemented 2026-11-18 in one pull request; on 2026-11-18 the user accepted the measured runtime of about 32 minutes in place of the 10-minute target (D-TC-3); the checks proposed for deletion are still an open decision, see Implementation notes. Revised the same day after an independent review (5 major, 10 minor, 1 nit findings), all addressed below. Baseline: main 487b8d3.
 Source: user request of 2026-11-17 to clean up the tests because they take too long to run and feel over-engineered, with too many checks. The check inventory and classifier behind this specification are local working material (`docs/plans/test-cleanup/`, Git-ignored); each pull request carries the evidence it relies on (R-TC-11).
 
 ## Problem and intended outcome
@@ -101,7 +101,7 @@ Approved by the user 2026-11-17 as recommended.
 
 - **D-TC-1.** Wording pins are deleted, not moved into evals. Behavior belongs to the skill eval cases; a pin restated as an eval would still only check wording.
 - **D-TC-2.** Pins that only show a skill names one of its files ("Load `references/x.md`") are replaced by one check in `tools/skills/check-skill-containment.py`, which today resolves `](…)` Markdown links but not backtick paths. A backtick path starting `references/`, `contracts/`, `evals/` or `scripts/` resolves from the skill root, then from the file's folder. Text that describes the structure of another skill or project, such as `assistant-skill-creator/SKILL.md` describing a skill being created, is allowlisted per file with a reason. Fixtures cover both outcomes.
-- **D-TC-3.** The runtime target is 10 minutes serial on the user's Mac. Kept buckets other than 4 measure about 440s under contention, which leaves about 160s for bucket 4: a cut of about 97.5% from 6,410s through shrinking plus batching. The Slice A serial baseline rechecks this arithmetic before Slice C starts. If it shows 10 minutes is out of reach without breaking R-TC-3 or R-TC-6, the user picks a new target then.
+- **D-TC-3.** The runtime target is 10 minutes serial on the user's Mac. Kept buckets other than 4 measure about 440s under contention, which leaves about 160s for bucket 4: a cut of about 97.5% from 6,410s through shrinking plus batching. The Slice A serial baseline rechecks this arithmetic before Slice C starts. If it shows 10 minutes is out of reach without breaking R-TC-3 or R-TC-6, the user picks a new target then. **Revised 2026-11-18:** the user accepted the measured serial runtime of about 32 minutes (1,940s) as the target; no fast tier and no coarser unit of protection.
 - **D-TC-4.** One test command stays; no separate fast and full tiers.
 - **D-TC-5.** If the target is missed only because of safety or unit coverage, a fast default tier with an opt-in full run is the fallback, decided then by the user.
 - **D-TC-6.** `tests/test-skill-activation-tools.sh` (14s) is out of scope. How the eval runners grade is out of scope; R-TC-7 allows only an additive response-lookup option.
@@ -140,7 +140,7 @@ Recorded 2026-11-18 for the pull request that implements slices A–D.
 - one accepted response per case;
 - one end-to-end runner witness for each distinct runner path in `codex-behavioral-eval`.
 
-Reaching 10 minutes would mean a coarser unit of protection or the D-TC-5 fast tier. The user picks between those and a new target.
+Reaching 10 minutes would mean a coarser unit of protection or the D-TC-5 fast tier. On 2026-11-18 the user chose neither and accepted about 32 minutes as the target (D-TC-3).
 
 ### Known flakes, not caused by this change
 
