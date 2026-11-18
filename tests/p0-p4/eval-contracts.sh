@@ -195,7 +195,7 @@ if [[ "$ajv_version" =~ ^8\.([1][89]|[2-9][0-9])\.[0-9]+$ ]] \
         .packages[""].devDependencies.ajv == $version
         and .packages["node_modules/ajv"].version == $version
     ' "$eval_package_lock" >/dev/null \
-    && grep -Fq 'uses: actions/setup-node@v4' "$framework_validation_workflow" \
+    && grep -Fq 'uses: actions/setup-node@v7' "$framework_validation_workflow" \
     && grep -Fq 'node-version: 22' "$framework_validation_workflow" \
     && grep -Fq 'cache-dependency-path: tools/evals/package-lock.json' "$framework_validation_workflow" \
     && grep -Fq 'working-directory: tools/evals' "$framework_validation_workflow" \
