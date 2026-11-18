@@ -38065,7 +38065,7 @@
       ],
       "machine_expectations": {
         "required_substrings": [
-          "Extension points",
+          "Extension point",
           "data",
           "Revisit when"
         ],

@@ -55,8 +55,11 @@ Structured batches load [review-loop.md](references/review-loop.md) before the f
   mismatches and requires Spec PASS before quality review. Workflow-composed
   review consumes current due-check evidence; acceptance review owns spec checks.
 - Review relevant spec, regression, testing, maintainability, bugfix,
-  semantic/behavioral contract, loop-safety and security concerns. Apply matching
-  [checklists](references/review-checklists.md) and [principles](references/review-principles.md);
+  semantic/behavioral contract, loop-safety and security concerns. For every
+  review of code, unless explicit instructions say otherwise, load
+  [principles](references/review-principles.md) and apply its SOLID and
+  "Behaviour selection and machinery" sections to the changed code. Apply matching
+  [checklists](references/review-checklists.md) and other principle sections;
   exclude unrelated sections. Medium+ retains its Design Coherence Pass. For a
   changed function with nested branches or loops, use the advisory
   [cognitive-complexity estimate](references/cognitive-complexity.md); it never

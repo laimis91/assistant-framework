@@ -1,6 +1,6 @@
 # Design standard: SOLID structure and pattern machinery
 
-Status: **Accepted** by the user 2026-11-18, including D-DV-1 to D-DV-4; D-DV-5 added after independent review. Implemented on branch `feature/design-for-variation`. Behavioural evaluation run 2026-11-18 (see [Behavioural evaluation](#behavioural-evaluation)); the revised cases were rerun the same day. The review skill's loading of `review-principles.md` and one CSV sample remain open.
+Status: **Accepted** by the user 2026-11-18, including D-DV-1 to D-DV-4; D-DV-5 added after independent review. Implemented on branch `feature/design-for-variation`. Behavioural evaluation run 2026-11-18 (see [Behavioural evaluation](#behavioural-evaluation)); the revised cases were rerun the same day. The review loading gap it found was fixed afterwards; a rerun of the review cases and the invalid CSV sample is owed.
 Source: user requests of 2026-11-05 and 2026-11-18. The user's M1 game build came out with enums and switch statements choosing behaviour although assistant-workflow was active. A follow-up session had to plan a refactor.
 
 ## Problem and intended outcome
@@ -79,16 +79,18 @@ Same method and model, run 2026-11-18 under fresh authorization; ten calls cost 
 
 Read against pass criteria, the change produced the intended design in three cases where the baseline did not. Both arms missed the type-code finding in the review enum case. Neither review answer loaded `review-principles.md`; the review skill says to apply "matching" principles, and the reviewer did not treat a payment diff as matching. The change-arm review read `csharp-review.md`, `review-checklists.md` and `review-rubric.md` instead.
 
-Open items:
+Fixed after the rerun:
 
-- The review skill should load `review-principles.md` for every code review, as the workflow now loads the writing guide. This is a skill change and needs its own approval and rerun.
-- The CSV change-arm sample must be rerun with eval files kept outside `/private/tmp`.
-- `plan-records-extension-points-table` should require "Extension point" (singular matches both), and `review-flags-single-variant-machinery` could forbid "Delete `IExportFormat`".
+- `assistant-review` `SKILL.md` now loads `review-principles.md` for every review of code, unless explicit instructions say otherwise, and applies its SOLID and "Behaviour selection and machinery" sections; checklists and other principle sections still apply when they match.
+- `csharp-review.md` "Fit" says an enum, string code or flag that selects behaviour is not a pattern to match.
+- `plan-records-extension-points-table` requires "Extension point", which also matches the plural heading.
+
+Still open: rerun both review cases and the CSV change-arm sample, with eval files kept outside `/private/tmp`; this needs fresh authorization.
 
 ## Owners
 
 - Writing guide: `skills/assistant-workflow/references/prompts/solid-principles.md`.
 - Plan and Build loading: `skills/assistant-workflow/SKILL.md`, `references/phases.md`, `plan-template.md`, `build-worker-protocol.md`, `contracts/phase-gates.yaml` (B8).
-- Review: `skills/assistant-review/references/review-principles.md` and `review-rubric.md`.
+- Review: `skills/assistant-review/SKILL.md` (loads the principles for every code review), `references/review-principles.md`, `review-rubric.md` and `csharp-review.md`.
 - Role prompts: `agents/claude/` and `agents/codex/` writer, architect and reviewer roles, synced into each skill's `references/roles/`.
 - Pattern library use: `skills/assistant-workflow/references/design-pattern-retrieval.md`.
